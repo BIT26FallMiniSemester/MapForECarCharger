@@ -1,0 +1,16 @@
+# macOS local metadata
+.DS_Store
+
+# Local-only working notes and generated process documents
+/local-docs/
+/docs/
+
+# Local development/runtime artifacts
+*.log
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+*.db
+*.sqlite
+*.sqlite3
