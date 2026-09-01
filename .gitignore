@@ -14,3 +14,8 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+.env
+.coverage
+htmlcov/
+coverage.xml
+/backend/runtime/

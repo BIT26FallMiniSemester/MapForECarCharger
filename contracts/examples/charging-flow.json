@@ -1,0 +1,22 @@
+{
+  "login": {
+    "method": "POST",
+    "path": "/api/v1/user/login",
+    "body": {"phone": "13800138000"}
+  },
+  "recharge": {
+    "method": "POST",
+    "path": "/api/v1/user/recharge",
+    "body": {"amount_cents": 5000, "client_request_id": "qt-demo-request-0001"}
+  },
+  "create_order": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "body": {"pile_id": 1}
+  },
+  "state_actions": ["reserve", "start", "stop", "settle"],
+  "headers": {
+    "Authorization": "Bearer <access_token>",
+    "Content-Type": "application/json; charset=utf-8"
+  }
+}

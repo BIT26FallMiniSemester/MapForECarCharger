@@ -1,0 +1,2088 @@
+openapi: 3.1.0
+info:
+  title: MapForECarCharger API
+  version: 0.1.0
+paths:
+  /api/v1/health:
+    get:
+      tags:
+      - system and users
+      summary: Health
+      operationId: health_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /api/v1/user/login:
+    post:
+      tags:
+      - system and users
+      summary: User Login
+      operationId: user_login_api_v1_user_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/login:
+    post:
+      tags:
+      - system and users
+      summary: Admin Login
+      operationId: admin_login_api_v1_admin_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLogin'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/user/profile:
+    get:
+      tags:
+      - system and users
+      summary: Profile
+      operationId: profile_api_v1_user_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - system and users
+      summary: Update Profile
+      operationId: update_profile_api_v1_user_profile_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/user/recharge:
+    post:
+      tags:
+      - system and users
+      summary: Create Recharge
+      operationId: create_recharge_api_v1_user_recharge_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechargeCreate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/user/recharge-records:
+    get:
+      tags:
+      - system and users
+      summary: Recharge Records
+      operationId: recharge_records_api_v1_user_recharge_records_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/user/avatar:
+    post:
+      tags:
+      - users
+      summary: Upload Avatar
+      operationId: upload_avatar_api_v1_user_avatar_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_avatar_api_v1_user_avatar_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/stations/nearby:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Nearby Stations
+      operationId: nearby_stations_api_v1_stations_nearby_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: latitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: Latitude
+      - name: longitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: Longitude
+      - name: radius_km
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 100
+          minimum: 0.1
+          default: 10
+          title: Radius Km
+      - name: available_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Available Only
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/stations:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Station List
+      operationId: station_list_api_v1_stations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
+      - name: operator_name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator Name
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: region_scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region Scope
+      - name: location_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Location Type
+      - name: has_coordinates
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Has Coordinates
+      - name: bookable_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Bookable Only
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/stations/filter-options:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Station Filter Options
+      operationId: station_filter_options_api_v1_stations_filter_options_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      security:
+      - HTTPBearer: []
+  /api/v1/stations/{station_id}:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Station Detail
+      operationId: station_detail_api_v1_stations__station_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: station_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Station Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/stations/{station_id}/piles:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Station Piles
+      operationId: station_piles_api_v1_stations__station_id__piles_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: station_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Station Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/PileStatus'
+          - type: 'null'
+          title: Status
+      - name: pile_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/PileType'
+          - type: 'null'
+          title: Pile Type
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/piles/{pile_id}:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Pile Detail
+      operationId: pile_detail_api_v1_piles__pile_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: pile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Pile Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: New Order
+      operationId: new_order_api_v1_orders_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Orders
+      operationId: orders_api_v1_orders_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/OrderStatus'
+          - type: 'null'
+          title: Status
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/reserve:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: Reserve
+      operationId: reserve_api_v1_orders__order_id__reserve_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/start:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: Start
+      operationId: start_api_v1_orders__order_id__start_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/stop:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: Stop
+      operationId: stop_api_v1_orders__order_id__stop_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/settle:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: Settle
+      operationId: settle_api_v1_orders__order_id__settle_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/cancel:
+    post:
+      tags:
+      - stations, piles and orders
+      summary: Cancel
+      operationId: cancel_api_v1_orders__order_id__cancel_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrder'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/active:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Active Order
+      operationId: active_order_api_v1_orders_active_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      security:
+      - HTTPBearer: []
+  /api/v1/orders/{order_id}:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Order Detail
+      operationId: order_detail_api_v1_orders__order_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/realtime-orders:
+    get:
+      tags:
+      - dashboard
+      summary: Realtime Orders
+      operationId: realtime_orders_api_v1_dashboard_realtime_orders_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/revenue:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin Revenue
+      operationId: admin_revenue_api_v1_admin_revenue_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 7
+          title: Days
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/piles:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin Piles
+      operationId: admin_piles_api_v1_admin_piles_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: station_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Station Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/PileStatus'
+          - type: 'null'
+          title: Status
+      - name: pile_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/PileType'
+          - type: 'null'
+          title: Pile Type
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/piles/{pile_id}:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin Pile Detail
+      operationId: admin_pile_detail_api_v1_admin_piles__pile_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: pile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Pile Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/piles/{pile_id}/restart:
+    post:
+      tags:
+      - admin and dashboard
+      summary: Admin Restart Pile
+      operationId: admin_restart_pile_api_v1_admin_piles__pile_id__restart_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: pile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Pile Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/piles/{pile_id}/status:
+    patch:
+      tags:
+      - admin and dashboard
+      summary: Admin Set Pile Status
+      operationId: admin_set_pile_status_api_v1_admin_piles__pile_id__status_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: pile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Pile Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PileStatusUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/stations:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin Stations
+      operationId: admin_stations_api_v1_admin_stations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/StationStatus'
+          - type: 'null'
+          title: Status
+      - name: operator_name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operator Name
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: data_source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Data Source
+      - name: has_coordinates
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Has Coordinates
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - admin and dashboard
+      summary: Admin Create Station
+      operationId: admin_create_station_api_v1_admin_stations_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StationCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/stations/{station_id}:
+    put:
+      tags:
+      - admin and dashboard
+      summary: Admin Update Station
+      operationId: admin_update_station_api_v1_admin_stations__station_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: station_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Station Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StationUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/stations/{station_id}/piles:
+    post:
+      tags:
+      - admin and dashboard
+      summary: Admin Add Pile
+      operationId: admin_add_pile_api_v1_admin_stations__station_id__piles_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: station_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Station Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StationPileCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/users:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin Users
+      operationId: admin_users_api_v1_admin_users_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: phone_keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone Keyword
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/UserStatus'
+          - type: 'null'
+          title: Status
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/users/{user_id}:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Admin User Detail
+      operationId: admin_user_detail_api_v1_admin_users__user_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/users/{user_id}/freeze:
+    post:
+      tags:
+      - admin and dashboard
+      summary: Freeze User
+      operationId: freeze_user_api_v1_admin_users__user_id__freeze_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/users/{user_id}/unfreeze:
+    post:
+      tags:
+      - admin and dashboard
+      summary: Unfreeze User
+      operationId: unfreeze_user_api_v1_admin_users__user_id__unfreeze_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/overview:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Overview
+      operationId: dashboard_overview_api_v1_dashboard_overview_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /api/v1/dashboard/revenue-trend:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Revenue
+      operationId: dashboard_revenue_api_v1_dashboard_revenue_trend_get
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 30
+          title: Days
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/pile-status:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Pile Status
+      operationId: dashboard_pile_status_api_v1_dashboard_pile_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /api/v1/dashboard/station-ranking:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Station Ranking
+      operationId: station_ranking_api_v1_dashboard_station_ranking_get
+      parameters:
+      - name: metric
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(revenue|order_count|energy|utilization)$
+          default: revenue
+          title: Metric
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 30
+          title: Days
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/predictions/load:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Load Predictions
+      operationId: load_predictions_api_v1_predictions_load_get
+      parameters:
+      - name: station_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Station Id
+      - name: horizon_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 6
+          title: Horizon Hours
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recommendations/stations:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Recommendations
+      operationId: recommendations_api_v1_recommendations_stations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: latitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: Latitude
+      - name: longitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: Longitude
+      - name: radius_km
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 100
+          minimum: 0.1
+          default: 20
+          title: Radius Km
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 5
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/internal/piles/{pile_id}/heartbeat:
+    post:
+      tags:
+      - internal
+      summary: Heartbeat
+      operationId: heartbeat_api_v1_internal_piles__pile_id__heartbeat_post
+      parameters:
+      - name: pile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Pile Id
+      - name: x-internal-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/internal/orders/{order_id}/telemetry:
+    post:
+      tags:
+      - internal
+      summary: Telemetry
+      operationId: telemetry_api_v1_internal_orders__order_id__telemetry_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Id
+      - name: x-internal-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/internal/predictions/load:
+    post:
+      tags:
+      - internal
+      summary: Write Predictions
+      operationId: write_predictions_api_v1_internal_predictions_load_post
+      parameters:
+      - name: x-internal-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PredictionsCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AdminLogin:
+      properties:
+        username:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Username
+        password:
+          type: string
+          maxLength: 128
+          minLength: 1
+          title: Password
+      type: object
+      required:
+      - username
+      - password
+      title: AdminLogin
+    ApiEnvelope:
+      properties:
+        code:
+          type: integer
+          title: Code
+          default: 0
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+      additionalProperties: true
+      type: object
+      required:
+      - request_id
+      title: ApiEnvelope
+    Body_upload_avatar_api_v1_user_avatar_post:
+      properties:
+        avatar:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Avatar
+          description: JPEG, PNG or WebP; maximum 2 MiB
+      type: object
+      required:
+      - avatar
+      title: Body_upload_avatar_api_v1_user_avatar_post
+    CancelOrder:
+      properties:
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Reason
+      type: object
+      title: CancelOrder
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HeartbeatCreate:
+      properties:
+        reported_at:
+          type: string
+          format: date-time
+          title: Reported At
+        device_status:
+          type: string
+          pattern: ^(ONLINE|OFFLINE)$
+          title: Device Status
+      type: object
+      required:
+      - reported_at
+      - device_status
+      title: HeartbeatCreate
+    OrderCreate:
+      properties:
+        pile_id:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Pile Id
+      type: object
+      required:
+      - pile_id
+      title: OrderCreate
+    OrderStatus:
+      type: string
+      enum:
+      - PENDING
+      - RESERVED
+      - CHARGING
+      - UNPAID
+      - COMPLETED
+      - CANCELLED
+      title: OrderStatus
+    PileStatus:
+      type: string
+      enum:
+      - IDLE
+      - RESERVED
+      - CHARGING
+      - FAULT
+      - OFFLINE
+      title: PileStatus
+    PileStatusUpdate:
+      properties:
+        status:
+          $ref: '#/components/schemas/PileStatus'
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - status
+      title: PileStatusUpdate
+    PileType:
+      type: string
+      enum:
+      - FAST
+      - SLOW
+      title: PileType
+    PredictionPointCreate:
+      properties:
+        prediction_type:
+          $ref: '#/components/schemas/PredictionType'
+        predicted_for:
+          type: string
+          format: date-time
+          title: Predicted For
+        predicted_value:
+          anyOf:
+          - type: number
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Predicted Value
+      type: object
+      required:
+      - prediction_type
+      - predicted_for
+      - predicted_value
+      title: PredictionPointCreate
+    PredictionType:
+      type: string
+      enum:
+      - LOAD_W
+      - AVAILABLE_PILES
+      - CONGESTION_SCORE
+      title: PredictionType
+    PredictionsCreate:
+      properties:
+        station_id:
+          anyOf:
+          - type: integer
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Station Id
+        horizon_hours:
+          type: integer
+          title: Horizon Hours
+        model_version:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Model Version
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        points:
+          items:
+            $ref: '#/components/schemas/PredictionPointCreate'
+          type: array
+          maxItems: 500
+          minItems: 1
+          title: Points
+      type: object
+      required:
+      - horizon_hours
+      - model_version
+      - generated_at
+      - points
+      title: PredictionsCreate
+    ProfileUpdate:
+      properties:
+        nickname:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Nickname
+      type: object
+      required:
+      - nickname
+      title: ProfileUpdate
+    RechargeCreate:
+      properties:
+        amount_cents:
+          type: integer
+          maximum: 1000000.0
+          minimum: 1.0
+          title: Amount Cents
+        client_request_id:
+          type: string
+          maxLength: 64
+          minLength: 8
+          title: Client Request Id
+      type: object
+      required:
+      - amount_cents
+      - client_request_id
+      title: RechargeCreate
+    StationCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Name
+        address:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Address
+        latitude:
+          anyOf:
+          - type: number
+            maximum: 90.0
+            minimum: -90.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Latitude
+        longitude:
+          anyOf:
+          - type: number
+            maximum: 180.0
+            minimum: -180.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Longitude
+        price_cents_per_kwh:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Price Cents Per Kwh
+        operator_name:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Operator Name
+        service_type:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: Service Type
+        district:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: District
+        region_scope:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: Region Scope
+        location_type:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Location Type
+        fast_connector_count:
+          type: integer
+          minimum: 0.0
+          title: Fast Connector Count
+          default: 0
+        slow_connector_count:
+          type: integer
+          minimum: 0.0
+          title: Slow Connector Count
+          default: 0
+        piles:
+          items:
+            $ref: '#/components/schemas/StationPileCreate'
+          type: array
+          maxItems: 100
+          title: Piles
+      type: object
+      required:
+      - name
+      - address
+      - latitude
+      - longitude
+      - price_cents_per_kwh
+      title: StationCreate
+    StationPileCreate:
+      properties:
+        pile_no:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Pile No
+        pile_type:
+          $ref: '#/components/schemas/PileType'
+        rated_power_w:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Rated Power W
+      type: object
+      required:
+      - pile_no
+      - pile_type
+      - rated_power_w
+      title: StationPileCreate
+    StationStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+      title: StationStatus
+    StationUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Name
+        address:
+          anyOf:
+          - type: string
+            maxLength: 255
+            minLength: 1
+          - type: 'null'
+          title: Address
+        latitude:
+          anyOf:
+          - type: number
+            maximum: 90.0
+            minimum: -90.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Latitude
+        longitude:
+          anyOf:
+          - type: number
+            maximum: 180.0
+            minimum: -180.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Longitude
+        price_cents_per_kwh:
+          anyOf:
+          - type: integer
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Price Cents Per Kwh
+        operator_name:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Operator Name
+        service_type:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: Service Type
+        district:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: District
+        region_scope:
+          anyOf:
+          - type: string
+            maxLength: 32
+            minLength: 1
+          - type: 'null'
+          title: Region Scope
+        location_type:
+          anyOf:
+          - type: string
+            maxLength: 64
+            minLength: 1
+          - type: 'null'
+          title: Location Type
+        fast_connector_count:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Fast Connector Count
+        slow_connector_count:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Slow Connector Count
+        status:
+          anyOf:
+          - $ref: '#/components/schemas/StationStatus'
+          - type: 'null'
+      type: object
+      title: StationUpdate
+    TelemetryCreate:
+      properties:
+        reported_at:
+          type: string
+          format: date-time
+          title: Reported At
+        energy_wh:
+          type: integer
+          minimum: 0.0
+          title: Energy Wh
+      type: object
+      required:
+      - reported_at
+      - energy_wh
+      title: TelemetryCreate
+    UserLogin:
+      properties:
+        phone:
+          type: string
+          pattern: ^1[3-9]\d{9}$
+          title: Phone
+      type: object
+      required:
+      - phone
+      title: UserLogin
+    UserStatus:
+      type: string
+      enum:
+      - NORMAL
+      - FROZEN
+      title: UserStatus
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
