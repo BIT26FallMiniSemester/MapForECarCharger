@@ -25,6 +25,7 @@ INSUFFICIENT_BALANCE = (40005, "insufficient balance", 409)
 ACTIVE_ORDER_PREVENTS_FREEZE = (40006, "active order prevents freeze", 409)
 DUPLICATE_RESOURCE = (40007, "duplicate resource", 409)
 TELEMETRY_OUT_OF_ORDER = (40008, "telemetry is out of order", 409)
+RESERVATION_EXPIRED = (40009, "reservation has expired", 409)
 INTERNAL_ERROR = (50000, "internal server error", 500)
 SERVICE_UNAVAILABLE = (50001, "service unavailable", 503)
 

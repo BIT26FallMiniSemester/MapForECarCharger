@@ -1,0 +1,38 @@
+{
+  "reserve_order": {
+    "method": "POST",
+    "path": "/api/v1/orders/{order_id}/reserve",
+    "response_fields": {
+      "status": "RESERVED",
+      "reserved_at": "2026-09-02T08:00:00Z",
+      "reservation_expires_at": "2026-09-02T08:15:00Z"
+    }
+  },
+  "expired_start_error": {
+    "http_status": 409,
+    "code": 40009,
+    "message": "reservation has expired",
+    "details": {
+      "order_id": 101,
+      "reservation_expires_at": "2026-09-02T08:15:00Z"
+    }
+  },
+  "internal_sweep": {
+    "method": "POST",
+    "path": "/api/v1/internal/orders/expire-reservations",
+    "headers": {
+      "X-Internal-Key": "<internal_key>"
+    },
+    "response_fields": {
+      "expired_count": 1,
+      "expired_order_ids": [101],
+      "processed_at": "2026-09-02T08:16:00Z"
+    }
+  },
+  "result": {
+    "order_status": "CANCELLED",
+    "cancel_reason": "reservation expired",
+    "pile_status": "IDLE",
+    "pile_log_source": "SYSTEM"
+  }
+}

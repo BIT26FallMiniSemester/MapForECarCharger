@@ -1,11 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from app.config import get_settings
 from app.enums import (
     ACTIVE_ORDER_STATUSES,
     LogSource,
@@ -19,12 +20,13 @@ from app.errors import (
     INVALID_ORDER_STATE,
     ORDER_NOT_OWNED,
     PILE_NOT_AVAILABLE,
+    RESERVATION_EXPIRED,
     RESOURCE_NOT_FOUND,
     TELEMETRY_OUT_OF_ORDER,
     USER_HAS_ACTIVE_ORDER,
     error,
 )
-from app.helpers import utcnow
+from app.helpers import as_utc, utcnow
 from app.models import (
     ChargingOrder,
     ChargingPile,
@@ -48,6 +50,7 @@ def get_owned_order(db: Session, order_id: int, user_id: int) -> ChargingOrder:
 
 
 def create_order(db: Session, user: User, pile_id: int) -> ChargingOrder:
+    expire_reservations(db, user_id=user.id)
     pile = db.get(ChargingPile, pile_id)
     if pile is None:
         raise error(RESOURCE_NOT_FOUND, {"resource": "pile", "id": pile_id})
@@ -116,6 +119,81 @@ def _pile_log(
     )
 
 
+def expire_reservations(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    user_id: int | None = None,
+    order_id: int | None = None,
+) -> list[int]:
+    cutoff = now or utcnow()
+    filters = [
+        ChargingOrder.status == OrderStatus.RESERVED,
+        ChargingOrder.reservation_expires_at.is_not(None),
+        ChargingOrder.reservation_expires_at <= cutoff,
+    ]
+    if user_id is not None:
+        filters.append(ChargingOrder.user_id == user_id)
+    if order_id is not None:
+        filters.append(ChargingOrder.id == order_id)
+    orders = db.scalars(
+        select(ChargingOrder)
+        .options(selectinload(ChargingOrder.pile))
+        .where(*filters)
+        .order_by(ChargingOrder.id)
+    ).all()
+    expired_order_ids: list[int] = []
+    for order in orders:
+        claimed = db.execute(
+            update(ChargingOrder)
+            .where(
+                ChargingOrder.id == order.id,
+                ChargingOrder.status == OrderStatus.RESERVED,
+                ChargingOrder.version == order.version,
+            )
+            .values(
+                status=OrderStatus.CANCELLED,
+                cancel_reason="reservation expired",
+                cancelled_at=cutoff,
+                updated_at=cutoff,
+                version=order.version + 1,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            continue
+        pile = order.pile
+        if pile.status == PileStatus.RESERVED:
+            released = db.execute(
+                update(ChargingPile)
+                .where(
+                    ChargingPile.id == pile.id,
+                    ChargingPile.status == PileStatus.RESERVED,
+                    ChargingPile.version == pile.version,
+                )
+                .values(
+                    status=PileStatus.IDLE,
+                    version=pile.version + 1,
+                    updated_at=cutoff,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            if released.rowcount == 1:
+                _pile_log(
+                    db,
+                    pile,
+                    PileStatus.RESERVED,
+                    PileStatus.IDLE,
+                    LogSource.SYSTEM,
+                    order.id,
+                    "reservation expired",
+                )
+        expired_order_ids.append(order.id)
+    if expired_order_ids:
+        db.commit()
+    return expired_order_ids
+
+
 def reserve_order(db: Session, order: ChargingOrder) -> ChargingOrder:
     if order.status != OrderStatus.PENDING:
         raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
@@ -143,6 +221,9 @@ def reserve_order(db: Session, order: ChargingOrder) -> ChargingOrder:
     now = utcnow()
     order.status = OrderStatus.RESERVED
     order.reserved_at = now
+    order.reservation_expires_at = now + timedelta(
+        seconds=get_settings().reservation_timeout_seconds
+    )
     order.version += 1
     order.updated_at = now
     _pile_log(
@@ -160,27 +241,91 @@ def reserve_order(db: Session, order: ChargingOrder) -> ChargingOrder:
 
 
 def start_order(db: Session, order: ChargingOrder) -> ChargingOrder:
-    if order.status != OrderStatus.RESERVED or order.pile.status != PileStatus.RESERVED:
+    now = utcnow()
+    expires_at = order.reservation_expires_at
+    if expires_at is not None and expires_at <= now:
+        expired = expire_reservations(db, order_id=order.id)
+        if order.id in expired or (
+            order.status == OrderStatus.CANCELLED
+            and order.cancel_reason == "reservation expired"
+        ):
+            raise error(
+                RESERVATION_EXPIRED,
+                {
+                    "order_id": order.id,
+                    "reservation_expires_at": as_utc(expires_at),
+                },
+            )
+    pile = order.pile
+    order_version = order.version
+    claimed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == OrderStatus.RESERVED,
+            ChargingOrder.version == order_version,
+            ChargingOrder.reservation_expires_at.is_(None)
+            | (ChargingOrder.reservation_expires_at > now),
+        )
+        .values(
+            status=OrderStatus.CHARGING,
+            started_at=now,
+            updated_at=now,
+            version=order_version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        if (
+            order.status == OrderStatus.CANCELLED
+            and order.cancel_reason == "reservation expired"
+        ):
+            raise error(
+                RESERVATION_EXPIRED,
+                {
+                    "order_id": order.id,
+                    "reservation_expires_at": as_utc(expires_at),
+                },
+            )
         raise error(
             INVALID_ORDER_STATE,
             {
                 "order_status": order.status.value,
-                "pile_status": order.pile.status.value,
+                "pile_status": pile.status.value,
             },
         )
-    now = utcnow()
-    order.status = OrderStatus.CHARGING
-    order.started_at = now
-    order.updated_at = now
-    order.version += 1
-    old = order.pile.status
-    order.pile.status = PileStatus.CHARGING
-    order.pile.updated_at = now
-    order.pile.version += 1
+    pile_version = pile.version
+    transitioned = db.execute(
+        update(ChargingPile)
+        .where(
+            ChargingPile.id == pile.id,
+            ChargingPile.status == PileStatus.RESERVED,
+            ChargingPile.version == pile_version,
+        )
+        .values(
+            status=PileStatus.CHARGING,
+            updated_at=now,
+            version=pile_version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transitioned.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        db.refresh(pile)
+        raise error(
+            INVALID_ORDER_STATE,
+            {
+                "order_status": order.status.value,
+                "pile_status": pile.status.value,
+            },
+        )
     _pile_log(
         db,
-        order.pile,
-        old,
+        pile,
+        PileStatus.RESERVED,
         PileStatus.CHARGING,
         LogSource.USER,
         order.id,

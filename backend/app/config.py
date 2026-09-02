@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     )
     user_token_expire_seconds: int = 86_400
     admin_token_expire_seconds: int = 28_800
+    reservation_timeout_seconds: int = Field(default=900, ge=1, le=86_400)
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

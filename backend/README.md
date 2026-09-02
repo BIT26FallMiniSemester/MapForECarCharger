@@ -15,6 +15,8 @@ python3 -m venv .venv
 
 Swagger: `http://127.0.0.1:8000/docs`，API 前缀：`/api/v1`。
 
+预约默认保留 15 分钟，可通过 `RESERVATION_TIMEOUT_SECONDS` 调整。用户再次查询或操作订单时会清理自己的过期预约；独立模拟器或定时任务可以调用 `POST /api/v1/internal/orders/expire-reservations` 批量释放过期电桩。
+
 ## 公共充电站数据
 
 `app.seed --reset` 会同时导入北京市公共数据开放平台的 2,614 条社会公用充电站记录。
