@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from app.database import SessionLocal
 from app.enums import (
     AdminStatus,
+    LogSource,
     OrderStatus,
     PileStatus,
     PileType,
@@ -187,6 +188,37 @@ def seed(reset: bool = False) -> None:
                 created_at=now - timedelta(minutes=30),
                 updated_at=now - timedelta(minutes=1),
             )
+        )
+        db.add_all(
+            [
+                PileStatusLog(
+                    pile_id=piles[2].id,
+                    order_id=None,
+                    old_status=PileStatus.IDLE,
+                    new_status=PileStatus.FAULT,
+                    source=LogSource.SIMULATOR,
+                    reason="simulated fault",
+                    created_at=now - timedelta(minutes=15),
+                ),
+                PileStatusLog(
+                    pile_id=piles[3].id,
+                    order_id=None,
+                    old_status=PileStatus.IDLE,
+                    new_status=PileStatus.OFFLINE,
+                    source=LogSource.SIMULATOR,
+                    reason="simulated offline",
+                    created_at=now - timedelta(minutes=10),
+                ),
+                PileStatusLog(
+                    pile_id=piles[0].id,
+                    order_id=None,
+                    old_status=PileStatus.FAULT,
+                    new_status=PileStatus.IDLE,
+                    source=LogSource.SIMULATOR,
+                    reason="simulated recovery",
+                    created_at=now - timedelta(minutes=5),
+                ),
+            ]
         )
         for index, user in enumerate(users[:5]):
             db.add(

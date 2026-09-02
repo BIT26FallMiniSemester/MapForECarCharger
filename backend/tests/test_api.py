@@ -134,6 +134,8 @@ def test_admin_and_dashboard_endpoints(client, admin_headers):
     overview = client.get("/api/v1/dashboard/overview")
     assert overview.status_code == 200
     assert overview.json()["data"]["station_count"] == 2
+    assert overview.json()["data"]["user_count"] == 2
+    assert overview.json()["data"]["total_energy_wh"] == 0
 
 
 def test_prediction_upsert_and_read(client):
