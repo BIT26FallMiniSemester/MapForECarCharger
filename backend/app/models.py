@@ -170,6 +170,7 @@ class ChargingOrder(TimestampMixin, Base):
         CheckConstraint("amount_cents >= 0", name="ck_orders_amount_nonnegative"),
         Index("idx_orders_user_created", "user_id", "created_at"),
         Index("idx_orders_status_created", "status", "created_at"),
+        Index("idx_orders_status_started", "status", "started_at"),
         Index("idx_orders_station_settled", "station_id", "settled_at"),
         Index("idx_orders_pile_started", "pile_id", "started_at"),
         Index(
@@ -247,7 +248,10 @@ class RechargeRecord(Base):
 
 class PileStatusLog(Base):
     __tablename__ = "pile_status_logs"
-    __table_args__ = (Index("idx_pile_logs_pile_created", "pile_id", "created_at"),)
+    __table_args__ = (
+        Index("idx_pile_logs_pile_created", "pile_id", "created_at"),
+        Index("idx_pile_logs_created", "created_at"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     pile_id: Mapped[int] = mapped_column(
         ForeignKey("charging_piles.id", ondelete="RESTRICT"), nullable=False

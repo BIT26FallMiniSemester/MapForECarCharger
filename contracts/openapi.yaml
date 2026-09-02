@@ -1303,6 +1303,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiEnvelope'
+  /api/v1/dashboard/stations-map:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Stations Map
+      operationId: dashboard_stations_map_api_v1_dashboard_stations_map_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /api/v1/dashboard/hourly-demand:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Hourly Demand
+      operationId: dashboard_hourly_demand_api_v1_dashboard_hourly_demand_get
+      parameters:
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 30
+          title: Days
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/dashboard/alerts:
+    get:
+      tags:
+      - admin and dashboard
+      summary: Dashboard Alerts
+      operationId: dashboard_alerts_api_v1_dashboard_alerts_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/dashboard/revenue-trend:
     get:
       tags:

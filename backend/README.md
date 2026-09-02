@@ -17,6 +17,8 @@ Swagger: `http://127.0.0.1:8000/docs`，API 前缀：`/api/v1`。
 
 预约默认保留 15 分钟，可通过 `RESERVATION_TIMEOUT_SECONDS` 调整。用户再次查询或操作订单时会清理自己的过期预约；独立模拟器或定时任务可以调用 `POST /api/v1/internal/orders/expire-reservations` 批量释放过期电桩。
 
+大屏可通过 `/dashboard/stations-map`、`/dashboard/hourly-demand` 和 `/dashboard/alerts` 直接读取站点地图聚合、分时需求和电桩运行告警，无业务数据时保持成功响应和空数组或补零数据。
+
 ## 公共充电站数据
 
 `app.seed --reset` 会同时导入北京市公共数据开放平台的 2,614 条社会公用充电站记录。

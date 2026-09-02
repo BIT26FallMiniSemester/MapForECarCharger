@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, extract, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.admin_services import (
@@ -499,6 +499,7 @@ def dashboard_overview(request: Request, db: DbSession) -> ApiEnvelope:
         )
         or 0
     )
+    users = db.scalar(select(func.count()).select_from(User)) or 0
     station_filter = Station.status == StationStatus.ACTIVE
     stations = (
         db.scalar(select(func.count()).select_from(Station).where(station_filter)) or 0
@@ -546,7 +547,9 @@ def dashboard_overview(request: Request, db: DbSession) -> ApiEnvelope:
             "today_order_count": revenue["today_order_count"],
             "total_order_count": total_orders,
             "today_energy_wh": int(today_energy),
+            "total_energy_wh": revenue["total_energy_wh"],
             "charging_order_count": charging,
+            "user_count": users,
             "station_count": stations,
             "operational_station_count": operational_stations,
             "public_catalog_station_count": public_catalog_stations,
@@ -557,6 +560,152 @@ def dashboard_overview(request: Request, db: DbSession) -> ApiEnvelope:
             "updated_at": as_utc(utcnow()),
         },
     )
+
+
+@router.get("/dashboard/stations-map")
+def dashboard_stations_map(request: Request, db: DbSession) -> ApiEnvelope:
+    rows = db.execute(
+        select(
+            Station.id,
+            Station.name,
+            Station.latitude,
+            Station.longitude,
+            func.count(ChargingPile.id),
+            func.sum(case((ChargingPile.status == PileStatus.IDLE, 1), else_=0)),
+            func.sum(case((ChargingPile.status == PileStatus.RESERVED, 1), else_=0)),
+            func.sum(case((ChargingPile.status == PileStatus.CHARGING, 1), else_=0)),
+            func.sum(case((ChargingPile.status == PileStatus.FAULT, 1), else_=0)),
+            func.sum(case((ChargingPile.status == PileStatus.OFFLINE, 1), else_=0)),
+            func.sum(case((ChargingPile.status.in_(ONLINE_PILE_STATUSES), 1), else_=0)),
+        )
+        .outerjoin(ChargingPile, ChargingPile.station_id == Station.id)
+        .where(
+            Station.status == StationStatus.ACTIVE,
+            Station.latitude.is_not(None),
+            Station.longitude.is_not(None),
+        )
+        .group_by(Station.id, Station.name, Station.latitude, Station.longitude)
+        .order_by(Station.id)
+    ).all()
+    items = []
+    for row in rows:
+        total = int(row[4] or 0)
+        reserved = int(row[6] or 0)
+        charging = int(row[7] or 0)
+        online = int(row[10] or 0)
+        items.append(
+            {
+                "station_id": row[0],
+                "station_name": row[1],
+                "latitude": float(row[2]),
+                "longitude": float(row[3]),
+                "total_piles": total,
+                "available_piles": int(row[5] or 0),
+                "reserved_piles": reserved,
+                "charging_piles": charging,
+                "fault_piles": int(row[8] or 0),
+                "offline_piles": int(row[9] or 0),
+                "online_rate": round(online * 100 / total, 2) if total else 0.0,
+                "utilization_rate": round((reserved + charging) * 100 / total, 2)
+                if total
+                else 0.0,
+            }
+        )
+    return success(request, {"items": items})
+
+
+@router.get("/dashboard/hourly-demand")
+def dashboard_hourly_demand(
+    request: Request,
+    db: DbSession,
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> ApiEnvelope:
+    today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    start = today - timedelta(days=days - 1)
+    end = today + timedelta(days=1)
+    hour = extract("hour", ChargingOrder.started_at)
+    rows = db.execute(
+        select(
+            hour,
+            func.count(ChargingOrder.id),
+            func.coalesce(func.sum(ChargingOrder.energy_wh), 0),
+        )
+        .where(
+            ChargingOrder.status.in_(
+                (OrderStatus.CHARGING, OrderStatus.UNPAID, OrderStatus.COMPLETED)
+            ),
+            ChargingOrder.started_at >= start,
+            ChargingOrder.started_at < end,
+        )
+        .group_by(hour)
+    ).all()
+    by_hour = {
+        int(row[0]): {"order_count": int(row[1]), "energy_wh": int(row[2])}
+        for row in rows
+    }
+    return success(
+        request,
+        {
+            "days": days,
+            "items": [
+                {
+                    "hour": value,
+                    "order_count": by_hour.get(value, {}).get("order_count", 0),
+                    "energy_wh": by_hour.get(value, {}).get("energy_wh", 0),
+                }
+                for value in range(24)
+            ],
+        },
+    )
+
+
+@router.get("/dashboard/alerts")
+def dashboard_alerts(
+    request: Request,
+    db: DbSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ApiEnvelope:
+    rows = db.execute(
+        select(PileStatusLog, ChargingPile.pile_no, ChargingPile.station_id)
+        .join(ChargingPile, ChargingPile.id == PileStatusLog.pile_id)
+        .where(
+            or_(
+                PileStatusLog.new_status.in_((PileStatus.FAULT, PileStatus.OFFLINE)),
+                and_(
+                    PileStatusLog.old_status.in_(
+                        (PileStatus.FAULT, PileStatus.OFFLINE)
+                    ),
+                    PileStatusLog.new_status == PileStatus.IDLE,
+                ),
+            )
+        )
+        .order_by(PileStatusLog.created_at.desc(), PileStatusLog.id.desc())
+        .limit(limit)
+    ).all()
+    items = []
+    for log, pile_no, station_id in rows:
+        if log.new_status == PileStatus.FAULT:
+            level, alert_type, title = "ERROR", "PILE_FAULT", "充电桩故障"
+            message = f"{pile_no} 进入故障状态"
+        elif log.new_status == PileStatus.OFFLINE:
+            level, alert_type, title = "WARNING", "PILE_OFFLINE", "充电桩离线"
+            message = f"{pile_no} 进入离线状态"
+        else:
+            level, alert_type, title = "INFO", "PILE_RECOVERED", "充电桩恢复"
+            message = f"{pile_no} 已恢复空闲状态"
+        items.append(
+            {
+                "id": log.id,
+                "level": level,
+                "type": alert_type,
+                "title": title,
+                "message": message,
+                "station_id": station_id,
+                "pile_id": log.pile_id,
+                "occurred_at": as_utc(log.created_at),
+            }
+        )
+    return success(request, {"items": items})
 
 
 @router.get("/dashboard/revenue-trend")
