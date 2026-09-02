@@ -1520,6 +1520,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/internal/orders/expire-reservations:
+    post:
+      tags:
+      - internal
+      summary: Expire Order Reservations
+      operationId: expire_order_reservations_api_v1_internal_orders_expire_reservations_post
+      parameters:
+      - name: x-internal-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/internal/orders/{order_id}/telemetry:
     post:
       tags:

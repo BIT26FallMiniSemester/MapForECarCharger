@@ -4,11 +4,11 @@ from sqlalchemy import select
 from app.dependencies import DbSession, require_internal_key
 from app.device_services import update_heartbeat
 from app.errors import RESOURCE_NOT_FOUND, error
-from app.helpers import as_utc
+from app.helpers import as_utc, utcnow
 from app.models import ChargingOrder, ChargingPile, LoadPrediction, Station
 from app.responses import ApiEnvelope, success
 from app.schemas import HeartbeatCreate, PredictionsCreate, TelemetryCreate
-from app.services import update_telemetry
+from app.services import expire_reservations, update_telemetry
 
 router = APIRouter(
     prefix="/internal",
@@ -31,6 +31,20 @@ def heartbeat(
             "pile_id": pile.id,
             "status": pile.status.value,
             "last_heartbeat_at": as_utc(pile.last_heartbeat_at),
+        },
+    )
+
+
+@router.post("/orders/expire-reservations")
+def expire_order_reservations(request: Request, db: DbSession) -> ApiEnvelope:
+    processed_at = utcnow()
+    expired_order_ids = expire_reservations(db, now=processed_at)
+    return success(
+        request,
+        {
+            "expired_count": len(expired_order_ids),
+            "expired_order_ids": expired_order_ids,
+            "processed_at": as_utc(processed_at),
         },
     )
 

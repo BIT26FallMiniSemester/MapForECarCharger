@@ -103,10 +103,12 @@ def order_data(order: ChargingOrder) -> dict:
         "duration_seconds": order.duration_seconds,
         "amount_cents": order.amount_cents,
         "reserved_at": as_utc(order.reserved_at),
+        "reservation_expires_at": as_utc(order.reservation_expires_at),
         "started_at": as_utc(order.started_at),
         "stopped_at": as_utc(order.stopped_at),
         "settled_at": as_utc(order.settled_at),
         "cancelled_at": as_utc(order.cancelled_at),
+        "cancel_reason": order.cancel_reason,
         "created_at": as_utc(order.created_at),
         "updated_at": as_utc(order.updated_at),
     }

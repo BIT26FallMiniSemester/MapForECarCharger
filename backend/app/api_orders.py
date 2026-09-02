@@ -22,6 +22,7 @@ from app.schemas import CancelOrder, OrderCreate
 from app.services import (
     cancel_order,
     create_order,
+    expire_reservations,
     get_owned_order,
     reserve_order,
     settle_order,
@@ -360,6 +361,7 @@ def orders(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiEnvelope:
+    expire_reservations(db, user_id=user.id)
     filters = [ChargingOrder.user_id == user.id]
     if status:
         filters.append(ChargingOrder.status == status)
@@ -384,6 +386,7 @@ def orders(
 def active_order(
     request: Request, db: DbSession, user: Annotated[User, Depends(current_user)]
 ) -> ApiEnvelope:
+    expire_reservations(db, user_id=user.id)
     order = db.scalar(
         select(ChargingOrder)
         .options(selectinload(ChargingOrder.station), selectinload(ChargingOrder.pile))
@@ -402,4 +405,5 @@ def order_detail(
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
 ) -> ApiEnvelope:
+    expire_reservations(db, user_id=user.id, order_id=order_id)
     return success(request, order_data(get_owned_order(db, order_id, user.id)))
