@@ -19,6 +19,12 @@ Swagger: `http://127.0.0.1:8000/docs`，API 前缀：`/api/v1`。
 
 大屏可通过 `/dashboard/stations-map`、`/dashboard/hourly-demand` 和 `/dashboard/alerts` 直接读取站点地图聚合、分时需求和电桩运行告警，无业务数据时保持成功响应和空数组或补零数据。
 
+## ML 联调与内部密钥
+
+ML 模块通过 `GET /api/v1/internal/stations/catalog-mappings` 查询当前数据库的 `(data_source, external_id) → station_id` 映射，禁止使用固定数值偏移推导主键。
+
+部署者应从 `.env.example` 创建不进入 Git 的 `backend/.env`，将权限设为 `600`，并为 `JWT_SECRET` 和 `INTERNAL_KEY` 分别生成至少 32 字节的随机值。`INTERNAL_KEY` 只通过 SSH、密码管理器或一对一私密渠道交付，不进入代码、URL、日志或群聊。ML 进程从自身环境变量读取密钥，请求时仅通过 `X-Internal-Key` Header 发送。
+
 ## 公共充电站数据
 
 `app.seed --reset` 会同时导入北京市公共数据开放平台的 2,614 条社会公用充电站记录。

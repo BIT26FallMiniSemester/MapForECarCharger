@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import jwt
+
 from app.config import get_settings
 
 
@@ -53,7 +54,9 @@ def test_recharge_is_idempotent(client, user_headers):
     assert profile.json()["data"]["balance_cents"] == 55_000
 
 
-def test_complete_charging_flow_and_idempotent_settlement(client, user_headers):
+def test_complete_charging_flow_and_idempotent_settlement(
+    client, user_headers, internal_headers
+):
     created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
     assert created.status_code == 201
     order_id = created.json()["data"]["id"]
@@ -74,7 +77,7 @@ def test_complete_charging_flow_and_idempotent_settlement(client, user_headers):
     telemetry_time = datetime.now(UTC) + timedelta(seconds=1)
     telemetry = client.post(
         f"/api/v1/internal/orders/{order_id}/telemetry",
-        headers={"X-Internal-Key": "development-internal-key-change-me"},
+        headers=internal_headers,
         json={"reported_at": telemetry_time.isoformat(), "energy_wh": 12_345},
     )
     assert telemetry.status_code == 200
@@ -138,7 +141,7 @@ def test_admin_and_dashboard_endpoints(client, admin_headers):
     assert overview.json()["data"]["total_energy_wh"] == 0
 
 
-def test_prediction_upsert_and_read(client):
+def test_prediction_upsert_and_read(client, internal_headers):
     payload = {
         "station_id": 1,
         "horizon_hours": 6,
@@ -152,13 +155,12 @@ def test_prediction_upsert_and_read(client):
             }
         ],
     }
-    headers = {"X-Internal-Key": "development-internal-key-change-me"}
     first = client.post(
-        "/api/v1/internal/predictions/load", headers=headers, json=payload
+        "/api/v1/internal/predictions/load", headers=internal_headers, json=payload
     )
     payload["points"][0]["predicted_value"] = 125000
     second = client.post(
-        "/api/v1/internal/predictions/load", headers=headers, json=payload
+        "/api/v1/internal/predictions/load", headers=internal_headers, json=payload
     )
     assert first.status_code == second.status_code == 200
     result = client.get("/api/v1/predictions/load?station_id=1&horizon_hours=6")

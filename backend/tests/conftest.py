@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+
+from app.config import get_settings
 from app.database import Base, create_database_engine, get_db
 from app.enums import AdminStatus, PileStatus, PileType, StationStatus, UserStatus
 from app.main import app
 from app.models import Admin, ChargingPile, Station, User
 from app.security import hash_password
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
 
 
 @pytest.fixture()
@@ -113,3 +115,8 @@ def admin_headers(client):
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
+
+
+@pytest.fixture()
+def internal_headers():
+    return {"X-Internal-Key": get_settings().internal_key}

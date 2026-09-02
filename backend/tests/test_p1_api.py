@@ -1,9 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
+
 from app.enums import LogSource, OrderStatus, PileStatus
 from app.helpers import utcnow
 from app.models import ChargingOrder, ChargingPile, PileStatusLog
-from sqlalchemy import select
 
 
 def test_avatar_upload_and_static_file(client, user_headers):
@@ -20,7 +21,7 @@ def test_avatar_upload_and_static_file(client, user_headers):
     assert image.content.startswith(b"\x89PNG")
 
 
-def test_realtime_orders_and_heartbeat_log(client, user_headers):
+def test_realtime_orders_and_heartbeat_log(client, user_headers, internal_headers):
     created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
     order_id = created.json()["data"]["id"]
     client.post(f"/api/v1/orders/{order_id}/reserve", headers=user_headers, json={})
@@ -32,7 +33,7 @@ def test_realtime_orders_and_heartbeat_log(client, user_headers):
     # A business-bound pile must not be forced offline by a heartbeat.
     heartbeat = client.post(
         "/api/v1/internal/piles/1/heartbeat",
-        headers={"X-Internal-Key": "development-internal-key-change-me"},
+        headers=internal_headers,
         json={
             "reported_at": (datetime.now(UTC) + timedelta(seconds=1)).isoformat(),
             "device_status": "OFFLINE",
@@ -81,7 +82,9 @@ def test_expired_reservation_releases_pile_and_allows_new_order(
     assert replacement.status_code == 201
 
 
-def test_internal_reservation_sweep_is_idempotent(client, user_headers, db_session):
+def test_internal_reservation_sweep_is_idempotent(
+    client, user_headers, internal_headers, db_session
+):
     created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
     order_id = created.json()["data"]["id"]
     client.post(f"/api/v1/orders/{order_id}/reserve", headers=user_headers)
@@ -89,9 +92,12 @@ def test_internal_reservation_sweep_is_idempotent(client, user_headers, db_sessi
     order.reservation_expires_at = utcnow() - timedelta(seconds=1)
     db_session.commit()
 
-    headers = {"X-Internal-Key": "development-internal-key-change-me"}
-    first = client.post("/api/v1/internal/orders/expire-reservations", headers=headers)
-    second = client.post("/api/v1/internal/orders/expire-reservations", headers=headers)
+    first = client.post(
+        "/api/v1/internal/orders/expire-reservations", headers=internal_headers
+    )
+    second = client.post(
+        "/api/v1/internal/orders/expire-reservations", headers=internal_headers
+    )
     assert first.status_code == second.status_code == 200
     assert first.json()["data"]["expired_count"] == 1
     assert first.json()["data"]["expired_order_ids"] == [order_id]
