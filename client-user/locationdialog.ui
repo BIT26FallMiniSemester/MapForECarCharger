@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LocationDialog</class>
+ <widget class="QDialog" name="LocationDialog">
+  <property name="windowTitle">
+   <string>选择位置</string>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>340</width>
+    <height>420</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>10</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="titleLabel">
+     <property name="text">
+      <string>定位</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="descLabel">
+     <property name="text">
+      <string>虚拟机没有手机 GPS。「定位我自己」用网络 IP 粗略定位；也可搜索地址或选择区域。界面只显示地名。</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="locateMeButton">
+     <property name="text">
+      <string>定位我自己</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="regionHint">
+     <property name="text">
+      <string>下拉选择区域</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="regionCombo"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="useRegionButton">
+     <property name="text">
+      <string>使用该区域</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="addressHint">
+     <property name="text">
+      <string>或手动输入地址</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="addressEdit">
+     <property name="placeholderText">
+      <string>例如：中关村 / 北京市海淀区xx路</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="searchButton">
+     <property name="text">
+      <string>搜索位置</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="keyHint">
+     <property name="text">
+      <string>腾讯地图 Key（可在 lbs.qq.com 申请；不填也可搜：天安门、中关村、望京、北京南站）</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="keyEdit">
+     <property name="placeholderText">
+      <string>可选，WebService Key</string>
+     </property>
+     <property name="echoMode">
+      <enum>QLineEdit::Password</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string/>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>12</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

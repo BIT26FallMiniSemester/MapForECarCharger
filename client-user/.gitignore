@@ -1,0 +1,10 @@
+﻿*.o
+*.obj
+moc_*
+ui_*.h
+Makefile*
+*.pro.user
+.qmake.stash
+debug/
+release/
+charging-user-client
