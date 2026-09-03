@@ -19,3 +19,7 @@ venv/
 htmlcov/
 coverage.xml
 /backend/runtime/
+
+# Generated ML artifacts
+/ml/build/
+/ml/outputs/

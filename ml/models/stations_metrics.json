@@ -1,0 +1,5 @@
+{
+  "1": {"strategy": "ridge", "model_mae": 18.9163, "model_rmse": 36.5716, "persistence_mae": 23.2257, "persistence_rmse": 46.4392},
+  "6": {"strategy": "ridge", "model_mae": 33.9312, "model_rmse": 59.4260, "persistence_mae": 68.6660, "persistence_rmse": 131.7536},
+  "24": {"strategy": "ridge", "model_mae": 17.5304, "model_rmse": 32.2828, "persistence_mae": 19.4765, "persistence_rmse": 39.3670}
+}
