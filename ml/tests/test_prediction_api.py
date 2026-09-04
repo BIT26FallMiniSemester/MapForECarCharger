@@ -35,6 +35,23 @@ class PredictionApiTest(unittest.TestCase):
         self.assertEqual(resolve_payloads(entries, mappings)[0]["station_id"], 4)
         self.assertEqual(api_base("http://backend:8000/api/v1"), "http://backend:8000/api/v1")
 
+    def test_repeated_catalog_page_fails_instead_of_looping(self):
+        items = [{"station_id": i + 1, "data_source": "SOURCE", "external_id": str(i)}
+                 for i in range(1000)]
+        calls = []
+        def opener(request, timeout):
+            calls.append(request.full_url)
+            return Response(json.dumps({"code": 0, "data": {"items": items}}).encode())
+        with self.assertRaisesRegex(ValueError, "did not advance"):
+            fetch_catalog_mappings("http://backend:8000", "secret", {"SOURCE"}, opener)
+        self.assertEqual(len(calls), 2)
+
+    def test_invalid_catalog_id_rejected(self):
+        def opener(request, timeout):
+            return Response(b'{"code":0,"data":{"items":[{"station_id":0,"data_source":"SOURCE","external_id":"1"}]}}')
+        with self.assertRaisesRegex(ValueError, "invalid backend station ID"):
+            fetch_catalog_mappings("http://backend:8000", "secret", {"SOURCE"}, opener)
+
 
 if __name__ == "__main__":
     unittest.main()

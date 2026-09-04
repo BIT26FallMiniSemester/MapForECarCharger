@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <numeric>
 #include <random>
@@ -23,8 +24,8 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
-constexpr std::array<int, 3> kHorizons{1, 6, 24};
-constexpr std::size_t kFeatureCount = 11;
+constexpr std::array<int, 24> kHorizons{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24};
+constexpr std::size_t kFeatureCount = 16;
 
 struct Record {
     std::int64_t timestamp_epoch{};
@@ -32,10 +33,15 @@ struct Record {
     int total_piles{};
     double capacity_kw{};
     double load_kw{};
+    double occupied_piles{};
+    double is_holiday{};
+    int unavailable_piles{};
 };
 
 struct Sample {
     std::int64_t timestamp_epoch{};
+    int station_id{};
+    double capacity_kw{};
     std::array<double, kFeatureCount> features{};
     std::array<double, kHorizons.size()> targets{};
 };
@@ -85,11 +91,25 @@ int positive_mod(std::int64_t value, int divisor) {
 }
 
 int hour_of_day(std::int64_t epoch_seconds) {
-    return positive_mod(epoch_seconds / 3600, 24);
+    return positive_mod(epoch_seconds / 3600 + 8, 24); // Station local time: Asia/Shanghai.
 }
 
 int day_of_week(std::int64_t epoch_seconds) {
-    return positive_mod(epoch_seconds / 86400 + 4, 7);  // 1970-01-01 was Thursday.
+    return positive_mod((epoch_seconds + 8 * 3600) / 86400 + 4, 7); // Sunday=0.
+}
+
+double parse_number(const std::string& value) {
+    std::size_t used = 0;
+    const double result = std::stod(value, &used);
+    if (used != value.size() || !std::isfinite(result)) throw std::runtime_error("invalid finite numeric field");
+    return result;
+}
+
+std::int64_t parse_integer(const std::string& value) {
+    std::size_t used = 0;
+    const auto result = std::stoll(value, &used);
+    if (used != value.size()) throw std::runtime_error("invalid integer field");
+    return result;
 }
 
 void generate_data(const fs::path& output, int days, int stations, unsigned seed = 42) {
@@ -100,8 +120,7 @@ void generate_data(const fs::path& output, int days, int stations, unsigned seed
     std::ofstream file(output);
     if (!file) throw std::runtime_error("cannot open output CSV: " + output.string());
 
-    const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    const std::int64_t end = static_cast<std::int64_t>(now) / 3600 * 3600;
+    const std::int64_t end = 1788220800; // Fixed synthetic cutoff; reproducible with the seed.
     const std::int64_t start = end - static_cast<std::int64_t>(days * 24 - 1) * 3600;
     std::mt19937 random(seed);
     std::normal_distribution<double> noise(0.0, 4.0);
@@ -114,7 +133,7 @@ void generate_data(const fs::path& output, int days, int stations, unsigned seed
         for (int index = 0; index < days * 24; ++index) {
             const std::int64_t timestamp = start + static_cast<std::int64_t>(index) * 3600;
             const int hour = hour_of_day(timestamp);
-            const bool weekend = day_of_week(timestamp) >= 5;
+            const bool weekend = day_of_week(timestamp) == 0 || day_of_week(timestamp) == 6;
             const double morning = 32.0 * std::exp(-std::pow((hour - 8) / 2.6, 2));
             const double evening = 48.0 * std::exp(-std::pow((hour - 18) / 3.2, 2));
             double load = (12.0 + morning + evening) * station_factor * (weekend ? 0.88 : 1.0);
@@ -143,6 +162,11 @@ std::vector<Record> read_csv(const fs::path& input) {
     const auto piles_index = index_of("total_piles");
     const auto capacity_index = index_of("capacity_kw");
     const auto load_index = index_of("load_kw");
+    const auto optional_value = [&](const auto& values, const std::string& name, double fallback) {
+        const auto found = std::find(headers.begin(), headers.end(), name);
+        if (found == headers.end()) return fallback;
+        return parse_number(values.at(static_cast<std::size_t>(found - headers.begin())));
+    };
     const auto required_size = std::max({timestamp_index, station_index, piles_index, capacity_index,
                                          load_index}) + 1;
 
@@ -151,9 +175,20 @@ std::vector<Record> read_csv(const fs::path& input) {
         if (line.empty()) continue;
         const auto values = split(line);
         if (values.size() < required_size) throw std::runtime_error("malformed CSV row: " + line);
-        records.push_back({std::stoll(values[timestamp_index]), std::stoi(values[station_index]),
-                           std::stoi(values[piles_index]), std::stod(values[capacity_index]),
-                           std::stod(values[load_index])});
+        const auto sid = parse_integer(values[station_index]), piles = parse_integer(values[piles_index]);
+        if (sid <= 0 || sid > std::numeric_limits<int>::max() || piles <= 0 || piles > 1000000)
+            throw std::runtime_error("invalid station ID or pile count");
+        records.push_back({parse_integer(values[timestamp_index]), static_cast<int>(sid),
+                           static_cast<int>(piles), parse_number(values[capacity_index]),
+                           parse_number(values[load_index])});
+        auto& record = records.back();
+        record.occupied_piles = optional_value(values, "occupied_piles",
+            record.capacity_kw > 0 ? std::ceil(record.load_kw / record.capacity_kw * record.total_piles) : 0);
+        record.is_holiday = optional_value(values, "is_holiday", 0);
+        const double unavailable = optional_value(values, "unavailable_piles", 0);
+        if (unavailable < 0 || unavailable > record.total_piles || std::floor(unavailable) != unavailable)
+            throw std::runtime_error("invalid unavailable pile count");
+        record.unavailable_piles = static_cast<int>(unavailable);
     }
     if (records.empty()) throw std::runtime_error("input CSV contains no data rows");
     std::sort(records.begin(), records.end(), [](const Record& left, const Record& right) {
@@ -178,12 +213,16 @@ std::array<double, kFeatureCount> make_features(const std::vector<Record>& rows,
             std::cos(2.0 * kPi * hour / 24.0),
             std::sin(2.0 * kPi * weekday / 7.0),
             std::cos(2.0 * kPi * weekday / 7.0),
-            weekday >= 5 ? 1.0 : 0.0,
+            weekday == 0 || weekday == 6 ? 1.0 : 0.0,
             current.load_kw,
             rows[index - 1].load_kw,
             rows[index - 24].load_kw,
             rows[index - 168].load_kw,
-            rolling_24 / 24.0};
+            rolling_24 / 24.0,
+            current.is_holiday,
+            std::max(0.0, 1.0 - (current.occupied_piles + current.unavailable_piles) / current.total_piles),
+            static_cast<double>(current.station_id),
+            static_cast<double>(current.total_piles), current.capacity_kw};
 }
 
 std::map<int, std::vector<Record>> group_by_station(const std::vector<Record>& records) {
@@ -195,7 +234,13 @@ std::map<int, std::vector<Record>> group_by_station(const std::vector<Record>& r
                 throw std::runtime_error("station " + std::to_string(station_id) +
                                          " has non-positive total_piles");
             }
-            if (rows[index].capacity_kw <= 0.0) {
+            const auto& row = rows[index];
+            if (row.station_id <= 0 || !std::isfinite(row.capacity_kw) || row.capacity_kw <= 0.0 ||
+                !std::isfinite(row.load_kw) || row.load_kw < 0 || row.load_kw > row.capacity_kw ||
+                !std::isfinite(row.occupied_piles) || row.occupied_piles < 0 ||
+                row.occupied_piles > row.total_piles || (row.is_holiday != 0 && row.is_holiday != 1) ||
+                row.unavailable_piles < 0 || row.unavailable_piles > row.total_piles ||
+                row.timestamp_epoch % 3600 != 0) {
                 throw std::runtime_error("station " + std::to_string(station_id) +
                                          " has non-positive capacity_kw");
             }
@@ -218,6 +263,8 @@ std::vector<Sample> make_samples(const std::vector<Record>& records) {
         for (std::size_t index = 168; index + kHorizons.back() < rows.size(); ++index) {
             Sample sample;
             sample.timestamp_epoch = rows[index].timestamp_epoch;
+            sample.station_id = station_id;
+            sample.capacity_kw = rows[index].capacity_kw;
             sample.features = make_features(rows, index);
             for (std::size_t horizon = 0; horizon < kHorizons.size(); ++horizon) {
                 sample.targets[horizon] = rows[index + kHorizons[horizon]].load_kw;
@@ -226,7 +273,7 @@ std::vector<Sample> make_samples(const std::vector<Record>& records) {
         }
     }
     std::sort(samples.begin(), samples.end(), [](const Sample& left, const Sample& right) {
-        return left.timestamp_epoch < right.timestamp_epoch;
+        return std::tie(left.timestamp_epoch, left.station_id) < std::tie(right.timestamp_epoch, right.station_id);
     });
     return samples;
 }
@@ -279,7 +326,8 @@ double forecast(const Model& model, std::size_t horizon,
                                           : ridge_forecast(model, horizon, raw_features);
 }
 
-std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& model) {
+std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& model,
+                                               const fs::path& evaluation_path) {
     const auto samples = make_samples(read_csv(input));
     const std::int64_t train_end = samples[samples.size() * 7 / 10].timestamp_epoch;
     const std::int64_t validation_end = samples[samples.size() * 8 / 10].timestamp_epoch;
@@ -287,17 +335,24 @@ std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& m
     std::vector<Sample> validation;
     std::vector<Sample> testing;
     for (const auto& sample : samples) {
-        if (sample.timestamp_epoch < train_end) {
+        if (sample.timestamp_epoch + 24 * 3600 < train_end) {
             training.push_back(sample);
-        } else if (sample.timestamp_epoch < validation_end) {
+        } else if (sample.timestamp_epoch >= train_end && sample.timestamp_epoch + 24 * 3600 < validation_end) {
             validation.push_back(sample);
-        } else {
+        } else if (sample.timestamp_epoch >= validation_end) {
             testing.push_back(sample);
         }
     }
     if (training.empty() || validation.empty() || testing.empty()) {
         throw std::runtime_error("not enough data for temporal train/validation/test split");
     }
+    ensure_parent(evaluation_path);
+    std::ofstream split_file(evaluation_path.string() + ".split.json");
+    if (!split_file) throw std::runtime_error("cannot open split metadata");
+    split_file << "{\"train_target_max\":" << training.back().timestamp_epoch + 24 * 3600
+               << ",\"validation_origin_min\":" << validation.front().timestamp_epoch
+               << ",\"validation_target_max\":" << validation.back().timestamp_epoch + 24 * 3600
+               << ",\"test_origin_min\":" << testing.front().timestamp_epoch << "}\n";
 
     model.scales.fill(1.0);
     for (std::size_t feature = 1; feature < kFeatureCount; ++feature) {
@@ -311,17 +366,20 @@ std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& m
         if (model.scales[feature] < 1e-9) model.scales[feature] = 1.0;
     }
 
-    for (std::size_t horizon = 0; horizon < kHorizons.size(); ++horizon) {
-        std::array<std::array<double, kFeatureCount + 1>, kFeatureCount> matrix{};
-        for (const auto& sample : training) {
-            const auto features = standardize(model, sample.features);
-            for (std::size_t row = 0; row < kFeatureCount; ++row) {
-                for (std::size_t column = 0; column < kFeatureCount; ++column) {
-                    matrix[row][column] += features[row] * features[column];
-                }
-                matrix[row][kFeatureCount] += features[row] * sample.targets[horizon];
-            }
+    std::array<std::array<double, kFeatureCount + 1>, kFeatureCount> gram{};
+    std::array<std::array<double, kFeatureCount>, kHorizons.size()> rhs{};
+    for (const auto& sample : training) {
+        const auto features = standardize(model, sample.features);
+        for (std::size_t row = 0; row < kFeatureCount; ++row) {
+            for (std::size_t column = 0; column < kFeatureCount; ++column)
+                gram[row][column] += features[row] * features[column];
+            for (std::size_t horizon = 0; horizon < kHorizons.size(); ++horizon)
+                rhs[horizon][row] += features[row] * sample.targets[horizon];
         }
+    }
+    for (std::size_t horizon = 0; horizon < kHorizons.size(); ++horizon) {
+        auto matrix = gram;
+        for (std::size_t row = 0; row < kFeatureCount; ++row) matrix[row][kFeatureCount] = rhs[horizon][row];
         for (std::size_t feature = 1; feature < kFeatureCount; ++feature) {
             matrix[feature][feature] += 0.01;
         }
@@ -336,7 +394,7 @@ std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& m
             const double target = sample.targets[horizon];
             const double predicted = persistence ? sample.features[6]
                                                  : ridge_forecast(model, horizon, sample.features);
-            const double model_error = predicted - target;
+            const double model_error = std::clamp(predicted, 0.0, sample.capacity_kw) - target;
             const double persistence_error = sample.features[6] - target;
             model_absolute += std::abs(model_error);
             model_squared += model_error * model_error;
@@ -354,6 +412,21 @@ std::array<Scores, kHorizons.size()> train_model(const fs::path& input, Model& m
         model.use_persistence[horizon] = validation_scores.persistence_mae <= validation_scores.model_mae;
         scores[horizon] = evaluate(testing, horizon, model.use_persistence[horizon]);
     }
+    ensure_parent(evaluation_path);
+    std::ofstream evaluation(evaluation_path);
+    if (!evaluation) throw std::runtime_error("cannot open evaluation CSV");
+    evaluation << "station_id,origin_epoch,predicted_for_epoch,lead_hours,actual_kw,predicted_kw,error_kw\n";
+    // Representative first station; aggregate metrics above use the entire held-out set.
+    for (const auto& sample : testing) {
+        if (sample.station_id != testing.front().station_id) continue;
+        for (int lead : {1, 6, 24}) {
+            const double predicted = std::clamp(forecast(model, lead - 1, sample.features), 0.0, sample.capacity_kw);
+            evaluation << sample.station_id << ',' << sample.timestamp_epoch << ','
+                       << sample.timestamp_epoch + lead * 3600 << ',' << lead << ','
+                       << sample.targets[lead - 1] << ',' << predicted << ','
+                       << predicted - sample.targets[lead - 1] << '\n';
+        }
+    }
     return scores;
 }
 
@@ -361,17 +434,17 @@ void save_model(const fs::path& output, const Model& model) {
     ensure_parent(output);
     std::ofstream file(output);
     if (!file) throw std::runtime_error("cannot open model output: " + output.string());
-    file << "PKLOT_ML_V2\n" << kFeatureCount << '\n' << std::setprecision(17);
-    for (const auto value : model.means) file << value << ' ';
+    file << "PKLOT_ML_V3\n" << kFeatureCount << '\n' << std::setprecision(17);
+    for (std::size_t i = 0; i < kFeatureCount; ++i) file << (i ? " " : "") << model.means[i];
     file << '\n';
-    for (const auto value : model.scales) file << value << ' ';
+    for (std::size_t i = 0; i < kFeatureCount; ++i) file << (i ? " " : "") << model.scales[i];
     file << '\n';
     for (std::size_t horizon = 0; horizon < kHorizons.size(); ++horizon) {
-        file << kHorizons[horizon] << ' ';
-        for (const auto value : model.weights[horizon]) file << value << ' ';
+        file << kHorizons[horizon];
+        for (const auto value : model.weights[horizon]) file << ' ' << value;
         file << '\n';
     }
-    for (const bool value : model.use_persistence) file << (value ? 1 : 0) << ' ';
+    for (std::size_t i = 0; i < kHorizons.size(); ++i) file << (i ? " " : "") << (model.use_persistence[i] ? 1 : 0);
     file << '\n';
 }
 
@@ -379,9 +452,9 @@ Model load_model(const fs::path& input) {
     std::ifstream file(input);
     std::string signature;
     std::size_t feature_count = 0;
-    if (!(file >> signature >> feature_count) || signature != "PKLOT_ML_V2" ||
+    if (!(file >> signature >> feature_count) || signature != "PKLOT_ML_V3" ||
         feature_count != kFeatureCount) {
-        throw std::runtime_error("invalid or unsupported model file");
+        throw std::runtime_error("invalid or unsupported model file; retrain with this V3 executable");
     }
     Model model;
     for (auto& value : model.means) file >> value;
@@ -401,6 +474,10 @@ Model load_model(const fs::path& input) {
         value = stored_value == 1;
     }
     if (!file) throw std::runtime_error("truncated model file");
+    for (auto value : model.means) if (!std::isfinite(value)) throw std::runtime_error("invalid model mean");
+    for (auto value : model.scales) if (!std::isfinite(value) || value <= 0) throw std::runtime_error("invalid model scale");
+    for (const auto& weights : model.weights) for (auto value : weights)
+        if (!std::isfinite(value)) throw std::runtime_error("invalid model weight");
     return model;
 }
 
@@ -439,18 +516,19 @@ std::vector<Prediction> make_predictions(const std::vector<Record>& records, con
             predictions.push_back({station_id, kHorizons[horizon],
                                    rows.back().timestamp_epoch + kHorizons[horizon] * 3600,
                                    load, occupied,
-                                   total_piles - occupied,
+                                   std::max(0, total_piles - occupied - rows.back().unavailable_piles),
                                    static_cast<double>(occupied) / total_piles});
         }
     }
     return predictions;
 }
 
-void write_predictions(const fs::path& output, const std::vector<Prediction>& predictions) {
+void write_predictions(const fs::path& output, const std::vector<Prediction>& predictions,
+                       const std::string& version) {
     ensure_parent(output);
     std::ofstream file(output);
     if (!file) throw std::runtime_error("cannot open prediction output");
-    file << "{\n  \"generated_at_epoch\": "
+    file << "{\n  \"model_version\": \"" << version << "\",\n  \"generated_at_epoch\": "
          << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())
          << ",\n  \"predictions\": [\n" << std::fixed << std::setprecision(4);
     for (std::size_t index = 0; index < predictions.size(); ++index) {
@@ -464,34 +542,34 @@ void write_predictions(const fs::path& output, const std::vector<Prediction>& pr
              << ", \"congestion_ratio\": " << item.congestion_ratio << "}"
              << (index + 1 == predictions.size() ? "\n" : ",\n");
     }
-    file << "  ],\n  \"recommended_station_ids\": [";
-    std::vector<Prediction> recommendations;
-    std::copy_if(predictions.begin(), predictions.end(), std::back_inserter(recommendations),
-                 [](const Prediction& item) { return item.horizon_hours == 1; });
-    std::sort(recommendations.begin(), recommendations.end(), [](const Prediction& left,
-                                                                 const Prediction& right) {
-        return std::tie(left.congestion_ratio, left.station_id) <
-               std::tie(right.congestion_ratio, right.station_id);
-    });
-    for (std::size_t index = 0; index < recommendations.size(); ++index) {
-        if (index) file << ", ";
-        file << recommendations[index].station_id;
-    }
-    file << "]\n}\n";
+    file << "  ]\n}\n";
 }
 
 void train_command(const fs::path& input, const fs::path& model_path,
                    const fs::path& metrics_path) {
     Model model;
-    const auto scores = train_model(input, model);
+    const auto scores = train_model(input, model, metrics_path.string() + ".evaluation.csv");
     save_model(model_path, model);
     write_metrics(metrics_path, scores, model);
+    std::ofstream metadata(model_path.string() + ".metadata.json");
+    if (!metadata) throw std::runtime_error("cannot write model metadata");
+    metadata << "{\"format_version\":\"PKLOT_ML_V3\",\"timezone\":\"Asia/Shanghai\","
+                "\"features\":[\"intercept\",\"hour_sin\",\"hour_cos\",\"weekday_sin\",\"weekday_cos\","
+                "\"weekend\",\"current_load_kw\",\"lag_1h\",\"lag_24h\",\"lag_168h\",\"rolling_24h\","
+                "\"is_holiday\",\"idle_ratio\",\"station_id\",\"total_piles\",\"capacity_kw\"],"
+                "\"lead_hours\":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]}\n";
 }
 
 void predict_command(const fs::path& input, const fs::path& model_path,
                      const fs::path& output) {
+    std::ifstream model_bytes(model_path, std::ios::binary);
+    std::uint64_t hash = 14695981039346656037ULL;
+    char byte;
+    while (model_bytes.get(byte)) { hash ^= static_cast<unsigned char>(byte); hash *= 1099511628211ULL; }
+    std::ostringstream version;
+    version << "pklot-v3-" << std::hex << hash;
     write_predictions(output,
-                      make_predictions(read_csv(input), load_model(model_path)));
+                      make_predictions(read_csv(input), load_model(model_path)), version.str());
 }
 
 void demo() {
@@ -507,7 +585,14 @@ void demo() {
         train_command(data, model, metrics);
         predict_command(data, model, output);
         const auto predictions = make_predictions(read_csv(data), load_model(model));
-        assert(predictions.size() == 6);
+        assert(predictions.size() == 48);
+        auto calendar_rows = read_csv(data);
+        calendar_rows.back().timestamp_epoch = 86400; // Friday, 1970-01-02.
+        assert(make_features(calendar_rows, calendar_rows.size() - 1)[5] == 0);
+        calendar_rows.back().timestamp_epoch = 2 * 86400; // Saturday.
+        assert(make_features(calendar_rows, calendar_rows.size() - 1)[5] == 1);
+        calendar_rows.back().timestamp_epoch = 3 * 86400; // Sunday.
+        assert(make_features(calendar_rows, calendar_rows.size() - 1)[5] == 1);
         assert(fs::file_size(metrics) > 0 && fs::file_size(output) > 0);
         auto capped = load_model(model);
         capped.use_persistence.fill(false);
@@ -537,7 +622,7 @@ void demo() {
             assert(false);
         } catch (const std::runtime_error&) {
         }
-        std::cout << "demo OK: 2 stations x 3 horizons\n";
+        std::cout << "demo OK: 2 stations x 24 hourly predictions\n";
     } catch (...) {
         fs::remove_all(root);
         throw;

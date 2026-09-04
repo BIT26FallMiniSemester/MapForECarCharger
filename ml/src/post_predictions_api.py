@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from export_predictions_api import PREDICTION_ENDPOINT
+
 PAGE_SIZE = 1000
 
 
@@ -34,14 +36,19 @@ def fetch_catalog_mappings(base_url, key, data_sources, opener=urlopen):
                 headers={"X-Internal-Key": key}, method="GET",
             )
             items = request_json(request, opener)["items"]
+            previous_count = len(mappings)
             for item in items:
                 identity = (str(item["data_source"]), str(item["external_id"]))
                 station_id = int(item["station_id"])
+                if station_id <= 0:
+                    raise ValueError("invalid backend station ID")
                 if identity in mappings and mappings[identity] != station_id:
                     raise ValueError(f"duplicate catalog mapping: {identity}")
                 mappings[identity] = station_id
             if len(items) < PAGE_SIZE:
                 break
+            if len(mappings) == previous_count:
+                raise ValueError("catalog pagination did not advance")
             page += 1
     return mappings
 
@@ -68,7 +75,11 @@ def main(source, base_url, dry_run=False, opener=urlopen):
     if not key:
         raise RuntimeError("INTERNAL_KEY is required for catalog lookup and prediction writes")
     document = json.loads(source.read_text(encoding="utf-8"))
+    if document.get("prediction_endpoint") != PREDICTION_ENDPOINT:
+        raise ValueError("unexpected prediction endpoint")
     entries = document["entries"]
+    if not entries:
+        raise ValueError("prediction batch must not be empty")
     data_sources = {entry["station_ref"]["data_source"] for entry in entries}
     mappings = fetch_catalog_mappings(base_url, key, data_sources, opener)
     payloads = resolve_payloads(entries, mappings)
