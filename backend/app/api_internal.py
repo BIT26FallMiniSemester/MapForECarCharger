@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import func, select
 
 from app.dependencies import DbSession, require_internal_key
 from app.device_services import update_heartbeat
 from app.errors import RESOURCE_NOT_FOUND, error
-from app.helpers import as_utc, utcnow
+from app.helpers import as_utc, page_data, to_utc_naive, utcnow
 from app.models import ChargingOrder, ChargingPile, LoadPrediction, Station
 from app.responses import ApiEnvelope, success
 from app.schemas import HeartbeatCreate, PredictionsCreate, TelemetryCreate
@@ -33,6 +35,40 @@ def heartbeat(
             "last_heartbeat_at": as_utc(pile.last_heartbeat_at),
         },
     )
+
+
+@router.get("/stations/catalog-mappings")
+def station_catalog_mappings(
+    request: Request,
+    db: DbSession,
+    data_source: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    external_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> ApiEnvelope:
+    filters = [Station.data_source.is_not(None), Station.external_id.is_not(None)]
+    if data_source is not None:
+        filters.append(Station.data_source == data_source.strip())
+    if external_id is not None:
+        filters.append(Station.external_id == external_id.strip())
+    total = db.scalar(select(func.count()).select_from(Station).where(*filters)) or 0
+    rows = db.execute(
+        select(Station.id, Station.data_source, Station.external_id, Station.name)
+        .where(*filters)
+        .order_by(Station.data_source, Station.external_id, Station.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [
+        {
+            "station_id": row[0],
+            "data_source": row[1],
+            "external_id": row[2],
+            "station_name": row[3],
+        }
+        for row in rows
+    ]
+    return success(request, page_data(items, page, page_size, total))
 
 
 @router.post("/orders/expire-reservations")
@@ -80,7 +116,7 @@ def write_predictions(
         filters = [
             LoadPrediction.prediction_type == point.prediction_type,
             LoadPrediction.horizon_hours == payload.horizon_hours,
-            LoadPrediction.predicted_for == point.predicted_for.replace(tzinfo=None),
+            LoadPrediction.predicted_for == to_utc_naive(point.predicted_for),
             LoadPrediction.model_version == payload.model_version,
         ]
         filters.append(
@@ -94,15 +130,15 @@ def write_predictions(
                 station_id=payload.station_id,
                 prediction_type=point.prediction_type,
                 horizon_hours=payload.horizon_hours,
-                predicted_for=point.predicted_for.replace(tzinfo=None),
+                predicted_for=to_utc_naive(point.predicted_for),
                 predicted_value=point.predicted_value,
                 model_version=payload.model_version,
-                generated_at=payload.generated_at.replace(tzinfo=None),
+                generated_at=to_utc_naive(payload.generated_at),
             )
             db.add(record)
         else:
             record.predicted_value = point.predicted_value
-            record.generated_at = payload.generated_at.replace(tzinfo=None)
+            record.generated_at = to_utc_naive(payload.generated_at)
         written += 1
     db.commit()
     return success(

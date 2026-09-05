@@ -1,5 +1,6 @@
 import json
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -131,11 +132,16 @@ def add_pile(
         updated_at=now,
     )
     db.add(pile)
-    db.flush()
-    operation_log(
-        db, admin, "CREATE_PILE", "PILE", pile.id, payload.model_dump(mode="json")
-    )
     try:
+        db.flush()
+        operation_log(
+            db,
+            admin,
+            "CREATE_PILE",
+            "PILE",
+            pile.id,
+            payload.model_dump(mode="json"),
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -155,9 +161,28 @@ def restart_pile(db: Session, admin: Admin, pile: ChargingPile) -> ChargingPile:
             {"pile_id": pile.id, "current_status": pile.status.value},
         )
     now = utcnow()
-    pile.status = PileStatus.IDLE
-    pile.version += 1
-    pile.updated_at = now
+    version = pile.version
+    transitioned = db.execute(
+        update(ChargingPile)
+        .where(
+            ChargingPile.id == pile.id,
+            ChargingPile.status == PileStatus.FAULT,
+            ChargingPile.version == version,
+        )
+        .values(
+            status=PileStatus.IDLE,
+            version=version + 1,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transitioned.rowcount != 1:
+        db.rollback()
+        db.refresh(pile)
+        raise error(
+            PILE_NOT_AVAILABLE,
+            {"pile_id": pile.id, "current_status": pile.status.value},
+        )
     db.add(
         PileStatusLog(
             pile_id=pile.id,
@@ -189,9 +214,28 @@ def set_pile_status(
         return pile
     old = pile.status
     now = utcnow()
-    pile.status = payload.status
-    pile.version += 1
-    pile.updated_at = now
+    version = pile.version
+    transitioned = db.execute(
+        update(ChargingPile)
+        .where(
+            ChargingPile.id == pile.id,
+            ChargingPile.status == old,
+            ChargingPile.version == version,
+        )
+        .values(
+            status=payload.status,
+            version=version + 1,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transitioned.rowcount != 1:
+        db.rollback()
+        db.refresh(pile)
+        raise error(
+            PILE_NOT_AVAILABLE,
+            {"pile_id": pile.id, "current_status": pile.status.value},
+        )
     db.add(
         PileStatusLog(
             pile_id=pile.id,

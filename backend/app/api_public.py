@@ -33,7 +33,8 @@ def health(request: Request, db: DbSession) -> ApiEnvelope:
     )
 
 
-@router.post("/user/login")
+@router.post("/auth/user/login")
+@router.post("/user/login", include_in_schema=False)
 def user_login(payload: UserLogin, request: Request, db: DbSession) -> ApiEnvelope:
     user = db.scalar(select(User).where(User.phone == payload.phone))
     is_new = user is None
@@ -53,6 +54,7 @@ def user_login(payload: UserLogin, request: Request, db: DbSession) -> ApiEnvelo
         except IntegrityError:
             db.rollback()
             user = db.scalar(select(User).where(User.phone == payload.phone))
+            is_new = False
         else:
             db.refresh(user)
     if user.status == UserStatus.FROZEN:
@@ -71,7 +73,8 @@ def user_login(payload: UserLogin, request: Request, db: DbSession) -> ApiEnvelo
     )
 
 
-@router.post("/admin/login")
+@router.post("/auth/admin/login")
+@router.post("/admin/login", include_in_schema=False)
 def admin_login(payload: AdminLogin, request: Request, db: DbSession) -> ApiEnvelope:
     admin = db.scalar(select(Admin).where(Admin.username == payload.username))
     if (
@@ -100,14 +103,16 @@ def admin_login(payload: AdminLogin, request: Request, db: DbSession) -> ApiEnve
     )
 
 
-@router.get("/user/profile")
+@router.get("/users/me")
+@router.get("/user/profile", include_in_schema=False)
 def profile(
     request: Request, user: Annotated[User, Depends(current_user)]
 ) -> ApiEnvelope:
     return success(request, user_data(user))
 
 
-@router.put("/user/profile")
+@router.patch("/users/me")
+@router.put("/user/profile", include_in_schema=False)
 def update_profile(
     payload: ProfileUpdate,
     request: Request,
@@ -121,7 +126,8 @@ def update_profile(
     return success(request, user_data(user))
 
 
-@router.post("/user/recharge")
+@router.post("/wallet/recharges")
+@router.post("/user/recharge", include_in_schema=False)
 def create_recharge(
     payload: RechargeCreate,
     request: Request,
@@ -132,7 +138,8 @@ def create_recharge(
     return success(request, recharge_data(record))
 
 
-@router.get("/user/recharge-records")
+@router.get("/wallet/recharges")
+@router.get("/user/recharge-records", include_in_schema=False)
 def recharge_records(
     request: Request,
     db: DbSession,

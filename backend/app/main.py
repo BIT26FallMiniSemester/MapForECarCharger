@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
@@ -15,12 +16,19 @@ from app.api_orders import router as orders_router
 from app.api_public import router as public_router
 from app.api_realtime import router as realtime_router
 from app.config import BACKEND_DIR, get_settings
-from app.errors import ApiError
+from app.errors import VALIDATION_ERROR, ApiError
 from app.responses import success
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version=settings.app_version)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
+)
 avatar_directory = BACKEND_DIR / "runtime" / "avatars"
 avatar_directory.mkdir(parents=True, exist_ok=True)
 app.mount("/static/avatars", StaticFiles(directory=avatar_directory), name="avatars")
@@ -28,7 +36,9 @@ app.mount("/static/avatars", StaticFiles(directory=avatar_directory), name="avat
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
-    request.state.request_id = request.headers.get("X-Request-ID") or uuid4().hex[:16]
+    request.state.request_id = (
+        request.headers.get("X-Request-ID") or f"req_{uuid4().hex}"
+    )
     response = await call_next(request)
     response.headers["X-Request-ID"] = request.state.request_id
     return response
@@ -58,8 +68,8 @@ async def validation_error_handler(
     return JSONResponse(
         status_code=422,
         content={
-            "code": 10001,
-            "message": "validation error",
+            "code": VALIDATION_ERROR[0],
+            "message": VALIDATION_ERROR[1],
             "data": None,
             "details": {"errors": details},
             "request_id": request.state.request_id,

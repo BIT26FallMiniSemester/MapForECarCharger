@@ -1,8 +1,7 @@
-from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, field_validator
 
 from app.enums import PileStatus, PileType, PredictionType, StationStatus
 
@@ -31,6 +30,7 @@ class RechargeCreate(BaseModel):
 
 
 class OrderCreate(BaseModel):
+    station_id: int = Field(gt=0)
     pile_id: int = Field(gt=0)
 
 
@@ -149,18 +149,18 @@ class PileStatusUpdate(BaseModel):
 
 
 class HeartbeatCreate(BaseModel):
-    reported_at: datetime
+    reported_at: AwareDatetime
     device_status: Annotated[str, StringConstraints(pattern=r"^(ONLINE|OFFLINE)$")]
 
 
 class TelemetryCreate(BaseModel):
-    reported_at: datetime
+    reported_at: AwareDatetime
     energy_wh: int = Field(ge=0)
 
 
 class PredictionPointCreate(BaseModel):
     prediction_type: PredictionType
-    predicted_for: datetime
+    predicted_for: AwareDatetime
     predicted_value: Decimal
 
 
@@ -168,7 +168,7 @@ class PredictionsCreate(BaseModel):
     station_id: int | None = Field(default=None, gt=0)
     horizon_hours: int
     model_version: Annotated[str, StringConstraints(min_length=1, max_length=64)]
-    generated_at: datetime
+    generated_at: AwareDatetime
     points: list[PredictionPointCreate] = Field(min_length=1, max_length=500)
 
     @field_validator("horizon_hours")

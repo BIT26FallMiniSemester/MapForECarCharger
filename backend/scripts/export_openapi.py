@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import yaml
+
 from app.main import app
 
 repository_root = Path(__file__).resolve().parents[2]

@@ -9,6 +9,7 @@
 *.log
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 .venv/
 venv/
 *.db
@@ -19,3 +20,6 @@ venv/
 htmlcov/
 coverage.xml
 /backend/runtime/
+/server-qt/build/
+/server-qt/runtime/
+CMakeUserPresets.json

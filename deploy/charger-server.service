@@ -1,0 +1,21 @@
+[Unit]
+Description=MapForECarCharger Qt Socket backend
+After=network-online.target
+
+[Service]
+Type=simple
+User=mapforcar
+Group=mapforcar
+WorkingDirectory=/opt/map-for-ecar
+EnvironmentFile=/etc/map-for-ecar/server.env
+ExecStart=/opt/map-for-ecar/bin/charger-server
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/map-for-ecar
+
+[Install]
+WantedBy=multi-user.target

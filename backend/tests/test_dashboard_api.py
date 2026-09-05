@@ -28,7 +28,7 @@ def test_dashboard_empty_aggregates(client, db_session):
 
     invalid = client.get("/api/v1/dashboard/hourly-demand?days=0")
     assert invalid.status_code == 422
-    assert invalid.json()["code"] == 10001
+    assert invalid.json()["code"] == 40001
 
 
 def test_dashboard_map_hourly_demand_and_alert_aggregates(client, db_session):

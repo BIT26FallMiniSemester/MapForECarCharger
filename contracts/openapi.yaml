@@ -16,12 +16,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiEnvelope'
-  /api/v1/user/login:
+  /api/v1/auth/user/login:
     post:
       tags:
       - system and users
       summary: User Login
-      operationId: user_login_api_v1_user_login_post
+      operationId: user_login_api_v1_auth_user_login_post
       requestBody:
         content:
           application/json:
@@ -41,12 +41,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/admin/login:
+  /api/v1/auth/admin/login:
     post:
       tags:
       - system and users
       summary: Admin Login
-      operationId: admin_login_api_v1_admin_login_post
+      operationId: admin_login_api_v1_auth_admin_login_post
       requestBody:
         content:
           application/json:
@@ -66,12 +66,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/user/profile:
+  /api/v1/users/me:
     get:
       tags:
       - system and users
       summary: Profile
-      operationId: profile_api_v1_user_profile_get
+      operationId: profile_api_v1_users_me_get
       responses:
         '200':
           description: Successful Response
@@ -81,11 +81,11 @@ paths:
                 $ref: '#/components/schemas/ApiEnvelope'
       security:
       - HTTPBearer: []
-    put:
+    patch:
       tags:
       - system and users
       summary: Update Profile
-      operationId: update_profile_api_v1_user_profile_put
+      operationId: update_profile_api_v1_users_me_patch
       requestBody:
         content:
           application/json:
@@ -107,18 +107,20 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
-  /api/v1/user/recharge:
+  /api/v1/wallet/recharges:
     post:
       tags:
       - system and users
       summary: Create Recharge
-      operationId: create_recharge_api_v1_user_recharge_post
+      operationId: create_recharge_api_v1_wallet_recharges_post
+      security:
+      - HTTPBearer: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RechargeCreate'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -132,14 +134,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-  /api/v1/user/recharge-records:
     get:
       tags:
       - system and users
       summary: Recharge Records
-      operationId: recharge_records_api_v1_user_recharge_records_get
+      operationId: recharge_records_api_v1_wallet_recharges_get
       security:
       - HTTPBearer: []
       parameters:
@@ -173,17 +172,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/user/avatar:
+  /api/v1/users/me/avatar:
     post:
       tags:
       - users
       summary: Upload Avatar
-      operationId: upload_avatar_api_v1_user_avatar_post
+      operationId: upload_avatar_api_v1_users_me_avatar_post
       requestBody:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_upload_avatar_api_v1_user_avatar_post'
+              $ref: '#/components/schemas/Body_upload_avatar_api_v1_users_me_avatar_post'
         required: true
       responses:
         '200':
@@ -200,6 +199,98 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/map/geocode:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Geocode
+      operationId: geocode_api_v1_map_geocode_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: address
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+          title: Address
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/map/route:
+    get:
+      tags:
+      - stations, piles and orders
+      summary: Route
+      operationId: route_api_v1_map_route_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: from_latitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: From Latitude
+      - name: from_longitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: From Longitude
+      - name: to_latitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: To Latitude
+      - name: to_longitude
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: To Longitude
+      - name: mode
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(driving|walking)$
+          default: driving
+          title: Mode
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/stations/nearby:
     get:
       tags:
@@ -225,23 +316,15 @@ paths:
           maximum: 180
           minimum: -180
           title: Longitude
-      - name: radius_km
+      - name: page
         in: query
         required: false
         schema:
-          type: number
-          maximum: 100
-          minimum: 0.1
-          default: 10
-          title: Radius Km
-      - name: available_only
-        in: query
-        required: false
-        schema:
-          type: boolean
-          default: false
-          title: Available Only
-      - name: limit
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
         in: query
         required: false
         schema:
@@ -249,7 +332,7 @@ paths:
           maximum: 100
           minimum: 1
           default: 20
-          title: Limit
+          title: Page Size
       responses:
         '200':
           description: Successful Response
@@ -1591,6 +1674,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/internal/stations/catalog-mappings:
+    get:
+      tags:
+      - internal
+      summary: Station Catalog Mappings
+      operationId: station_catalog_mappings_api_v1_internal_stations_catalog_mappings_get
+      parameters:
+      - name: data_source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 64
+          - type: 'null'
+          title: Data Source
+      - name: external_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 64
+          - type: 'null'
+          title: External Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 500
+          title: Page Size
+      - name: x-internal-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/internal/orders/expire-reservations:
     post:
       tags:
@@ -1732,7 +1880,7 @@ components:
       required:
       - request_id
       title: ApiEnvelope
-    Body_upload_avatar_api_v1_user_avatar_post:
+    Body_upload_avatar_api_v1_users_me_avatar_post:
       properties:
         avatar:
           type: string
@@ -1742,7 +1890,7 @@ components:
       type: object
       required:
       - avatar
-      title: Body_upload_avatar_api_v1_user_avatar_post
+      title: Body_upload_avatar_api_v1_users_me_avatar_post
     CancelOrder:
       properties:
         reason:
@@ -1779,12 +1927,17 @@ components:
       title: HeartbeatCreate
     OrderCreate:
       properties:
+        station_id:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Station Id
         pile_id:
           type: integer
           exclusiveMinimum: 0.0
           title: Pile Id
       type: object
       required:
+      - station_id
       - pile_id
       title: OrderCreate
     OrderStatus:

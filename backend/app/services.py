@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,25 +13,28 @@ from app.enums import (
     OrderStatus,
     PileStatus,
     StationStatus,
+    UserStatus,
 )
 from app.errors import (
-    DUPLICATE_RESOURCE,
     INSUFFICIENT_BALANCE,
     INVALID_ORDER_STATE,
+    INVALID_REQUEST,
     ORDER_NOT_OWNED,
     PILE_NOT_AVAILABLE,
     RESERVATION_EXPIRED,
     RESOURCE_NOT_FOUND,
     TELEMETRY_OUT_OF_ORDER,
+    USER_FROZEN,
     USER_HAS_ACTIVE_ORDER,
     error,
 )
-from app.helpers import as_utc, utcnow
+from app.helpers import as_utc, to_utc_naive, utcnow
 from app.models import (
     ChargingOrder,
     ChargingPile,
     PileStatusLog,
     RechargeRecord,
+    Station,
     User,
 )
 
@@ -49,21 +52,41 @@ def get_owned_order(db: Session, order_id: int, user_id: int) -> ChargingOrder:
     return order
 
 
-def create_order(db: Session, user: User, pile_id: int) -> ChargingOrder:
+def create_order(
+    db: Session, user: User, station_id: int, pile_id: int
+) -> ChargingOrder:
     expire_reservations(db, user_id=user.id)
+    station = db.get(Station, station_id)
+    if station is None:
+        raise error(RESOURCE_NOT_FOUND, {"resource": "station", "id": station_id})
     pile = db.get(ChargingPile, pile_id)
     if pile is None:
         raise error(RESOURCE_NOT_FOUND, {"resource": "pile", "id": pile_id})
-    if pile.station.status != StationStatus.ACTIVE:
+    if pile.station_id != station.id:
+        raise error(
+            INVALID_REQUEST,
+            {"reason": "charging pile does not belong to station"},
+        )
+    if station.status != StationStatus.ACTIVE:
         raise error(
             PILE_NOT_AVAILABLE,
-            {"pile_id": pile_id, "station_status": pile.station.status.value},
+            {"pile_id": pile_id, "station_status": station.status.value},
         )
-    if pile.station.price_cents_per_kwh is None:
+    if station.price_cents_per_kwh is None:
         raise error(
             PILE_NOT_AVAILABLE,
             {"pile_id": pile_id, "reason": "station price is not configured"},
         )
+    claimed_user = db.execute(
+        update(User)
+        .where(User.id == user.id, User.status == UserStatus.NORMAL)
+        .values(balance_cents=User.balance_cents)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed_user.rowcount != 1:
+        db.rollback()
+        db.refresh(user)
+        raise error(USER_FROZEN)
     active = db.scalar(
         select(ChargingOrder.id).where(
             ChargingOrder.user_id == user.id,
@@ -76,10 +99,10 @@ def create_order(db: Session, user: User, pile_id: int) -> ChargingOrder:
     order = ChargingOrder(
         order_no=_number("CO"),
         user_id=user.id,
-        station_id=pile.station_id,
+        station_id=station.id,
         pile_id=pile.id,
         status=OrderStatus.PENDING,
-        unit_price_cents_per_kwh=pile.station.price_cents_per_kwh,
+        unit_price_cents_per_kwh=station.price_cents_per_kwh,
         energy_wh=0,
         duration_seconds=0,
         amount_cents=0,
@@ -199,33 +222,52 @@ def reserve_order(db: Session, order: ChargingOrder) -> ChargingOrder:
         raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
     if order.station.status != StationStatus.ACTIVE:
         raise error(PILE_NOT_AVAILABLE, {"station_status": order.station.status.value})
+    now = utcnow()
+    order_version = order.version
+    claimed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == OrderStatus.PENDING,
+            ChargingOrder.version == order_version,
+        )
+        .values(
+            status=OrderStatus.RESERVED,
+            reserved_at=now,
+            reservation_expires_at=now
+            + timedelta(seconds=get_settings().reservation_timeout_seconds),
+            version=order_version + 1,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
     pile = order.pile
-    old_version = pile.version
-    result = db.execute(
+    pile_version = pile.version
+    transitioned = db.execute(
         update(ChargingPile)
         .where(
             ChargingPile.id == pile.id,
             ChargingPile.status == PileStatus.IDLE,
-            ChargingPile.version == old_version,
+            ChargingPile.version == pile_version,
         )
         .values(
-            status=PileStatus.RESERVED, version=old_version + 1, updated_at=utcnow()
+            status=PileStatus.RESERVED,
+            version=pile_version + 1,
+            updated_at=now,
         )
+        .execution_options(synchronize_session=False)
     )
-    if result.rowcount != 1:
+    if transitioned.rowcount != 1:
         db.rollback()
+        db.refresh(pile)
         raise error(
             PILE_NOT_AVAILABLE,
             {"pile_id": pile.id, "current_status": pile.status.value},
         )
-    now = utcnow()
-    order.status = OrderStatus.RESERVED
-    order.reserved_at = now
-    order.reservation_expires_at = now + timedelta(
-        seconds=get_settings().reservation_timeout_seconds
-    )
-    order.version += 1
-    order.updated_at = now
     _pile_log(
         db,
         pile,
@@ -237,6 +279,7 @@ def reserve_order(db: Session, order: ChargingOrder) -> ChargingOrder:
     )
     db.commit()
     db.refresh(order)
+    db.refresh(pile)
     return order
 
 
@@ -337,6 +380,8 @@ def start_order(db: Session, order: ChargingOrder) -> ChargingOrder:
 
 
 def stop_order(db: Session, order: ChargingOrder) -> ChargingOrder:
+    if order.status in (OrderStatus.UNPAID, OrderStatus.COMPLETED):
+        return order
     if order.status != OrderStatus.CHARGING or order.pile.status != PileStatus.CHARGING:
         raise error(
             INVALID_ORDER_STATE,
@@ -345,33 +390,72 @@ def stop_order(db: Session, order: ChargingOrder) -> ChargingOrder:
                 "pile_status": order.pile.status.value,
             },
         )
-    now = max(utcnow(), order.updated_at)
+    if order.started_at is None:
+        raise error(INVALID_ORDER_STATE, {"reason": "started_at is missing"})
+    now = max(utcnow(), order.started_at)
     duration = max(0, round((now - order.started_at).total_seconds()))
-    energy = order.energy_wh
-    if energy <= 0:
-        energy = int(
-            (
-                Decimal(order.pile.rated_power_w) * Decimal(duration) / Decimal(3600)
-            ).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-        )
+    energy = int(
+        (
+            Decimal(order.pile.rated_power_w) * Decimal(duration) / Decimal(3600)
+        ).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    )
     amount = int(
         (
             Decimal(energy) * Decimal(order.unit_price_cents_per_kwh) / Decimal(1000)
         ).quantize(Decimal(1), rounding=ROUND_HALF_UP)
     )
-    order.status = OrderStatus.UNPAID
-    order.duration_seconds = duration
-    order.energy_wh = energy
-    order.amount_cents = amount
-    order.stopped_at = now
-    order.updated_at = now
-    order.version += 1
-    order.pile.status = PileStatus.IDLE
-    order.pile.updated_at = now
-    order.pile.version += 1
+    order_version = order.version
+    claimed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == OrderStatus.CHARGING,
+            ChargingOrder.version == order_version,
+        )
+        .values(
+            status=OrderStatus.UNPAID,
+            duration_seconds=duration,
+            energy_wh=energy,
+            amount_cents=amount,
+            stopped_at=now,
+            updated_at=now,
+            version=order_version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        if order.status in (OrderStatus.UNPAID, OrderStatus.COMPLETED):
+            return order
+        raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
+    pile = order.pile
+    pile_version = pile.version
+    transitioned = db.execute(
+        update(ChargingPile)
+        .where(
+            ChargingPile.id == pile.id,
+            ChargingPile.status == PileStatus.CHARGING,
+            ChargingPile.version == pile_version,
+        )
+        .values(
+            status=PileStatus.IDLE,
+            updated_at=now,
+            version=pile_version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if transitioned.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        db.refresh(pile)
+        raise error(
+            INVALID_ORDER_STATE,
+            {"order_status": order.status.value, "pile_status": pile.status.value},
+        )
     _pile_log(
         db,
-        order.pile,
+        pile,
         PileStatus.CHARGING,
         PileStatus.IDLE,
         LogSource.USER,
@@ -380,6 +464,7 @@ def stop_order(db: Session, order: ChargingOrder) -> ChargingOrder:
     )
     db.commit()
     db.refresh(order)
+    db.refresh(pile)
     return order
 
 
@@ -388,24 +473,42 @@ def settle_order(db: Session, order: ChargingOrder, user: User) -> ChargingOrder
         return order
     if order.status != OrderStatus.UNPAID:
         raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
-    result = db.execute(
+    now = utcnow()
+    claimed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == OrderStatus.UNPAID,
+        )
+        .values(
+            status=OrderStatus.COMPLETED,
+            settled_at=now,
+            updated_at=now,
+            version=ChargingOrder.version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        db.refresh(user)
+        if order.status == OrderStatus.COMPLETED:
+            return order
+        raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
+    deducted = db.execute(
         update(User)
         .where(User.id == user.id, User.balance_cents >= order.amount_cents)
-        .values(
-            balance_cents=User.balance_cents - order.amount_cents, updated_at=utcnow()
-        )
+        .values(balance_cents=User.balance_cents - order.amount_cents, updated_at=now)
+        .execution_options(synchronize_session=False)
     )
-    if result.rowcount != 1:
+    if deducted.rowcount != 1:
         db.rollback()
+        db.refresh(order)
+        db.refresh(user)
         raise error(
             INSUFFICIENT_BALANCE,
             {"amount_cents": order.amount_cents, "balance_cents": user.balance_cents},
         )
-    now = utcnow()
-    order.status = OrderStatus.COMPLETED
-    order.settled_at = now
-    order.updated_at = now
-    order.version += 1
     db.commit()
     db.refresh(order)
     db.refresh(user)
@@ -417,12 +520,54 @@ def cancel_order(
 ) -> ChargingOrder:
     if order.status not in (OrderStatus.PENDING, OrderStatus.RESERVED):
         raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
+    original_status = order.status
+    order_version = order.version
     now = utcnow()
-    if order.status == OrderStatus.RESERVED:
+    claimed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == original_status,
+            ChargingOrder.version == order_version,
+        )
+        .values(
+            status=OrderStatus.CANCELLED,
+            cancel_reason=reason,
+            cancelled_at=now,
+            updated_at=now,
+            version=order_version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
+    if original_status == OrderStatus.RESERVED:
         pile = order.pile
-        pile.status = PileStatus.IDLE
-        pile.version += 1
-        pile.updated_at = now
+        pile_version = pile.version
+        released = db.execute(
+            update(ChargingPile)
+            .where(
+                ChargingPile.id == pile.id,
+                ChargingPile.status == PileStatus.RESERVED,
+                ChargingPile.version == pile_version,
+            )
+            .values(
+                status=PileStatus.IDLE,
+                version=pile_version + 1,
+                updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if released.rowcount != 1:
+            db.rollback()
+            db.refresh(order)
+            db.refresh(pile)
+            raise error(
+                INVALID_ORDER_STATE,
+                {"order_status": order.status.value, "pile_status": pile.status.value},
+            )
         _pile_log(
             db,
             pile,
@@ -432,13 +577,10 @@ def cancel_order(
             order.id,
             "reservation cancelled",
         )
-    order.status = OrderStatus.CANCELLED
-    order.cancel_reason = reason
-    order.cancelled_at = now
-    order.updated_at = now
-    order.version += 1
     db.commit()
     db.refresh(order)
+    if original_status == OrderStatus.RESERVED:
+        db.refresh(pile)
     return order
 
 
@@ -452,12 +594,20 @@ def recharge(
     )
     if existing is not None:
         if existing.user_id != user.id or existing.amount_cents != amount_cents:
-            raise error(DUPLICATE_RESOURCE, {"field": "client_request_id"})
+            raise error(INVALID_REQUEST, {"field": "client_request_id"})
         return existing
-    before = user.balance_cents
     now = utcnow()
-    user.balance_cents += amount_cents
-    user.updated_at = now
+    db.execute(
+        update(User)
+        .where(User.id == user.id)
+        .values(
+            balance_cents=User.balance_cents + amount_cents,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    db.refresh(user)
+    before = user.balance_cents - amount_cents
     record = RechargeRecord(
         recharge_no=_number("RC"),
         client_request_id=client_request_id,
@@ -485,7 +635,7 @@ def recharge(
             and existing.amount_cents == amount_cents
         ):
             return existing
-        raise error(DUPLICATE_RESOURCE, {"field": "client_request_id"})
+        raise error(INVALID_REQUEST, {"field": "client_request_id"})
     db.refresh(record)
     return record
 
@@ -495,14 +645,36 @@ def update_telemetry(
 ) -> ChargingOrder:
     if order.status != OrderStatus.CHARGING:
         raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
-    reported = reported_at.replace(tzinfo=None)
+    reported = to_utc_naive(reported_at)
     if energy_wh < order.energy_wh or reported < order.updated_at:
         raise error(TELEMETRY_OUT_OF_ORDER, {"current_energy_wh": order.energy_wh})
-    if energy_wh == order.energy_wh and reported == order.updated_at:
-        return order
-    order.energy_wh = energy_wh
-    order.updated_at = reported
-    order.version += 1
+    changed = db.execute(
+        update(ChargingOrder)
+        .where(
+            ChargingOrder.id == order.id,
+            ChargingOrder.status == OrderStatus.CHARGING,
+            ChargingOrder.energy_wh <= energy_wh,
+            ChargingOrder.updated_at <= reported,
+            or_(
+                ChargingOrder.energy_wh < energy_wh,
+                ChargingOrder.updated_at < reported,
+            ),
+        )
+        .values(
+            energy_wh=energy_wh,
+            updated_at=reported,
+            version=ChargingOrder.version + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if changed.rowcount != 1:
+        db.rollback()
+        db.refresh(order)
+        if order.status != OrderStatus.CHARGING:
+            raise error(INVALID_ORDER_STATE, {"current_status": order.status.value})
+        if energy_wh == order.energy_wh and reported == order.updated_at:
+            return order
+        raise error(TELEMETRY_OUT_OF_ORDER, {"current_energy_wh": order.energy_wh})
     db.commit()
     db.refresh(order)
     return order
