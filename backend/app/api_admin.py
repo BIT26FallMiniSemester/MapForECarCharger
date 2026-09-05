@@ -42,6 +42,7 @@ from app.models import (
     Station,
     User,
 )
+from app.query_stats import pile_order_totals, station_pile_stats
 from app.responses import ApiEnvelope, success
 from app.schemas import (
     PileStatusUpdate,
@@ -55,6 +56,8 @@ router = APIRouter(tags=["admin and dashboard"])
 
 
 def _pile_stats(db, station_id: int | None = None) -> dict:
+    if station_id is not None:
+        return station_pile_stats(db, (station_id,))[station_id]
     query = select(
         func.count(ChargingPile.id),
         func.sum(case((ChargingPile.status == PileStatus.IDLE, 1), else_=0)),
@@ -68,22 +71,6 @@ def _pile_stats(db, station_id: int | None = None) -> dict:
         "total_piles": total,
         "available_piles": available,
         "online_rate": round(online * 100 / total, 2) if total else 0.0,
-    }
-
-
-def _pile_totals(db, pile_id: int) -> dict:
-    row = db.execute(
-        select(
-            func.count(ChargingOrder.id),
-            func.coalesce(func.sum(ChargingOrder.duration_seconds), 0),
-        ).where(
-            ChargingOrder.pile_id == pile_id,
-            ChargingOrder.status.in_((OrderStatus.UNPAID, OrderStatus.COMPLETED)),
-        )
-    ).one()
-    return {
-        "total_charge_count": int(row[0]),
-        "total_charge_duration_seconds": int(row[1]),
     }
 
 
@@ -194,10 +181,11 @@ def admin_piles(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
+    totals_by_pile = pile_order_totals(db, (item.id for item in piles))
     return success(
         request,
         page_data(
-            [pile_data(item, _pile_totals(db, item.id)) for item in piles],
+            [pile_data(item, totals_by_pile[item.id]) for item in piles],
             page,
             page_size,
             total,
@@ -225,7 +213,7 @@ def admin_pile_detail(
         .order_by(PileStatusLog.created_at.desc())
         .limit(20)
     ).all()
-    data = pile_data(pile, _pile_totals(db, pile.id))
+    data = pile_data(pile, pile_order_totals(db, (pile.id,))[pile.id])
     data["recent_status_logs"] = [
         {
             "old_status": item.old_status.value,
@@ -310,10 +298,11 @@ def admin_stations(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
+    stats_by_station = station_pile_stats(db, (item.id for item in stations))
     return success(
         request,
         page_data(
-            [station_data(item, _pile_stats(db, item.id)) for item in stations],
+            [station_data(item, stats_by_station[item.id]) for item in stations],
             page,
             page_size,
             total,
@@ -769,9 +758,10 @@ def station_ranking(
         .where(Station.piles.any())
         .group_by(Station.id)
     ).all()
+    stats_by_station = station_pile_stats(db, (row[0] for row in rows))
     items = []
     for row in rows:
-        pile_count = _pile_stats(db, row[0])["total_piles"]
+        pile_count = stats_by_station[row[0]]["total_piles"]
         capacity_seconds = pile_count * days * 86400
         items.append(
             {
@@ -812,9 +802,25 @@ def load_predictions(
         if station_id is not None
         else LoadPrediction.station_id.is_(None)
     )
-    records = db.scalars(
-        select(LoadPrediction).where(*filters).order_by(LoadPrediction.predicted_for)
-    ).all()
+    latest = db.scalar(
+        select(LoadPrediction)
+        .where(*filters)
+        .order_by(LoadPrediction.generated_at.desc(), LoadPrediction.id.desc())
+        .limit(1)
+    )
+    records = (
+        db.scalars(
+            select(LoadPrediction)
+            .where(
+                *filters,
+                LoadPrediction.model_version == latest.model_version,
+                LoadPrediction.generated_at == latest.generated_at,
+            )
+            .order_by(LoadPrediction.predicted_for)
+        ).all()
+        if latest is not None
+        else []
+    )
     grouped = {}
     for item in records:
         key = as_utc(item.predicted_for)
@@ -825,7 +831,6 @@ def load_predictions(
             "CONGESTION_SCORE": "congestion_score",
         }[item.prediction_type.value]
         grouped[key][field] = float(item.predicted_value)
-    latest = max(records, key=lambda item: item.generated_at) if records else None
     return success(
         request,
         {
@@ -850,20 +855,27 @@ def recommendations(
 ) -> ApiEnvelope:
     from app.api_orders import _distance_km
 
-    items = []
-    for station in db.scalars(
+    stations = db.scalars(
         select(Station).where(
             Station.status == StationStatus.ACTIVE,
             Station.latitude.is_not(None),
             Station.longitude.is_not(None),
         )
-    ).all():
+    ).all()
+    candidates = []
+    for station in stations:
         distance = _distance_km(
             latitude, longitude, float(station.latitude), float(station.longitude)
         )
         if distance > radius_km:
             continue
-        stats = _pile_stats(db, station.id)
+        candidates.append((station, distance))
+    stats_by_station = station_pile_stats(
+        db, (station.id for station, _distance in candidates)
+    )
+    items = []
+    for station, distance in candidates:
+        stats = stats_by_station[station.id]
         free_rate = (
             stats["available_piles"] / stats["total_piles"]
             if stats["total_piles"]

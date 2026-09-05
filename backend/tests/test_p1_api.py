@@ -22,7 +22,11 @@ def test_avatar_upload_and_static_file(client, user_headers):
 
 
 def test_realtime_orders_and_heartbeat_log(client, user_headers, internal_headers):
-    created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
+    created = client.post(
+        "/api/v1/orders",
+        headers=user_headers,
+        json={"station_id": 1, "pile_id": 1},
+    )
     order_id = created.json()["data"]["id"]
     client.post(f"/api/v1/orders/{order_id}/reserve", headers=user_headers, json={})
     client.post(f"/api/v1/orders/{order_id}/start", headers=user_headers, json={})
@@ -46,11 +50,15 @@ def test_realtime_orders_and_heartbeat_log(client, user_headers, internal_header
 def test_expired_reservation_releases_pile_and_allows_new_order(
     client, user_headers, db_session
 ):
-    created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
+    created = client.post(
+        "/api/v1/orders",
+        headers=user_headers,
+        json={"station_id": 1, "pile_id": 1},
+    )
     order_id = created.json()["data"]["id"]
     reserved = client.post(f"/api/v1/orders/{order_id}/reserve", headers=user_headers)
     assert reserved.status_code == 200
-    assert reserved.json()["data"]["reservation_expires_at"] is not None
+    assert reserved.json()["data"]["expires_at"] is not None
 
     order = db_session.get(ChargingOrder, order_id)
     order.reservation_expires_at = utcnow() - timedelta(seconds=1)
@@ -58,7 +66,7 @@ def test_expired_reservation_releases_pile_and_allows_new_order(
 
     start = client.post(f"/api/v1/orders/{order_id}/start", headers=user_headers)
     assert start.status_code == 409
-    assert start.json()["code"] == 40009
+    assert start.json()["code"] == 40005
 
     db_session.expire_all()
     assert db_session.get(ChargingOrder, order_id).status == OrderStatus.CANCELLED
@@ -77,7 +85,9 @@ def test_expired_reservation_releases_pile_and_allows_new_order(
     assert active.status_code == 200
     assert active.json()["data"] is None
     replacement = client.post(
-        "/api/v1/orders", headers=user_headers, json={"pile_id": 2}
+        "/api/v1/orders",
+        headers=user_headers,
+        json={"station_id": 1, "pile_id": 2},
     )
     assert replacement.status_code == 201
 
@@ -85,7 +95,11 @@ def test_expired_reservation_releases_pile_and_allows_new_order(
 def test_internal_reservation_sweep_is_idempotent(
     client, user_headers, internal_headers, db_session
 ):
-    created = client.post("/api/v1/orders", headers=user_headers, json={"pile_id": 1})
+    created = client.post(
+        "/api/v1/orders",
+        headers=user_headers,
+        json={"station_id": 1, "pile_id": 1},
+    )
     order_id = created.json()["data"]["id"]
     client.post(f"/api/v1/orders/{order_id}/reserve", headers=user_headers)
     order = db_session.get(ChargingOrder, order_id)
@@ -104,4 +118,4 @@ def test_internal_reservation_sweep_is_idempotent(
     assert second.json()["data"]["expired_count"] == 0
     start = client.post(f"/api/v1/orders/{order_id}/start", headers=user_headers)
     assert start.status_code == 409
-    assert start.json()["code"] == 40009
+    assert start.json()["code"] == 40005

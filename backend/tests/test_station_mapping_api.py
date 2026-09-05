@@ -6,7 +6,7 @@ from app.models import Station
 def test_station_catalog_mapping_requires_internal_key(client):
     response = client.get("/api/v1/internal/stations/catalog-mappings")
     assert response.status_code == 401
-    assert response.json()["code"] == 20001
+    assert response.json()["code"] == 40101
 
 
 def test_station_catalog_mapping_list_filter_and_empty_result(
@@ -52,11 +52,10 @@ def test_station_catalog_mapping_list_filter_and_empty_result(
     )
     assert listing.status_code == 200
     listing_data = listing.json()["data"]
-    assert listing_data["pagination"] == {
+    assert {key: listing_data[key] for key in ("page", "page_size", "total")} == {
         "page": 1,
         "page_size": 2,
         "total": 3,
-        "total_pages": 2,
     }
     assert len(listing_data["items"]) == 2
     assert set(listing_data["items"][0]) == {
@@ -73,7 +72,7 @@ def test_station_catalog_mapping_list_filter_and_empty_result(
     )
     exact_data = exact.json()["data"]
     assert exact.status_code == 200
-    assert exact_data["pagination"]["total"] == 1
+    assert exact_data["total"] == 1
     assert exact_data["items"] == [
         {
             "station_id": stations[1].id,
@@ -90,11 +89,11 @@ def test_station_catalog_mapping_list_filter_and_empty_result(
     )
     assert empty.status_code == 200
     assert empty.json()["data"]["items"] == []
-    assert empty.json()["data"]["pagination"]["total"] == 0
+    assert empty.json()["data"]["total"] == 0
 
     invalid = client.get(
         "/api/v1/internal/stations/catalog-mappings?page_size=1001",
         headers=internal_headers,
     )
     assert invalid.status_code == 422
-    assert invalid.json()["code"] == 10001
+    assert invalid.json()["code"] == 40001

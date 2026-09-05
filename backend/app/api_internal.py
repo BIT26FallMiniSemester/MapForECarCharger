@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from app.dependencies import DbSession, require_internal_key
 from app.device_services import update_heartbeat
 from app.errors import RESOURCE_NOT_FOUND, error
-from app.helpers import as_utc, page_data, utcnow
+from app.helpers import as_utc, page_data, to_utc_naive, utcnow
 from app.models import ChargingOrder, ChargingPile, LoadPrediction, Station
 from app.responses import ApiEnvelope, success
 from app.schemas import HeartbeatCreate, PredictionsCreate, TelemetryCreate
@@ -116,7 +116,7 @@ def write_predictions(
         filters = [
             LoadPrediction.prediction_type == point.prediction_type,
             LoadPrediction.horizon_hours == payload.horizon_hours,
-            LoadPrediction.predicted_for == point.predicted_for.replace(tzinfo=None),
+            LoadPrediction.predicted_for == to_utc_naive(point.predicted_for),
             LoadPrediction.model_version == payload.model_version,
         ]
         filters.append(
@@ -130,15 +130,15 @@ def write_predictions(
                 station_id=payload.station_id,
                 prediction_type=point.prediction_type,
                 horizon_hours=payload.horizon_hours,
-                predicted_for=point.predicted_for.replace(tzinfo=None),
+                predicted_for=to_utc_naive(point.predicted_for),
                 predicted_value=point.predicted_value,
                 model_version=payload.model_version,
-                generated_at=payload.generated_at.replace(tzinfo=None),
+                generated_at=to_utc_naive(payload.generated_at),
             )
             db.add(record)
         else:
             record.predicted_value = point.predicted_value
-            record.generated_at = payload.generated_at.replace(tzinfo=None)
+            record.generated_at = to_utc_naive(payload.generated_at)
         written += 1
     db.commit()
     return success(

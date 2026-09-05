@@ -2,21 +2,22 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
+from app import map_services
 from app.dependencies import DbSession, current_user
 from app.enums import (
     ACTIVE_ORDER_STATUSES,
-    ONLINE_PILE_STATUSES,
     OrderStatus,
     PileStatus,
     PileType,
     StationStatus,
 )
-from app.errors import RESOURCE_NOT_FOUND, error
+from app.errors import INVALID_REQUEST, RESOURCE_NOT_FOUND, error
 from app.helpers import order_data, page_data, pile_data, station_data
 from app.models import ChargingOrder, ChargingPile, Station, User
+from app.query_stats import pile_order_totals, station_pile_stats
 from app.responses import ApiEnvelope, success
 from app.schemas import CancelOrder, OrderCreate
 from app.services import (
@@ -34,22 +35,11 @@ router = APIRouter(tags=["stations, piles and orders"])
 
 
 def _station_stats(db, station_id: int) -> dict:
-    row = db.execute(
-        select(
-            func.count(ChargingPile.id),
-            func.sum(case((ChargingPile.status == PileStatus.IDLE, 1), else_=0)),
-            func.sum(case((ChargingPile.status.in_(ONLINE_PILE_STATUSES), 1), else_=0)),
-        ).where(ChargingPile.station_id == station_id)
-    ).one()
-    total, available, online = int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
-    return {
-        "total_piles": total,
-        "available_piles": available,
-        "online_rate": round(online * 100 / total, 2) if total else 0.0,
-    }
+    return station_pile_stats(db, (station_id,))[station_id]
 
 
 def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Compatibility helper for the legacy recommendation endpoint."""
     d_lat = radians(lat2 - lat1)
     d_lon = radians(lon2 - lon1)
     value = (
@@ -60,17 +50,41 @@ def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def _pile_totals(db, pile_id: int) -> dict:
-    ended = (OrderStatus.UNPAID, OrderStatus.COMPLETED)
-    row = db.execute(
-        select(
-            func.count(ChargingOrder.id),
-            func.coalesce(func.sum(ChargingOrder.duration_seconds), 0),
-        ).where(ChargingOrder.pile_id == pile_id, ChargingOrder.status.in_(ended))
-    ).one()
-    return {
-        "total_charge_count": int(row[0] or 0),
-        "total_charge_duration_seconds": int(row[1] or 0),
-    }
+    return pile_order_totals(db, (pile_id,))[pile_id]
+
+
+@router.get("/map/geocode")
+def geocode(
+    request: Request,
+    _user: Annotated[User, Depends(current_user)],
+    address: Annotated[str, Query(min_length=1, max_length=255)],
+) -> ApiEnvelope:
+    address = address.strip()
+    if not address:
+        raise error(INVALID_REQUEST, {"reason": "address is required"})
+    return success(request, map_services.geocode_address(address))
+
+
+@router.get("/map/route")
+def route(
+    request: Request,
+    _user: Annotated[User, Depends(current_user)],
+    from_latitude: Annotated[float, Query(ge=-90, le=90)],
+    from_longitude: Annotated[float, Query(ge=-180, le=180)],
+    to_latitude: Annotated[float, Query(ge=-90, le=90)],
+    to_longitude: Annotated[float, Query(ge=-180, le=180)],
+    mode: Annotated[str, Query(pattern="^(driving|walking)$")] = "driving",
+) -> ApiEnvelope:
+    return success(
+        request,
+        map_services.route_plan(
+            from_latitude,
+            from_longitude,
+            to_latitude,
+            to_longitude,
+            mode,
+        ),
+    )
 
 
 @router.get("/stations/nearby")
@@ -80,32 +94,39 @@ def nearby_stations(
     _user: Annotated[User, Depends(current_user)],
     latitude: Annotated[float, Query(ge=-90, le=90)],
     longitude: Annotated[float, Query(ge=-180, le=180)],
-    radius_km: Annotated[float, Query(ge=0.1, le=100)] = 10,
-    available_only: bool = False,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiEnvelope:
     stations = db.scalars(
         select(Station).where(
             Station.status == StationStatus.ACTIVE,
             Station.latitude.is_not(None),
             Station.longitude.is_not(None),
+            Station.price_cents_per_kwh.is_not(None),
+            Station.piles.any(),
         )
     ).all()
+    stats_by_station = station_pile_stats(db, (item.id for item in stations))
+    routes = map_services.route_distances(
+        latitude,
+        longitude,
+        [(float(item.latitude), float(item.longitude)) for item in stations],
+    )
     items = []
-    for station in stations:
-        stats = _station_stats(db, station.id)
-        if available_only and stats["available_piles"] == 0:
+    for station, route_data in zip(stations, routes, strict=True):
+        if route_data is None:
             continue
-        distance = _distance_km(
-            latitude,
-            longitude,
-            float(station.latitude),
-            float(station.longitude),
-        )
-        if distance <= radius_km:
-            items.append(station_data(station, stats, round(distance, 2)))
-    items.sort(key=lambda item: item["distance_km"])
-    return success(request, items[:limit])
+        stats = stats_by_station[station.id]
+        item = station_data(station, stats)
+        item.pop("distance_km", None)
+        item.update(route_data)
+        items.append(item)
+    items.sort(key=lambda item: item["route_distance_meters"])
+    total = len(items)
+    offset = (page - 1) * page_size
+    return success(
+        request, page_data(items[offset : offset + page_size], page, page_size, total)
+    )
 
 
 @router.get("/stations")
@@ -160,7 +181,8 @@ def station_list(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    items = [station_data(item, _station_stats(db, item.id)) for item in stations]
+    stats_by_station = station_pile_stats(db, (item.id for item in stations))
+    items = [station_data(item, stats_by_station[item.id]) for item in stations]
     return success(request, page_data(items, page, page_size, total))
 
 
@@ -256,7 +278,8 @@ def station_piles(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    items = [pile_data(item, _pile_totals(db, item.id)) for item in piles]
+    totals_by_pile = pile_order_totals(db, (item.id for item in piles))
+    items = [pile_data(item, totals_by_pile[item.id]) for item in piles]
     return success(request, page_data(items, page, page_size, total))
 
 
@@ -284,7 +307,10 @@ def new_order(
     db: DbSession,
     user: Annotated[User, Depends(current_user)],
 ) -> ApiEnvelope:
-    return success(request, order_data(create_order(db, user, payload.pile_id)))
+    return success(
+        request,
+        order_data(create_order(db, user, payload.station_id, payload.pile_id)),
+    )
 
 
 @router.post("/orders/{order_id}/reserve")

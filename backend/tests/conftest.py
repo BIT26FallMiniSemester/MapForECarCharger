@@ -103,7 +103,7 @@ def client(db_session):
 
 @pytest.fixture()
 def user_headers(client):
-    response = client.post("/api/v1/user/login", json={"phone": "13900000001"})
+    response = client.post("/api/v1/auth/user/login", json={"phone": "13900000001"})
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
 
@@ -111,7 +111,8 @@ def user_headers(client):
 @pytest.fixture()
 def admin_headers(client):
     response = client.post(
-        "/api/v1/admin/login", json={"username": "admin", "password": "123456"}
+        "/api/v1/auth/admin/login",
+        json={"username": "admin", "password": "123456"},
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
