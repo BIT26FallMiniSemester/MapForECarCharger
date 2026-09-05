@@ -1,16 +1,22 @@
 #include "homepage.h"
 #include "ui_homepage.h"
 
+#include <algorithm>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QStringList>
+#include <QStyle>
 #include <QtGlobal>
 #include <QToolButton>
+#include <QVariant>
 
 HomePage::HomePage(QWidget *parent)
     : QWidget(parent)
@@ -18,19 +24,30 @@ HomePage::HomePage(QWidget *parent)
 {
     ui->setupUi(this);
     ui->titleLabel->setObjectName(QStringLiteral("titleLabel"));
-    ui->descLabel->setObjectName(QStringLiteral("subtitleLabel"));
+    ui->distanceDesc->setObjectName(QStringLiteral("subtitleLabel"));
+    ui->keywordDesc->setObjectName(QStringLiteral("subtitleLabel"));
     ui->hintLabel->setObjectName(QStringLiteral("subtitleLabel"));
     ui->radiusHint->setObjectName(QStringLiteral("subtitleLabel"));
     ui->locationButton->setObjectName(QStringLiteral("locationButton"));
     ui->locationButton->setStyleSheet(QStringLiteral("text-align: left; padding: 12px;"));
+    ui->distanceModeButton->setObjectName(QStringLiteral("modeTab"));
+    ui->keywordModeButton->setObjectName(QStringLiteral("modeTab"));
     ui->radiusUp->setObjectName(QStringLiteral("stepButton"));
     ui->radiusDown->setObjectName(QStringLiteral("stepButton"));
 
+    setupFilterCombos();
     setupRadiusControl();
+    setupModeSwitch();
     refreshLocationButton();
+    setKeywordMode(false);
 
     connect(ui->locationButton, &QPushButton::clicked, this, &HomePage::changeLocationClicked);
     connect(ui->queryButton, &QPushButton::clicked, this, &HomePage::queryClicked);
+    connect(ui->searchButton, &QPushButton::clicked, this, &HomePage::searchClicked);
+    connect(ui->keywordEdit, &QLineEdit::returnPressed, this, &HomePage::searchClicked);
+    connect(ui->activeOrderButton, &QPushButton::clicked, this, &HomePage::activeOrderClicked);
+    ui->activeOrderButton->setObjectName(QStringLiteral("locationButton"));
+    ui->activeOrderButton->setVisible(false);
 }
 
 HomePage::~HomePage()
@@ -41,6 +58,115 @@ HomePage::~HomePage()
 double HomePage::radiusKm() const
 {
     return m_radiusKm;
+}
+
+QString HomePage::keyword() const
+{
+    return ui->keywordEdit->text().trimmed();
+}
+
+QString HomePage::selectedDistrict() const
+{
+    return ui->districtCombo->currentData().toString();
+}
+
+QString HomePage::selectedOperator() const
+{
+    return ui->operatorCombo->currentData().toString();
+}
+
+QString HomePage::selectedRegionScope() const
+{
+    return ui->regionCombo->currentData().toString();
+}
+
+QString HomePage::selectedLocationType() const
+{
+    return ui->locationCombo->currentData().toString();
+}
+
+bool HomePage::availableOnly() const
+{
+    return ui->availableOnlyCheck->isChecked();
+}
+
+bool HomePage::bookableOnly() const
+{
+    return ui->bookableOnlyCheck->isChecked();
+}
+
+void HomePage::setupFilterCombos()
+{
+    ui->districtCombo->setMaxVisibleItems(12);
+    ui->operatorCombo->setMaxVisibleItems(12);
+    ui->regionCombo->setMaxVisibleItems(12);
+    ui->locationCombo->setMaxVisibleItems(12);
+    fillFilterCombo(ui->districtCombo, QStringLiteral("全部行政区"), {});
+    fillFilterCombo(ui->operatorCombo, QStringLiteral("全部运营商"), {});
+    fillFilterCombo(ui->regionCombo, QStringLiteral("全部范围"), {});
+    fillFilterCombo(ui->locationCombo, QStringLiteral("全部场所"), {});
+}
+
+void HomePage::fillFilterCombo(QComboBox *box, const QString &allLabel, const QStringList &values)
+{
+    const QString current = box->currentData().toString();
+    const QSignalBlocker blocker(box);
+    box->clear();
+    box->addItem(allLabel, QString());
+    for (const QString &value : values) {
+        if (!value.trimmed().isEmpty())
+            box->addItem(value, value);
+    }
+    const int idx = box->findData(current);
+    box->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void HomePage::setFilterOptions(const StationFilterOptions &options)
+{
+    fillFilterCombo(ui->districtCombo, QStringLiteral("全部行政区"), options.districts);
+    fillFilterCombo(ui->operatorCombo, QStringLiteral("全部运营商"), options.operatorNames);
+    fillFilterCombo(ui->regionCombo, QStringLiteral("全部范围"), options.regionScopes);
+    fillFilterCombo(ui->locationCombo, QStringLiteral("全部场所"), options.locationTypes);
+}
+
+void HomePage::setupModeSwitch()
+{
+    ui->distanceModeButton->setCheckable(true);
+    ui->keywordModeButton->setCheckable(true);
+    connect(ui->distanceModeButton, &QPushButton::clicked, this, [this]() {
+        setKeywordMode(false);
+    });
+    connect(ui->keywordModeButton, &QPushButton::clicked, this, [this]() {
+        setKeywordMode(true);
+    });
+}
+
+void HomePage::setKeywordMode(bool keywordMode)
+{
+    const bool changed = (m_keywordMode != keywordMode);
+    m_keywordMode = keywordMode;
+    ui->distanceModeButton->setChecked(!keywordMode);
+    ui->keywordModeButton->setChecked(keywordMode);
+    ui->distancePage->setVisible(!keywordMode);
+    ui->keywordPage->setVisible(keywordMode);
+    ui->distanceModeButton->style()->unpolish(ui->distanceModeButton);
+    ui->distanceModeButton->style()->polish(ui->distanceModeButton);
+    ui->keywordModeButton->style()->unpolish(ui->keywordModeButton);
+    ui->keywordModeButton->style()->polish(ui->keywordModeButton);
+
+    clearCards();
+    m_stations.clear();
+    if (keywordMode)
+        showHint(QStringLiteral("输入关键词或选择筛选条件后点击「搜索」。"));
+    else
+        showHint(QStringLiteral("选择范围后点击「查询附近站点」。"));
+    if (!keywordMode && changed)
+        emit queryClicked();
+}
+
+void HomePage::resetToDistanceMode()
+{
+    setKeywordMode(false);
 }
 
 void HomePage::setupRadiusControl()
@@ -118,6 +244,17 @@ void HomePage::showHint(const QString &text)
     ui->hintLabel->setText(text);
 }
 
+void HomePage::setActiveOrder(bool hasOrder, const ChargingOrder &order)
+{
+    ui->activeOrderButton->setVisible(hasOrder);
+    if (!hasOrder)
+        return;
+    ui->activeOrderButton->setText(
+        QStringLiteral("当前订单  %1  ·  %2  ›")
+            .arg(orderStatusText(order.status),
+                 order.stationName.isEmpty() ? order.orderNo : order.stationName));
+}
+
 void HomePage::clearCards()
 {
     while (ui->stationListLayout->count() > 1) {
@@ -146,14 +283,63 @@ bool HomePage::eventFilter(QObject *watched, QEvent *event)
 
 void HomePage::showStations(const QVector<StationSummary> &stations)
 {
+    if (m_keywordMode)
+        return;
+    renderStations(stations,
+                   QStringLiteral("附近没有充电站，可加大范围或换一个位置。"),
+                   QStringLiteral("共 %1 座充电站，已按距离由近到远排序。点击站点查看详情。")
+                       .arg(stations.size()));
+}
+
+void HomePage::showSearchStations(const QVector<StationSummary> &stations, int total)
+{
+    if (!m_keywordMode)
+        return;
+    QVector<StationSummary> ranked = stations;
+    for (StationSummary &s : ranked) {
+        if (s.hasCoordinates) {
+            s.distanceKm = geoDistanceKm(m_lat, m_lng, s.latitude, s.longitude);
+        } else {
+            s.distanceKm = -1;
+        }
+    }
+    std::sort(ranked.begin(), ranked.end(), [](const StationSummary &a, const StationSummary &b) {
+        const bool aOk = a.distanceKm >= 0;
+        const bool bOk = b.distanceKm >= 0;
+        if (aOk != bOk)
+            return aOk;
+        if (aOk)
+            return a.distanceKm < b.distanceKm;
+        return a.id < b.id;
+    });
+
+    const int shown = ranked.size();
+    const int all = qMax(total, shown);
+    QString okHint;
+    if (all > shown) {
+        okHint = QStringLiteral("共 %1 座站点，当前显示前 %2 座；有坐标的已按距当前位置由近到远排序。")
+                     .arg(all)
+                     .arg(shown);
+    } else {
+        okHint = QStringLiteral("共 %1 座站点，有坐标的已按距当前位置由近到远排序。点击查看详情。")
+                     .arg(shown);
+    }
+    renderStations(ranked,
+                   QStringLiteral("没有符合条件的站点，可换个关键词或筛选条件。"),
+                   okHint);
+}
+
+void HomePage::renderStations(const QVector<StationSummary> &stations,
+                             const QString &emptyHint,
+                             const QString &okHint)
+{
     m_stations = stations;
     clearCards();
     if (stations.isEmpty()) {
-        showHint(QStringLiteral("附近没有充电站，可加大范围或换一个位置。"));
+        showHint(emptyHint);
         return;
     }
-    showHint(QStringLiteral("共 %1 座充电站，已按距离由近到远排序。点击站点查看详情。")
-                 .arg(stations.size()));
+    showHint(okHint);
 
     for (int i = 0; i < stations.size(); ++i) {
         const StationSummary &s = stations.at(i);
@@ -177,19 +363,33 @@ void HomePage::showStations(const QVector<StationSummary> &stations)
         titleRow->addStretch();
         titleRow->addWidget(chevron);
 
-        const QString price = centsToYuanText(s.priceCentsPerKwh) + QStringLiteral(" 元/度");
-        auto *info = new QLabel(
-            QStringLiteral("%1  ·  空闲 %2 / %3  ·  %4 km\n%5")
-                .arg(price)
-                .arg(s.availablePiles)
-                .arg(s.totalPiles)
-                .arg(s.distanceKm, 0, 'f', 2)
-                .arg(s.address));
+        QStringList meta;
+        if (!s.district.isEmpty())
+            meta << s.district;
+        if (!s.operatorName.isEmpty())
+            meta << s.operatorName;
+        const QString price = s.priceCentsPerKwh > 0
+                                  ? centsToYuanText(s.priceCentsPerKwh) + QStringLiteral(" 元/度")
+                                  : QStringLiteral("电价未配置");
+        QString stats = QStringLiteral("%1  ·  空闲 %2 / %3")
+                            .arg(price)
+                            .arg(s.availablePiles)
+                            .arg(s.totalPiles);
+        if (s.distanceKm >= 0)
+            stats += QStringLiteral("  ·  %1 km").arg(s.distanceKm, 0, 'f', 2);
+        else if (!s.hasCoordinates)
+            stats += QStringLiteral("  ·  无坐标");
+
+        QString infoText = stats + QLatin1Char('\n') + s.address;
+        if (!meta.isEmpty())
+            infoText = meta.join(QStringLiteral("  ·  ")) + QLatin1Char('\n') + infoText;
+
+        auto *info = new QLabel(infoText);
         info->setObjectName(QStringLiteral("cardInfo"));
         info->setWordWrap(true);
         info->setAttribute(Qt::WA_TransparentForMouseEvents);
 
-        auto *clickHint = new QLabel(QStringLiteral("点击查看详情"));
+        auto *clickHint = new QLabel(QStringLiteral("点击查看电桩并预约"));
         clickHint->setObjectName(QStringLiteral("subtitleLabel"));
         clickHint->setAttribute(Qt::WA_TransparentForMouseEvents);
 

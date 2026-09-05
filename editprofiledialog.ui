@@ -25,7 +25,7 @@
    <item>
     <widget class="QLabel" name="hintLabel">
      <property name="text">
-      <string>可更换头像、修改昵称，点击「保存」后生效。</string>
+      <string>可更换头像、修改昵称。对接后端后头像会上传到服务器；演示模式保存在本地。</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

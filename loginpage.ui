@@ -124,7 +124,8 @@
     <widget class="QLabel" name="hintLabel">
      <property name="text">
       <string>演示模式不会访问数据库。真实模式只发送 JSON 到后端。
-冻结测试号：13800000000</string>
+冻结测试号：13800000000
+演示流程：登录后充值 → 找站 → 空闲桩「预约充电」→ 开始/结束充电 → 结算</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

@@ -89,6 +89,66 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="pileFilterRow">
+     <property name="spacing">
+      <number>8</number>
+     </property>
+     <item>
+      <widget class="QComboBox" name="pileStatusCombo">
+       <item>
+        <property name="text">
+         <string>全部状态</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>空闲</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>已预约</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>充电中</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>故障</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>离线</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="pileTypeCombo">
+       <item>
+        <property name="text">
+         <string>全部类型</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>快充</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>慢充</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QScrollArea" name="pilesScroll">
      <property name="frameShape">
       <enum>QFrame::NoFrame</enum>

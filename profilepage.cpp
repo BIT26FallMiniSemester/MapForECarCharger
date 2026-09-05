@@ -19,15 +19,18 @@ ProfilePage::ProfilePage(QWidget *parent)
     ui->rechargeButton->setObjectName(QStringLiteral("rechargeInlineButton"));
     ui->rechargeRecordsButton->setObjectName(QStringLiteral("menuRow"));
     ui->orderRecordsButton->setObjectName(QStringLiteral("menuRow"));
+    ui->activeOrderButton->setObjectName(QStringLiteral("menuRow"));
     ui->logoutButton->setObjectName(QStringLiteral("dangerButton"));
     ui->avatarLabel->setObjectName(QStringLiteral("avatar"));
     ui->rechargeRecordsButton->setStyleSheet(QStringLiteral("text-align: left;"));
     ui->orderRecordsButton->setStyleSheet(QStringLiteral("text-align: left;"));
+    ui->activeOrderButton->setStyleSheet(QStringLiteral("text-align: left;"));
 
     connect(ui->editButton, &QPushButton::clicked, this, &ProfilePage::editClicked);
     connect(ui->rechargeButton, &QPushButton::clicked, this, &ProfilePage::rechargeClicked);
     connect(ui->rechargeRecordsButton, &QPushButton::clicked, this, &ProfilePage::rechargeRecordsClicked);
     connect(ui->orderRecordsButton, &QPushButton::clicked, this, &ProfilePage::orderRecordsClicked);
+    connect(ui->activeOrderButton, &QPushButton::clicked, this, &ProfilePage::activeOrderClicked);
     connect(ui->logoutButton, &QPushButton::clicked, this, &ProfilePage::logoutClicked);
 }
 
@@ -75,4 +78,15 @@ void ProfilePage::setStatus(const QString &text, bool success)
     ui->statusLabel->style()->unpolish(ui->statusLabel);
     ui->statusLabel->style()->polish(ui->statusLabel);
     ui->statusLabel->update();
+}
+
+void ProfilePage::setActiveOrder(bool hasOrder, const ChargingOrder &order)
+{
+    if (!hasOrder) {
+        ui->activeOrderButton->setText(QStringLiteral("当前订单  无进行中订单  ›"));
+        return;
+    }
+    ui->activeOrderButton->setText(QStringLiteral("当前订单  %1  ·  %2  ›")
+                                       .arg(orderStatusText(order.status),
+                                            order.stationName.isEmpty() ? order.orderNo : order.stationName));
 }

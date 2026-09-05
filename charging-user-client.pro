@@ -18,7 +18,8 @@ SOURCES += \
     navigationdialog.cpp \
     rechargedialog.cpp \
     recordlistdialog.cpp \
-    editprofiledialog.cpp
+    editprofiledialog.cpp \
+    orderdialog.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -35,7 +36,8 @@ HEADERS += \
     navigationdialog.h \
     rechargedialog.h \
     recordlistdialog.h \
-    editprofiledialog.h
+    editprofiledialog.h \
+    orderdialog.h
 
 FORMS += \
     mainwindow.ui \
@@ -47,4 +49,5 @@ FORMS += \
     navigationdialog.ui \
     rechargedialog.ui \
     recordlistdialog.ui \
-    editprofiledialog.ui
+    editprofiledialog.ui \
+    orderdialog.ui

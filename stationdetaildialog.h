@@ -29,12 +29,21 @@ public slots:
 
 signals:
     void navigateClicked();
+    void reserveClicked(const ChargingPile &pile);
+    void pileClicked(const ChargingPile &pile);
+
+private slots:
+    void applyPileFilter();
 
 private:
     void clearPileCards();
+    void renderPileCards(const QVector<ChargingPile> &piles);
+    QString selectedPileStatus() const;
+    QString selectedPileType() const;
 
     Ui::StationDetailDialog *ui;
     StationSummary m_station;
+    QVector<ChargingPile> m_allPiles;
 };
 
 #endif

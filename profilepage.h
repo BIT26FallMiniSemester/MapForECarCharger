@@ -23,12 +23,14 @@ public:
     void setAvatarPath(const QString &path);
     void setBusy(bool busy);
     void setStatus(const QString &text, bool success = false);
+    void setActiveOrder(bool hasOrder, const ChargingOrder &order);
 
 signals:
     void editClicked();
     void rechargeClicked();
     void rechargeRecordsClicked();
     void orderRecordsClicked();
+    void activeOrderClicked();
     void logoutClicked();
 
 private:
