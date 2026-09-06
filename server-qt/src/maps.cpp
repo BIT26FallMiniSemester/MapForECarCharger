@@ -67,12 +67,24 @@ Maps::Maps(QString key,QObject *parent,QUrl base,int requestTimeout,int totalTim
 void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,Result done) {
     if(a=="stations.nearby"&&stations.isEmpty()){done(QJsonObject{{"items",QJsonArray{}},{"page",d["page"].toInteger(1)},{"page_size",d["page_size"].toInteger(20)},{"total",0}},0);return;}
     if(key.trimmed().isEmpty()){done({},50301);return;}
-    auto job=new MapJob(network,key,base,requestTimeout,totalTimeout,done,this);job->data=d;job->stations=stations;
+    QJsonArray selectedStations=stations;
     if(a=="stations.nearby"){
         QList<QPair<double,QJsonObject>> candidates;const double lat=d["latitude"].toDouble(),lng=d["longitude"].toDouble(),lngScale=std::cos(lat*0.017453292519943295);
         for(const auto &value:stations){const auto station=value.toObject();const double dy=station["latitude"].toDouble()-lat,dx=(station["longitude"].toDouble()-lng)*lngScale;candidates.append({dx*dx+dy*dy,station});}
-        std::sort(candidates.begin(),candidates.end(),[](const auto &left,const auto &right){return left.first<right.first;});job->stations={};
-        for(int i=0;i<qMin(5,candidates.size());++i)job->stations.append(candidates[i].second);
+        std::sort(candidates.begin(),candidates.end(),[](const auto &left,const auto &right){return left.first<right.first;});selectedStations={};
+        for(int i=0;i<qMin(5,candidates.size());++i)selectedStations.append(candidates[i].second);
+    }
+    const QByteArray cacheBytes=QJsonDocument(QJsonObject{{"action",a},{"data",d},{"stations",selectedStations}}).toJson(QJsonDocument::Compact);
+    const QString cacheKey=QString::fromLatin1(QCryptographicHash::hash(cacheBytes,QCryptographicHash::Sha256).toHex());
+    const qint64 now=QDateTime::currentMSecsSinceEpoch();
+    if(const auto it=cache.constFind(cacheKey);it!=cache.cend()&&it->expiresAtMs>now){done(it->data,0);return;}
+    cache.remove(cacheKey);
+    Result cachedDone=[this,cacheKey,done](QJsonValue data,int code){
+        if(code==0){if(cache.size()>=128)cache.clear();cache.insert(cacheKey,{QDateTime::currentMSecsSinceEpoch()+600000,data});}
+        done(data,code);
+    };
+    auto job=new MapJob(network,key,base,requestTimeout,totalTimeout,cachedDone,this);job->data=d;job->stations=selectedStations;
+    if(a=="stations.nearby"){
         job->batch();return;
     }
     if(a=="map.geocode") {

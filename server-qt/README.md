@@ -35,6 +35,8 @@ server-qt/build/charger-server --database runtime/showcase.db \
 
 `--seed-showcase` requires an otherwise empty business database. It keeps all 2,614 real catalog stations, adds only user `13900000000`, and attaches one clearly named course test pile to a real station. No other users, fake stations, orders or device states are generated.
 
+Successful Tencent geocoding, distance, route and static-map responses are cached in memory for 10 minutes (up to 128 query variants). Repeating the same location query therefore does not consume the WebService quota again; restarting the server clears this cache.
+
 ## Database initialization and migration
 
 Create a new target database:

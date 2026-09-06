@@ -157,8 +157,8 @@ private slots:
         QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32},{"radius_km",1}},token)["code"].toInt(),50301);
     }
     void mapHttpParsingAndTimeout(){
-        QTcpServer upstream;QVERIFY(upstream.listen(QHostAddress::LocalHost,0));QString mode="geocode";
-        connect(&upstream,&QTcpServer::newConnection,&upstream,[&]{auto socket=upstream.nextPendingConnection();connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto input=socket->readAll();if(!input.contains("\r\n\r\n"))return;if(mode=="timeout")return;if(mode=="snapshot"){const auto bytes=QByteArray::fromHex("89504e470d0a1a0a");socket->write("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: "+QByteArray::number(bytes.size())+"\r\nConnection: close\r\n\r\n"+bytes);socket->disconnectFromHost();return;}
+        QTcpServer upstream;QVERIFY(upstream.listen(QHostAddress::LocalHost,0));QString mode="geocode";int upstreamRequests=0;
+        connect(&upstream,&QTcpServer::newConnection,&upstream,[&]{++upstreamRequests;auto socket=upstream.nextPendingConnection();connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto input=socket->readAll();if(!input.contains("\r\n\r\n"))return;if(mode=="timeout")return;if(mode=="snapshot"){const auto bytes=QByteArray::fromHex("89504e470d0a1a0a");socket->write("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: "+QByteArray::number(bytes.size())+"\r\nConnection: close\r\n\r\n"+bytes);socket->disconnectFromHost();return;}
             QJsonObject response{{"status",0}};
             if(mode=="badkey")response["status"]=110;
             else if(mode=="geocode")response["result"]=QJsonObject{{"location",QJsonObject{{"lat",39.95},{"lng",116.32}}},{"title","北京"}};
@@ -173,6 +173,7 @@ private slots:
         QCOMPARE(data.toObject()["route_points"].toArray()[1].toObject()["latitude"].toDouble(),39.951);
         mode="matrix";done=false;auto s=server->business.station(1);maps.run("stations.nearby",{{"latitude",39.95},{"longitude",116.32}},QJsonArray{s,s},callback);QTRY_VERIFY(done);QCOMPARE(code,0);QCOMPARE(data.toObject()["total"].toInt(),1);
         mode="snapshot";done=false;maps.run("map.snapshot",{{"latitude",39.95},{"longitude",116.32}}, {},callback);QTRY_VERIFY(done);QCOMPARE(code,0);QVERIFY(!data.toObject()["content_base64"].toString().isEmpty());
+        const int beforeCachedSnapshot=upstreamRequests;done=false;maps.run("map.snapshot",{{"latitude",39.95},{"longitude",116.32}}, {},callback);QVERIFY(done);QCOMPARE(code,0);QCOMPARE(upstreamRequests,beforeCachedSnapshot);
         for(const auto &behavior:QStringList{"badkey","empty","timeout"}){mode=behavior;done=false;maps.run("map.route",{}, {},callback);QTRY_VERIFY(done);QCOMPARE(code,50301);}
     }
     void databaseMigrationsAndCalculation(){
