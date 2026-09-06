@@ -4,23 +4,6 @@
 namespace {
 double number(QJsonValue v,double low=0,double high=9007199254740991.0){if(!v.isDouble()||!std::isfinite(v.toDouble())||v.toDouble()<low||v.toDouble()>high)fail(50301);return v.toDouble();}
 qint64 whole(QJsonValue value) { const double n=number(value); if(std::floor(n)!=n) fail(50301); return qint64(n); }
-double distanceMeters(double lat1,double lng1,double lat2,double lng2){
-    constexpr double radians=0.017453292519943295;
-    const double aLat=lat1*radians,bLat=lat2*radians;
-    const double dLat=(lat2-lat1)*radians,dLng=(lng2-lng1)*radians;
-    const double h=std::sin(dLat/2)*std::sin(dLat/2)+std::cos(aLat)*std::cos(bLat)*std::sin(dLng/2)*std::sin(dLng/2);
-    return 12742000.0*std::asin(std::sqrt(qMin(1.0,h)));
-}
-QJsonObject localNearby(const QJsonObject &data,const QJsonArray &stations){
-    QList<QJsonObject> items;const double radius=data["radius_km"].toDouble(100.0)*1000.0;
-    for(const auto &value:stations){auto station=value.toObject();const auto distance=distanceMeters(data["latitude"].toDouble(),data["longitude"].toDouble(),station["latitude"].toDouble(),station["longitude"].toDouble());
-        if(distance>radius)continue;
-        const qint64 meters=qRound64(distance);station["route_distance_meters"]=meters;station["route_duration_seconds"]=qMax<qint64>(60,qRound64(distance/10.0));items<<station;}
-    std::sort(items.begin(),items.end(),[](const auto &a,const auto &b){return a["route_distance_meters"].toInteger()<b["route_distance_meters"].toInteger();});
-    const qint64 page=data["page"].toInteger(1),size=data["page_size"].toInteger(20),start=(page-1)*size,end=qMin<qint64>(items.size(),start+size);QJsonArray selected;
-    for(qint64 i=start;i<end;++i)selected.append(items[i]);
-    return {{"items",selected},{"page",page},{"page_size",size},{"total",items.size()}};
-}
 class MapJob:public QObject {
 public:
     MapJob(QNetworkAccessManager &manager,QString key,QUrl base,int timeout,int total,Result done,QObject *parent):QObject(parent),manager(manager),key(key),base(base),timeout(timeout),done(done){deadline.setSingleShot(true);connect(&deadline,&QTimer::timeout,this,[this]{finish({},50301);});deadline.start(total);}
@@ -66,7 +49,7 @@ private:
 Maps::Maps(QString key,QObject *parent,QUrl base,int requestTimeout,int totalTimeout):QObject(parent),key(key),base(base),requestTimeout(requestTimeout),totalTimeout(totalTimeout){}
 void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,Result done) {
     if(a=="stations.nearby"&&stations.isEmpty()){done(QJsonObject{{"items",QJsonArray{}},{"page",d["page"].toInteger(1)},{"page_size",d["page_size"].toInteger(20)},{"total",0}},0);return;}
-    if(key.trimmed().isEmpty()){if(a=="stations.nearby")done(localNearby(d,stations),0);else done({},50301);return;}
+    if(key.trimmed().isEmpty()){done({},50301);return;}
     auto job=new MapJob(network,key,base,requestTimeout,totalTimeout,done,this);job->data=d;job->stations=stations;
     if(a=="stations.nearby"){job->batch();return;}
     if(a=="map.geocode") {

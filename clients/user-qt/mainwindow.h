@@ -12,6 +12,8 @@ class MainWindow;
 QT_END_NAMESPACE
 
 class ApiClient;
+class ChargingPage;
+class QPushButton;
 
 class MainWindow : public QMainWindow
 {
@@ -41,6 +43,8 @@ private:
 
     Ui::MainWindow *ui;
     ApiClient *m_api = nullptr;
+    ChargingPage *m_chargingPage = nullptr;
+    QPushButton *m_tabCharging = nullptr;
     User m_user;
     int m_inflight = 0;
 };

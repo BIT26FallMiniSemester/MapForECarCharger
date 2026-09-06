@@ -31,10 +31,7 @@ QJsonObject pagination(QJsonObject object)
 QJsonObject adaptPile(QJsonObject pile)
 {
     pile.insert(QStringLiteral("pile_type"), pile.value(QStringLiteral("charge_type")));
-    pile.insert(QStringLiteral("station_name"),
-                QStringLiteral("站点 #%1").arg(pile.value(QStringLiteral("station_id")).toInt()));
-    pile.insert(QStringLiteral("last_heartbeat_at"), QStringLiteral("Qt Socket 在线"));
-    pile.insert(QStringLiteral("total_charge_count"), pile.value(QStringLiteral("total_charge_count")).toInt());
+    pile.insert(QStringLiteral("last_heartbeat_at"), QStringLiteral("未接入"));
     return pile;
 }
 }
@@ -147,11 +144,8 @@ QJsonValue ApiClient::adapt(const QString &action, const QJsonValue &data) const
                 item = adaptPile(item);
             else if (action == QStringLiteral("admin.stations.list")) {
                 const int total = item.value(QStringLiteral("total_piles")).toInt();
-                const int available = item.value(QStringLiteral("available_piles")).toInt();
-                item.insert(QStringLiteral("online_rate"), total ? available * 100.0 / total : 0.0);
-            } else if (action == QStringLiteral("admin.users.list")) {
-                item.insert(QStringLiteral("created_at"), QStringLiteral("—"));
-                item.insert(QStringLiteral("order_count"), 0);
+                const int online = item.value(QStringLiteral("online_piles")).toInt();
+                item.insert(QStringLiteral("online_rate"), total ? online * 100.0 / total : 0.0);
             }
             items[i] = item;
         }

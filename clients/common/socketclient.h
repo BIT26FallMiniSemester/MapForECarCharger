@@ -24,6 +24,7 @@ signals:
     void failed(const QString &context, int code, const QString &message);
 
 private:
+    void flushOutput();
     void readResponses();
     void failAll(int code, const QString &message);
 

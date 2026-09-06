@@ -18,12 +18,8 @@ QByteArray frame(const QJsonObject &object)
 
 SocketClient::SocketClient(QObject *parent) : QObject(parent)
 {
-    connect(&m_socket, &QTcpSocket::connected, this, [this] {
-        if (!m_output.isEmpty()) {
-            m_socket.write(m_output);
-            m_output.clear();
-        }
-    });
+    connect(&m_socket, &QTcpSocket::connected, this, &SocketClient::flushOutput);
+    connect(&m_socket, &QTcpSocket::bytesWritten, this, [this](qint64) { flushOutput(); });
     connect(&m_socket, &QTcpSocket::readyRead, this, &SocketClient::readResponses);
     connect(&m_socket, &QTcpSocket::disconnected, this, [this] {
         if (!m_pending.isEmpty())
@@ -70,14 +66,11 @@ void SocketClient::send(const QString &context, const QString &action,
         request.insert(QStringLiteral("token"), token);
 
     m_pending.insert(requestId, context);
-    const QByteArray bytes = frame(request);
+    m_output += frame(request);
     if (m_socket.state() == QAbstractSocket::ConnectedState)
-        m_socket.write(bytes);
-    else {
-        m_output += bytes;
-        if (m_socket.state() == QAbstractSocket::UnconnectedState)
-            m_socket.connectToHost(m_host, m_port);
-    }
+        flushOutput();
+    else if (m_socket.state() == QAbstractSocket::UnconnectedState)
+        m_socket.connectToHost(m_host, m_port);
 
     QTimer::singleShot(15000, this, [this, requestId] {
         const auto it = m_pending.find(requestId);
@@ -87,6 +80,15 @@ void SocketClient::send(const QString &context, const QString &action,
         m_pending.erase(it);
         emit failed(context, 50001, QStringLiteral("Qt 后端请求超时"));
     });
+}
+
+void SocketClient::flushOutput()
+{
+    if (m_socket.state() != QAbstractSocket::ConnectedState || m_output.isEmpty())
+        return;
+    const qint64 accepted = m_socket.write(m_output);
+    if (accepted > 0)
+        m_output.remove(0, int(accepted));
 }
 
 void SocketClient::readResponses()

@@ -149,14 +149,13 @@ private slots:
         QCOMPARE(call("wallet.recharges.create",{{"client_request_id","lost-response-01"},{"amount_cents",5000}},token)["data"].toObject()["balance_cents"].toInt(),5000);
         peer.reset();server.reset();server=std::make_unique<Server>(*db,QString());QVERIFY(server->listen(QHostAddress::LocalHost,0));peer=std::make_unique<Peer>(server->serverPort());QCOMPARE(call("users.me.get",{},token)["code"].toInt(),40101);
     }
-    void mapMissingKeyUsesLocalDistance(){
+    void mapMissingKeyFailsWithoutFabricatedDistance(){
         QCOMPARE(call("map.geocode",{{"address","北京"}},token)["code"].toInt(),50301);
         QCOMPARE(call("map.geocode",{{"address","北京"}},admin)["code"].toInt(),50301);
         QCOMPARE(call("map.route",{{"from_latitude",39.95},{"from_longitude",116.32},{"to_latitude",39.96},{"to_longitude",116.33}},token)["code"].toInt(),50301);
-        auto nearby=call("stations.nearby",{{"latitude",39.95},{"longitude",116.32},{"radius_km",1}},token);
-        QCOMPARE(nearby["code"].toInt(),0);QCOMPARE(nearby["data"].toObject()["total"].toInt(),1);
-        QCOMPARE(nearby["data"].toObject()["items"].toArray()[0].toObject()["route_distance_meters"].toInt(),0);
-        db->execute("UPDATE stations SET price_cents_per_kwh=NULL");QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32}},token)["data"].toObject()["total"].toInt(),0);
+        QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32},{"radius_km",1}},token)["code"].toInt(),50301);
+        db->execute("UPDATE stations SET price_cents_per_kwh=NULL");
+        QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32}},token)["data"].toObject()["total"].toInt(),0);
     }
     void mapHttpParsingAndTimeout(){
         QTcpServer upstream;QVERIFY(upstream.listen(QHostAddress::LocalHost,0));QString mode="geocode";
@@ -183,8 +182,9 @@ private slots:
         auto hash=passwordHash("hello-world");QVERIFY(passwordVerify("hello-world",hash));QVERIFY(!passwordVerify("wrong",hash));QVERIFY(!passwordVerify("x","malformed"));
         db->createAdmin("admin","different-password");QVERIFY(passwordVerify("test-password",db->one("SELECT password_hash FROM admins WHERE username='admin'")["password_hash"].toString()));
         Database demo(dir->filePath("demo.db"));demo.migrate();demo.seedDemo();demo.seedDemo();
-        QCOMPARE(demo.scalar("SELECT count(*) FROM users"),4);QCOMPARE(demo.scalar("SELECT count(*) FROM stations"),4);
-        QCOMPARE(demo.scalar("SELECT count(*) FROM charging_piles"),12);QCOMPARE(demo.scalar("SELECT count(*) FROM charging_orders"),9);
+        QCOMPARE(demo.scalar("SELECT count(*) FROM users"),5);QCOMPARE(demo.scalar("SELECT count(*) FROM stations"),4);
+        QCOMPARE(demo.scalar("SELECT count(*) FROM charging_piles"),12);QCOMPARE(demo.scalar("SELECT count(*) FROM charging_orders"),10);
+        QCOMPARE(demo.scalar("SELECT count(*) FROM charging_orders WHERE status='UNPAID'"),1);
         QCOMPARE(demo.scalar("SELECT count(*) FROM admins WHERE username='admin'"),1);QVERIFY(demo.rows("PRAGMA foreign_key_check").isEmpty());
     }
     void catalogImportPreservesIds(){

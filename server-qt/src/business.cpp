@@ -23,15 +23,21 @@ Identity Business::authorize(const QString &action,const QString &token) {
     return identity;
 }
 QJsonObject Business::user(qint64 id) {
-    auto o=db.one("SELECT id,phone,nickname,avatar_id,balance_cents,status FROM users WHERE id=?",{id}); if(o.isEmpty()) fail(40401); return o;
+    auto o=db.one("SELECT u.id,u.phone,u.nickname,u.avatar_id,u.balance_cents,u.status,u.created_at,"
+                  "(SELECT count(*) FROM charging_orders o WHERE o.user_id=u.id) order_count,"
+                  "(SELECT coalesce(sum(o.amount_cents),0) FROM charging_orders o WHERE o.user_id=u.id AND o.status='COMPLETED') total_spent_cents "
+                  "FROM users u WHERE u.id=?",{id}); if(o.isEmpty()) fail(40401); return o;
 }
 QJsonObject Business::pile(qint64 id) {
-    auto o=db.one("SELECT id,station_id,pile_no,charge_type,rated_power_w,status FROM charging_piles WHERE id=?",{id}); if(o.isEmpty()) fail(40401); return o;
+    auto o=db.one("SELECT p.id,p.station_id,s.name station_name,p.pile_no,p.charge_type,p.rated_power_w,p.status,"
+                  "(SELECT count(*) FROM charging_orders o WHERE o.pile_id=p.id AND o.status='COMPLETED') total_charge_count,"
+                  "(SELECT coalesce(sum(o.duration_seconds),0) FROM charging_orders o WHERE o.pile_id=p.id AND o.status='COMPLETED') total_charge_duration_seconds "
+                  "FROM charging_piles p JOIN stations s ON s.id=p.station_id WHERE p.id=?",{id}); if(o.isEmpty()) fail(40401); return o;
 }
 QJsonObject Business::station(qint64 id) {
     auto o=db.one("SELECT * FROM stations WHERE id=?",{id}); if(o.isEmpty()) fail(40401);
-    const auto stats=db.one("SELECT count(*) total_piles,coalesce(sum(status='IDLE'),0) available_piles FROM charging_piles WHERE station_id=?",{id});
-    o["total_piles"]=stats["total_piles"];o["available_piles"]=stats["available_piles"];return o;
+    const auto stats=db.one("SELECT count(*) total_piles,coalesce(sum(status='IDLE'),0) available_piles,coalesce(sum(status!='OFFLINE'),0) online_piles FROM charging_piles WHERE station_id=?",{id});
+    o["total_piles"]=stats["total_piles"];o["available_piles"]=stats["available_piles"];o["online_piles"]=stats["online_piles"];return o;
 }
 QJsonArray Business::nearbyCandidates() {
     QJsonArray out;for(auto o:db.rows("SELECT id FROM stations s WHERE status='ACTIVE' AND price_cents_per_kwh IS NOT NULL AND EXISTS(SELECT 1 FROM charging_piles p WHERE p.station_id=s.id) ORDER BY id"))out.append(station(o.toObject()["id"].toInteger()));return out;
@@ -215,7 +221,9 @@ QJsonValue Business::adminAction(const QString &a,const QJsonObject &d,qint64 ad
         return listing(sql+" ORDER BY id",args,d,[&](auto o){auto id=o["id"].toInteger();return type=="users"?user(id):type=="stations"?station(id):pile(id);});
     }
     if(a=="admin.users.detail") {
-        auto id=idOf(d,"user_id");auto out=user(id);out["order_count"]=db.scalar("SELECT count(*) FROM charging_orders WHERE user_id=?",{id});out["recharge_total_cents"]=db.scalar("SELECT coalesce(sum(amount_cents),0) FROM recharge_records WHERE user_id=?",{id});return out;
+        auto id=idOf(d,"user_id");auto out=user(id);out["recharge_total_cents"]=db.scalar("SELECT coalesce(sum(amount_cents),0) FROM recharge_records WHERE user_id=?",{id});
+        out["recent_orders"]=db.rows("SELECT order_no,status,amount_cents,created_at FROM charging_orders WHERE user_id=? ORDER BY id DESC LIMIT 5",{id});
+        out["recent_recharge_records"]=db.rows("SELECT amount_cents,created_at FROM recharge_records WHERE user_id=? ORDER BY id DESC LIMIT 5",{id});return out;
     }
     if(a=="admin.piles.detail") {auto id=idOf(d,"pile_id");auto out=pile(id);out["status_logs"]=db.rows("SELECT * FROM pile_status_logs WHERE pile_id=? ORDER BY id DESC LIMIT 100",{id});return out;}
     Transaction tx(db);

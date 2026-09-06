@@ -13,9 +13,11 @@ ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClie
         handleSuccess(context, data);
     });
     connect(m_socket, &SocketClient::failed, this,
-            [this](const QString &, int code, const QString &message) {
+            [this](const QString &context, int code, const QString &message) {
         emit requestFinished();
-        emit apiFailed(code, chineseMessage(code, message));
+        const QString translated = chineseMessage(code, message);
+        emit requestFailed(context, code, translated);
+        emit apiFailed(code, translated);
     });
 }
 
@@ -65,6 +67,78 @@ void ApiClient::fetchNearbyStations(double latitude, double longitude, double ra
                      {QStringLiteral("page_size"), 100}});
 }
 
+void ApiClient::geocode(const QString &address)
+{
+    send(QStringLiteral("geocode"), QStringLiteral("map.geocode"),
+         QJsonObject{{QStringLiteral("address"), address.trimmed()}});
+}
+
+void ApiClient::fetchStationPiles(qint64 stationId)
+{
+    send(QStringLiteral("piles:%1").arg(stationId), QStringLiteral("stations.piles.list"),
+         QJsonObject{{QStringLiteral("station_id"), stationId},
+                     {QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 100}});
+}
+
+void ApiClient::fetchActiveOrder()
+{
+    send(QStringLiteral("order:active"), QStringLiteral("orders.active"));
+}
+
+void ApiClient::fetchOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:detail"), QStringLiteral("orders.detail"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::createOrder(qint64 stationId, qint64 pileId)
+{
+    send(QStringLiteral("order:create"), QStringLiteral("orders.create"),
+         QJsonObject{{QStringLiteral("station_id"), stationId},
+                     {QStringLiteral("pile_id"), pileId}});
+}
+
+void ApiClient::reserveOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:reserve"), QStringLiteral("orders.reserve"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::startOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:start"), QStringLiteral("orders.start"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::stopOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:stop"), QStringLiteral("orders.stop"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::settleOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:settle"), QStringLiteral("orders.settle"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::cancelOrder(qint64 orderId)
+{
+    send(QStringLiteral("order:cancel"), QStringLiteral("orders.cancel"),
+         QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::planRoute(double fromLatitude, double fromLongitude,
+                          double toLatitude, double toLongitude)
+{
+    send(QStringLiteral("route"), QStringLiteral("map.route"),
+         QJsonObject{{QStringLiteral("from_latitude"), fromLatitude},
+                     {QStringLiteral("from_longitude"), fromLongitude},
+                     {QStringLiteral("to_latitude"), toLatitude},
+                     {QStringLiteral("to_longitude"), toLongitude},
+                     {QStringLiteral("mode"), QStringLiteral("driving")}});
+}
+
 void ApiClient::send(const QString &context, const QString &action,
                      const QJsonObject &data, bool withToken)
 {
@@ -108,6 +182,43 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
         for (const QJsonValue &value : data.toObject().value(QStringLiteral("items")).toArray())
             stations.push_back(parseStation(value.toObject()));
         emit nearbyStationsReady(stations);
+        return;
+    }
+    if (context == QStringLiteral("geocode")) {
+        const QJsonObject object = data.toObject();
+        emit locationResolved(object.value(QStringLiteral("latitude")).toDouble(),
+                              object.value(QStringLiteral("longitude")).toDouble(),
+                              object.value(QStringLiteral("formatted_address")).toString());
+        return;
+    }
+    if (context.startsWith(QStringLiteral("piles:"))) {
+        const QJsonObject object = data.toObject();
+        QVector<ChargingPile> piles;
+        const qint64 stationId = context.section(QLatin1Char(':'), 1).toLongLong();
+        for (const QJsonValue &value : object.value(QStringLiteral("items")).toArray()) {
+            ChargingPile pile = parsePile(value.toObject());
+            piles.push_back(pile);
+        }
+        emit stationPilesReady(stationId, piles);
+        return;
+    }
+    if (context == QStringLiteral("order:active")) {
+        emit activeOrderReady(!data.isNull(), data.isNull() ? ChargingOrder{} : parseOrder(data.toObject()));
+        return;
+    }
+    if (context.startsWith(QStringLiteral("order:"))) {
+        QJsonObject object = data.toObject();
+        if (context == QStringLiteral("order:settle")) {
+            emit balanceChanged(object.value(QStringLiteral("balance_cents")).toInteger());
+            object = object.value(QStringLiteral("order")).toObject();
+        }
+        emit orderReady(context.section(QLatin1Char(':'), 1), parseOrder(object));
+        return;
+    }
+    if (context == QStringLiteral("route")) {
+        const QJsonObject object = data.toObject();
+        emit routeReady(RouteInfo{object.value(QStringLiteral("distance_meters")).toInteger(),
+                                  object.value(QStringLiteral("duration_seconds")).toInteger()});
     }
 }
 
@@ -149,6 +260,40 @@ RechargeRecord ApiClient::parseRecharge(const QJsonObject &object) const
     record.status = QStringLiteral("SUCCESS");
     record.createdAt = object.value(QStringLiteral("created_at")).toString();
     return record;
+}
+
+ChargingPile ApiClient::parsePile(const QJsonObject &object) const
+{
+    ChargingPile pile;
+    pile.id = object.value(QStringLiteral("id")).toInteger();
+    pile.stationId = object.value(QStringLiteral("station_id")).toInteger();
+    pile.pileNo = object.value(QStringLiteral("pile_no")).toString();
+    pile.chargeType = object.value(QStringLiteral("charge_type")).toString();
+    pile.ratedPowerW = object.value(QStringLiteral("rated_power_w")).toInteger();
+    pile.status = object.value(QStringLiteral("status")).toString();
+    return pile;
+}
+
+ChargingOrder ApiClient::parseOrder(const QJsonObject &object) const
+{
+    ChargingOrder order;
+    order.id = object.value(QStringLiteral("id")).toInteger();
+    order.orderNo = object.value(QStringLiteral("order_no")).toString();
+    order.status = object.value(QStringLiteral("status")).toString();
+    order.priceCentsPerKwh = object.value(QStringLiteral("price_cents_per_kwh")).toInteger();
+    order.durationSeconds = object.value(QStringLiteral("duration_seconds")).toInteger();
+    order.energyWh = object.value(QStringLiteral("energy_wh")).toInteger();
+    order.amountCents = object.value(QStringLiteral("amount_cents")).toInteger();
+    order.expiresAt = object.value(QStringLiteral("expires_at")).toString();
+    order.estimated = object.value(QStringLiteral("estimated")).toBool();
+    const QJsonObject station = object.value(QStringLiteral("station")).toObject();
+    order.stationId = station.value(QStringLiteral("id")).toInteger();
+    order.stationName = station.value(QStringLiteral("name")).toString();
+    const QJsonObject pile = object.value(QStringLiteral("pile")).toObject();
+    order.pileId = pile.value(QStringLiteral("id")).toInteger();
+    order.pileNo = pile.value(QStringLiteral("pile_no")).toString();
+    order.ratedPowerW = pile.value(QStringLiteral("rated_power_w")).toInteger();
+    return order;
 }
 
 QString ApiClient::chineseMessage(int code, const QString &fallback) const

@@ -30,6 +30,18 @@ public:
     void recharge(double amountYuan);
     void fetchRechargeRecords();
     void fetchNearbyStations(double latitude, double longitude, double radiusKm);
+    void geocode(const QString &address);
+    void fetchStationPiles(qint64 stationId);
+    void fetchActiveOrder();
+    void fetchOrder(qint64 orderId);
+    void createOrder(qint64 stationId, qint64 pileId);
+    void reserveOrder(qint64 orderId);
+    void startOrder(qint64 orderId);
+    void stopOrder(qint64 orderId);
+    void settleOrder(qint64 orderId);
+    void cancelOrder(qint64 orderId);
+    void planRoute(double fromLatitude, double fromLongitude,
+                   double toLatitude, double toLongitude);
 
 signals:
     void requestStarted();
@@ -40,6 +52,13 @@ signals:
     void rechargeSucceeded(qint64 balanceAfterCents, const RechargeRecord &record);
     void rechargeRecordsReady(const QVector<RechargeRecord> &records);
     void nearbyStationsReady(const QVector<StationSummary> &stations);
+    void locationResolved(double latitude, double longitude, const QString &displayName);
+    void stationPilesReady(qint64 stationId, const QVector<ChargingPile> &piles);
+    void activeOrderReady(bool hasOrder, const ChargingOrder &order);
+    void orderReady(const QString &operation, const ChargingOrder &order);
+    void routeReady(const RouteInfo &route);
+    void balanceChanged(qint64 balanceCents);
+    void requestFailed(const QString &context, int code, const QString &message);
     void apiFailed(int code, const QString &message);
 
 private:
@@ -48,6 +67,8 @@ private:
     User parseUser(const QJsonObject &object) const;
     StationSummary parseStation(const QJsonObject &object) const;
     RechargeRecord parseRecharge(const QJsonObject &object) const;
+    ChargingPile parsePile(const QJsonObject &object) const;
+    ChargingOrder parseOrder(const QJsonObject &object) const;
     QString chineseMessage(int code, const QString &fallback) const;
 
     SocketClient *m_socket = nullptr;

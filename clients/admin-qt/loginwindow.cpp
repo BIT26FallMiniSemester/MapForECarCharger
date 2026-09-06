@@ -52,7 +52,6 @@ void LoginWindow::login()
 void LoginWindow::openMainWindow(bool demoMode, const QString &token)
 {
     QSettings settings;
-    settings.setValue("admin/token", token);
     settings.setValue("server/endpoint", m_serverEdit->text().trimmed());
     auto *main = new MainWindow(demoMode, m_serverEdit->text().trimmed(), token);
     main->setAttribute(Qt::WA_DeleteOnClose);

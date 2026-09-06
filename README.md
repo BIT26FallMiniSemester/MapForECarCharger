@@ -18,10 +18,18 @@ ctest --test-dir server-qt/build --output-on-failure
 
 运行、数据库迁移和旧库导入说明见 `server-qt/README.md`。密钥、数据库、头像、日志和构建产物不得进入 Git。
 
-## 一键准备演示数据
+## 当前演示环境
 
 ```bash
-server-qt/build/charger-server --database runtime/demo.db --seed-demo --host 0.0.0.0 --port 9000
+set -a
+. /etc/map-for-ecar/server.env
+set +a
+server-qt/build/charger-server --database server-qt/runtime/showcase.db \
+  --host 127.0.0.1 --port 9000
 ```
 
-`--seed-demo` 可重复执行，会创建 4 个北京站点、12 个电桩、历史和进行中订单、充值记录及运营统计。用户端使用 `13900000000` 登录；管理端使用 `admin / admin123`。附近站点在未配置腾讯地图 Key 时由 Qt 后端本地计算距离，完整演示无需 Python 或外部地图服务。
+`showcase.db` 包含 4 个明确标记为 `DEMO` 的可预约站点、12 个受管电桩，以及 2,614 条来自北京市公共数据开放平台的只读站点目录。公共目录缺少可信电价和单桩资料，因此不会伪造成可预约站点。
+
+用户端使用 `13900000000` 体验新订单，`13600000000` 查看充电中订单，`13500000000` 查看待支付订单；管理端使用 `admin / admin123`。地址解析、附近路线距离和路线规划必须使用腾讯地图 WebService，Key 缺失或不可用时返回 `50301`，不会伪造直线距离。
+
+用户端构建和完整流程见 `clients/user-qt/README.md`，管理端见 `clients/admin-qt/README.md`。

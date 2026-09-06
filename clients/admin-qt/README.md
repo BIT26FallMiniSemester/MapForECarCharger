@@ -9,13 +9,13 @@
 
 ## 已实现功能
 
-- 管理员登录、错误提示和本地 Token 保存。
+- 管理员登录和错误提示；Token 仅保存在当前进程内存中。
 - 登录窗口采用安全的对象生命周期管理，登录后切换主窗口不会异常退出。
 - 首页展示今日、本月、累计营收、订单数、累计充电量。
 - Qt Charts 绘制近 7 日/30 日营收和订单趋势，并对缺失自然日补零。
 - 电桩 `IDLE`、`RESERVED`、`CHARGING`、`FAULT`、`OFFLINE` 五状态分布。
-- 电桩列表按站点、状态和编号筛选；详情展示累计数据、心跳和状态日志。
-- 仅允许 `FAULT` 电桩执行模拟远程重启，操作前二次确认。
+- 电桩列表按站点、状态和编号筛选；详情展示真实站名、累计数据、设备接入说明和状态日志。
+- 仅允许 `FAULT` 电桩恢复为 `IDLE`，操作前二次确认。
 - 站点列表、站内电桩详情、新增和修改站点、新增唯一编号电桩。
 - 用户列表、脱敏手机号模糊查询、详情、冻结和解冻。
 - 成功、校验、权限/冲突类错误统一弹窗反馈。
@@ -48,14 +48,17 @@ make -j$(nproc)
 默认后端地址为 `127.0.0.1:9000`。客户端通过 4 字节大端长度头加 UTF-8 JSON 的长连接调用 `server-qt`，不使用 HTTP 或 Python 后端。演示前运行：
 
 ```bash
-server-qt/build/charger-server --database runtime/demo.db --seed-demo --port 9000
+set -a
+. /etc/map-for-ecar/server.env
+set +a
+server-qt/build/charger-server --database server-qt/runtime/showcase.db --port 9000
 ```
 
 管理端已连接登录、运营总览、营收趋势、电桩状态、电桩/站点/用户列表及管理操作等 Socket actions。
 
 客户端不直接连接数据库，所有真实数据均应由后端接口提供。
 
-更完整的字段、单位和错误码说明见 `docs/API_INTEGRATION.md`，测试场景见 `docs/TEST_CASES.md`。
+更完整的字段、单位和错误码说明见仓库根目录的 `contracts/socket-protocol.md`。
 
 ## 演示建议
 

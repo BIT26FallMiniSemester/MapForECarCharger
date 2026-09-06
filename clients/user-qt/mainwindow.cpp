@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 
 #include "apiclient.h"
+#include "chargingpage.h"
 #include "homepage.h"
 #include "locationdialog.h"
 #include "loginpage.h"
@@ -21,13 +22,27 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     applyTheme();
 
+    m_chargingPage = new ChargingPage(m_api, ui->contentStack);
+    ui->contentStack->addWidget(m_chargingPage);
+    m_tabCharging = new QPushButton(QStringLiteral("充电"), ui->bottomBar);
+    m_tabCharging->setCheckable(true);
+    ui->bottomBarLayout->insertWidget(1, m_tabCharging);
+
     ui->tabHome->setObjectName(QStringLiteral("tabButton"));
     ui->tabMine->setObjectName(QStringLiteral("tabButton"));
+    m_tabCharging->setObjectName(QStringLiteral("tabButton"));
     ui->bottomBar->setObjectName(QStringLiteral("bottomBar"));
 
     connect(ui->loginPage, &LoginPage::loginClicked, this, &MainWindow::onLoginClicked);
     connect(ui->homePage, &HomePage::queryClicked, this, &MainWindow::onQueryNearby);
     connect(ui->homePage, &HomePage::changeLocationClicked, this, &MainWindow::onChangeLocation);
+    connect(ui->homePage, &HomePage::stationSelected, this, [this](const StationSummary &station) {
+        m_chargingPage->selectStation(station, ui->homePage->latitude(), ui->homePage->longitude());
+        ui->contentStack->setCurrentWidget(m_chargingPage);
+        ui->tabHome->setChecked(false);
+        m_tabCharging->setChecked(true);
+        ui->tabMine->setChecked(false);
+    });
     connect(ui->profilePage, &ProfilePage::saveNicknameClicked, this, &MainWindow::onSaveNickname);
     connect(ui->profilePage, &ProfilePage::chooseAvatarClicked, this, &MainWindow::onChooseAvatar);
     connect(ui->profilePage, &ProfilePage::rechargeClicked, this, &MainWindow::onRecharge);
@@ -36,11 +51,22 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->tabHome, &QPushButton::clicked, this, [this]() {
         ui->contentStack->setCurrentIndex(0);
         ui->tabHome->setChecked(true);
+        m_tabCharging->setChecked(false);
         ui->tabMine->setChecked(false);
+    });
+    connect(m_tabCharging, &QPushButton::toggled, this, [this](bool checked) {
+        if (!checked)
+            return;
+        ui->contentStack->setCurrentWidget(m_chargingPage);
+        ui->tabHome->setChecked(false);
+        m_tabCharging->setChecked(true);
+        ui->tabMine->setChecked(false);
+        m_chargingPage->restoreActiveOrder();
     });
     connect(ui->tabMine, &QPushButton::clicked, this, [this]() {
         ui->contentStack->setCurrentIndex(1);
         ui->tabHome->setChecked(false);
+        m_tabCharging->setChecked(false);
         ui->tabMine->setChecked(true);
         m_api->fetchRechargeRecords();
     });
@@ -62,6 +88,15 @@ MainWindow::MainWindow(QWidget *parent)
         m_api->fetchRechargeRecords();
     });
     connect(m_api, &ApiClient::rechargeRecordsReady, ui->profilePage, &ProfilePage::showRechargeRecords);
+    connect(m_api, &ApiClient::balanceChanged, this, [this](qint64 balance) {
+        m_user.balanceCents = balance;
+        applyUser(m_user);
+    });
+    connect(m_api, &ApiClient::requestFailed, this,
+            [this](const QString &context, int, const QString &message) {
+        if (context == QStringLiteral("nearby"))
+            ui->homePage->showHint(message);
+    });
 }
 
 MainWindow::~MainWindow()
@@ -94,6 +129,7 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
     ui->homePage->useSimulatedGps();
     ui->homePage->showHint(QStringLiteral("Qt 后端已连接，使用北京演示定位"));
     onQueryNearby();
+    m_chargingPage->restoreActiveOrder();
 }
 
 void MainWindow::onQueryNearby()
@@ -110,6 +146,13 @@ void MainWindow::onChangeLocation()
     dialog.setCurrentLocation(ui->homePage->latitude(),
                               ui->homePage->longitude(),
                               ui->homePage->displayName());
+    connect(&dialog, &LocationDialog::searchRequested, m_api, &ApiClient::geocode);
+    connect(m_api, &ApiClient::locationResolved, &dialog, &LocationDialog::applyGeocodedLocation);
+    connect(m_api, &ApiClient::requestFailed, &dialog,
+            [&dialog](const QString &context, int, const QString &message) {
+        if (context == QStringLiteral("geocode"))
+            dialog.showSearchError(message);
+    });
     if (dialog.exec() != QDialog::Accepted)
         return;
     ui->homePage->setLocation(dialog.latitude(), dialog.longitude(), dialog.displayName());
@@ -151,7 +194,9 @@ void MainWindow::onLogout()
     ui->rootStack->setCurrentIndex(0);
     ui->contentStack->setCurrentIndex(0);
     ui->tabHome->setChecked(true);
+    m_tabCharging->setChecked(false);
     ui->tabMine->setChecked(false);
+    m_chargingPage->clearSession();
     ui->loginPage->setStatus(QString());
 }
 
@@ -162,7 +207,7 @@ void MainWindow::onApiFailed(int code, const QString &message)
     else
         ui->profilePage->setStatus(message);
 
-    if (code == 20001)
+    if (code == 40101)
         onLogout();
 }
 
@@ -173,6 +218,7 @@ void MainWindow::setBusy(bool busy)
     ui->loginPage->setBusy(on);
     ui->homePage->setBusy(on);
     ui->profilePage->setBusy(on);
+    m_chargingPage->setBusy(on);
 }
 
 void MainWindow::showAppPage()
@@ -180,6 +226,7 @@ void MainWindow::showAppPage()
     ui->rootStack->setCurrentIndex(1);
     ui->contentStack->setCurrentIndex(0);
     ui->tabHome->setChecked(true);
+    m_tabCharging->setChecked(false);
     ui->tabMine->setChecked(false);
 }
 
@@ -206,6 +253,7 @@ void MainWindow::applyTheme()
             font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
             font-size: 14px;
         }
+        QLabel { background: transparent; }
         #brandLabel { color: #0f766e; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
         #titleLabel { color: #134e4a; font-size: 24px; font-weight: 700; }
         #subtitleLabel, #hintLabel, #cardInfo { color: #5b6f69; font-size: 13px; }
@@ -291,6 +339,24 @@ void MainWindow::applyTheme()
             padding: 12px;
         }
         QPushButton#tabButton:checked { color: #fde68a; }
+        QPushButton#pileButton {
+            background: #ecfdf5;
+            color: #115e59;
+            border: 1px solid #99f6e4;
+            text-align: left;
+        }
+        QPushButton#pileButton:hover { background: #ccfbf1; }
+        QPushButton#pileButton:disabled { background: #f5f5f4; color: #a8a29e; border-color: #e7e5e4; }
+        QPushButton#secondaryButton { background: #e2e8f0; color: #334155; }
+        QPushButton#secondaryButton:hover { background: #cbd5e1; }
+        #chargeCard {
+            background: #0f766e;
+            color: white;
+            border-radius: 16px;
+        }
+        #chargeCard #cardTitle, #chargeStatus, #chargeMetrics { color: white; }
+        #chargeMetrics { font-size: 18px; font-weight: 700; line-height: 1.5; }
+        #routeInfo { color: #b45309; font-weight: 600; }
         QCheckBox { color: #3f5c55; spacing: 8px; }
         QScrollArea { background: transparent; border: none; }
         QDialog { background: #f4f7f2; }

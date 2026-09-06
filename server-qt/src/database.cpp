@@ -10,9 +10,9 @@ Database::Database(const QString &path) {
 Database::~Database() { const auto name=db.connectionName(); db.close(); db=QSqlDatabase(); QSqlDatabase::removeDatabase(name); }
 QSqlQuery Database::query(const QString &sql,const QVariantList &args) {
     QSqlQuery q(db);
-    if(!q.prepare(sql)) { qWarning().noquote()<<"Database prepare failed:"<<q.lastError().text()<<"SQL:"<<sql; fail(50001); }
+    if(!q.prepare(sql)) { qWarning().noquote()<<"Database prepare failed:"<<q.lastError().text(); fail(50001); }
     for(const auto &a:args) q.addBindValue(a);
-    if(!q.exec()) { qWarning().noquote()<<"Database query failed:"<<q.lastError().text()<<"SQL:"<<sql; fail(50001); }
+    if(!q.exec()) { qWarning().noquote()<<"Database query failed:"<<q.lastError().text(); fail(50001); }
     return q;
 }
 QJsonArray Database::rows(const QString &sql,const QVariantList &args) {
@@ -58,8 +58,9 @@ void Database::seedDemo() {
             "(1,'13900000000','演示车主',24810,'NORMAL',?,?),"
             "(2,'13800000000','冻结测试用户',5000,'FROZEN',?,?),"
             "(3,'13700000000','预约中用户',12000,'NORMAL',?,?),"
-            "(4,'13600000000','充电中用户',18000,'NORMAL',?,?)",
-            {stamp(-30),stamp(0),stamp(-20),stamp(0),stamp(-10),stamp(0),stamp(-8),stamp(0)});
+            "(4,'13600000000','充电中用户',18000,'NORMAL',?,?),"
+            "(5,'13500000000','待支付用户',6000,'NORMAL',?,?)",
+            {stamp(-30),stamp(0),stamp(-20),stamp(0),stamp(-10),stamp(0),stamp(-8),stamp(0),stamp(-6),stamp(0)});
     execute("INSERT INTO stations(id,name,address,latitude,longitude,price_cents_per_kwh,operator_name,district,data_source,external_id,status,created_at,updated_at) VALUES"
             "(1,'王府井绿色充电站','北京市东城区王府井大街88号',39.9142,116.4108,148,'京能充电','东城区','DEMO','BJ-DONG-001','ACTIVE',?,?),"
             "(2,'金融街超级充电站','北京市西城区金融大街15号',39.9148,116.3612,172,'国家电网','西城区','DEMO','BJ-XICHENG-001','ACTIVE',?,?),"
@@ -95,6 +96,8 @@ void Database::seedDemo() {
             {stamp(0,-2),stamp(0,13),stamp(0,-3),stamp(0,-2)});
     execute("INSERT INTO charging_orders(id,order_no,user_id,station_id,pile_id,status,price_cents_per_kwh,reserved_at,expires_at,started_at,created_at,updated_at) VALUES(9,'DEMO-CURRENT',4,3,6,'CHARGING',165,?,?,?,?,?)",
             {stamp(0,-32),stamp(0,-17),stamp(0,-30),stamp(0,-33),stamp(0,-30)});
+    execute("INSERT INTO charging_orders(id,order_no,user_id,station_id,pile_id,status,price_cents_per_kwh,started_at,stopped_at,duration_seconds,energy_wh,amount_cents,created_at,updated_at) VALUES(10,'DEMO-UNPAID',5,4,10,'UNPAID',136,?,?,?,?,?,?,?)",
+            {stamp(-1,-80),stamp(-1,-20),3600,9200,1251,stamp(-1,-85),stamp(-1,-20)});
     execute("UPDATE charging_piles SET reserved_order_id=8 WHERE id=5");
     execute("UPDATE charging_piles SET reserved_order_id=9 WHERE id=6");
     execute("INSERT INTO recharge_records(id,user_id,client_request_id,amount_cents,balance_after_cents,created_at) VALUES"

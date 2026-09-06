@@ -7,6 +7,7 @@ TARGET = charging-user-client
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    chargingpage.cpp \
     apiclient.cpp \
     loginpage.cpp \
     homepage.cpp \
@@ -16,6 +17,7 @@ SOURCES += \
 
 HEADERS += \
     mainwindow.h \
+    chargingpage.h \
     apiclient.h \
     models.h \
     loginpage.h \

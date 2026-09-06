@@ -21,7 +21,7 @@ server-qt/build/charger-server --database runtime/demo.db --seed-demo \
   --host 0.0.0.0 --port 9000
 ```
 
-The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Without `TENCENT_MAP_KEY`, `stations.nearby` uses the built-in Haversine distance implementation; geocoding and routing still require a key.
+The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Geocoding, nearby route distance and route planning all require a Tencent Map WebService key. A missing, disabled or rejected key returns business code `50301`; the server does not fabricate local distances.
 
 ## Database initialization and migration
 
@@ -68,6 +68,8 @@ export DATABASE_PATH=/absolute/path/charger-qt.db
 export TENCENT_MAP_KEY='configured-outside-git'
 server-qt/build/charger-server
 ```
+
+For the course development host, keep the secret outside Git in `/etc/map-for-ecar/server.env`, load it with `set -a; . /etc/map-for-ecar/server.env; set +a`, then start the server. The Key must have **WebService API** enabled in the Tencent Location console.
 
 Use a reachable `SERVER_HOST` for LAN integration. Plain TCP is for the controlled course network; use TLS before an untrusted-network deployment. Runtime database, avatar files, logs, keys, and build output are excluded from Git.
 

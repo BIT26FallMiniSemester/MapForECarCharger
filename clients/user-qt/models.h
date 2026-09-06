@@ -39,6 +39,37 @@ struct StationSummary {
     double distanceKm = 0;      // 附近查询时由后端计算
 };
 
+struct ChargingPile {
+    qint64 id = 0;
+    qint64 stationId = 0;
+    QString pileNo;
+    QString chargeType;
+    qint64 ratedPowerW = 0;
+    QString status;
+};
+
+struct ChargingOrder {
+    qint64 id = 0;
+    QString orderNo;
+    QString status;
+    qint64 stationId = 0;
+    QString stationName;
+    qint64 pileId = 0;
+    QString pileNo;
+    qint64 ratedPowerW = 0;
+    qint64 priceCentsPerKwh = 0;
+    qint64 durationSeconds = 0;
+    qint64 energyWh = 0;
+    qint64 amountCents = 0;
+    QString expiresAt;
+    bool estimated = false;
+};
+
+struct RouteInfo {
+    qint64 distanceMeters = 0;
+    qint64 durationSeconds = 0;
+};
+
 struct RechargeRecord {
     QString rechargeNo;
     qint64 amountCents = 0;

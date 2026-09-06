@@ -21,15 +21,31 @@ LocationDialog::LocationDialog(QWidget *parent)
     ui->keyHint->hide();
     ui->keyEdit->hide();
     ui->locateMeButton->hide();
-    ui->addressEdit->hide();
-    ui->searchButton->hide();
-    ui->addressHint->setText(QStringLiteral("演示环境可直接选择预设区域"));
+    ui->addressHint->setText(QStringLiteral("或输入详细地址（由后端调用腾讯地图）"));
 
     fillRegions();
 
     connect(ui->useRegionButton, &QPushButton::clicked, this, &LocationDialog::onUseRegion);
+    connect(ui->searchButton, &QPushButton::clicked, this, &LocationDialog::onSearch);
+    connect(ui->addressEdit, &QLineEdit::returnPressed, this, &LocationDialog::onSearch);
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &LocationDialog::onAccepted);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &LocationDialog::reject);
+}
+
+void LocationDialog::applyGeocodedLocation(double lat, double lng, const QString &displayName)
+{
+    m_searching = false;
+    ui->searchButton->setEnabled(true);
+    ui->searchButton->setText(QStringLiteral("搜索位置"));
+    applyLocation(lat, lng, displayName);
+}
+
+void LocationDialog::showSearchError(const QString &message)
+{
+    m_searching = false;
+    ui->searchButton->setEnabled(true);
+    ui->searchButton->setText(QStringLiteral("搜索位置"));
+    ui->statusLabel->setText(message);
 }
 
 LocationDialog::~LocationDialog()
@@ -88,6 +104,21 @@ void LocationDialog::onUseRegion()
     applyLocation(data.value(QStringLiteral("lat")).toDouble(),
                   data.value(QStringLiteral("lng")).toDouble(),
                   data.value(QStringLiteral("display")).toString());
+}
+
+void LocationDialog::onSearch()
+{
+    const QString address = ui->addressEdit->text().trimmed();
+    if (address.isEmpty()) {
+        ui->statusLabel->setText(QStringLiteral("请输入要搜索的地址"));
+        return;
+    }
+    if (m_searching)
+        return;
+    m_searching = true;
+    ui->searchButton->setEnabled(false);
+    ui->searchButton->setText(QStringLiteral("腾讯地图查询中…"));
+    emit searchRequested(address);
 }
 
 void LocationDialog::onAccepted()

@@ -34,6 +34,7 @@ public:
 signals:
     void queryClicked();
     void changeLocationClicked();
+    void stationSelected(const StationSummary &station);
 
 private:
     void refreshLocationButton();

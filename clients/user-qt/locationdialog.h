@@ -23,8 +23,16 @@ public:
 
     void setCurrentLocation(double lat, double lng, const QString &displayName);
 
+public slots:
+    void applyGeocodedLocation(double lat, double lng, const QString &displayName);
+    void showSearchError(const QString &message);
+
+signals:
+    void searchRequested(const QString &address);
+
 private slots:
     void onUseRegion();
+    void onSearch();
     void onAccepted();
 
 private:
@@ -35,6 +43,7 @@ private:
     double m_lat = 39.9042;
     double m_lng = 116.4074;
     QString m_displayName = QStringLiteral("北京市东城区（模拟定位）");
+    bool m_searching = false;
 };
 
 #endif

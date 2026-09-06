@@ -154,8 +154,18 @@ void HomePage::showStations(const QVector<StationSummary> &stations)
         info->setObjectName(QStringLiteral("cardInfo"));
         info->setWordWrap(true);
 
+        auto *choose = new QPushButton(QStringLiteral("选择电桩"));
+        choose->setCursor(Qt::PointingHandCursor);
+        choose->setEnabled(s.availablePiles > 0);
+        if (!choose->isEnabled())
+            choose->setText(QStringLiteral("暂无空闲电桩"));
+        connect(choose, &QPushButton::clicked, this, [this, s]() {
+            emit stationSelected(s);
+        });
+
         box->addWidget(name);
         box->addWidget(info);
+        box->addWidget(choose);
         ui->stationListLayout->insertWidget(ui->stationListLayout->count() - 1, card);
     }
 }
