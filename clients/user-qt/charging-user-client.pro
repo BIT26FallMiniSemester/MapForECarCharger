@@ -12,7 +12,7 @@ SOURCES += \
     homepage.cpp \
     profilepage.cpp \
     locationdialog.cpp \
-    tencentgeocoder.cpp
+    ../common/socketclient.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -22,8 +22,9 @@ HEADERS += \
     homepage.h \
     profilepage.h \
     locationdialog.h \
-    tencentgeocoder.h \
-    mapconfig.h
+    ../common/socketclient.h
+
+INCLUDEPATH += ../common
 
 FORMS += \
     mainwindow.ui \

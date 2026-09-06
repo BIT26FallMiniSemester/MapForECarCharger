@@ -33,7 +33,7 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
     ui->setupUi(this);
     setWindowTitle("充电林运营管理平台 - PC 管理端");
     resize(1360, 820);
-    m_api->setBaseUrl(baseUrl.isEmpty() ? "http://127.0.0.1:8000/api/v1" : baseUrl);
+    m_api->setBaseUrl(baseUrl.isEmpty() ? "127.0.0.1:9000" : baseUrl);
     m_api->setToken(token);
     connect(m_api, &ApiClient::succeeded, this, &MainWindow::handleApiSuccess);
     connect(m_api, &ApiClient::failed, this, &MainWindow::handleApiFailure);
@@ -43,7 +43,7 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
     ui->stackedWidget->addWidget(createUserPage());
     connect(ui->navigationList, &QListWidget::currentRowChanged, ui->stackedWidget, &QStackedWidget::setCurrentIndex);
     ui->navigationList->setCurrentRow(0);
-    ui->statusbar->showMessage(m_demoMode ? "内置演示数据模式" : "已连接后端 · " + m_api->baseUrl());
+    ui->statusbar->showMessage(m_demoMode ? "内置演示数据模式" : "已连接 Qt 后端 · " + m_api->baseUrl());
     for(QLabel *label:ui->sidebar->findChildren<QLabel*>())if(label->text().contains("演示数据模式"))label->setText(m_demoMode?"管理员：admin\n演示数据模式":"管理员：admin\n真实后端模式");
     if (!m_demoMode) {
         loadDashboard(7);
@@ -74,7 +74,7 @@ QWidget *MainWindow::createDashboard()
     cards->addWidget(metricCard("今日营收",m_demoMode?"¥ 4,286.50":"加载中…",m_demoMode?"较昨日 +12.6%":"已完成订单实收"));
     cards->addWidget(metricCard("本月营收",m_demoMode?"¥ 128,930.20":"加载中…","已完成订单实收"));
     cards->addWidget(metricCard("累计营收",m_demoMode?"¥ 1,846,720.80":"加载中…","平台历史累计"));
-    cards->addWidget(metricCard("今日订单",m_demoMode?"103":"加载中…",m_demoMode?"完成 96 · 待结算 7":"已完成订单口径"));
+    cards->addWidget(metricCard("今日订单",m_demoMode?"103":"加载中…",m_demoMode?"完成 96 · 待结算 7":"当日创建订单"));
     cards->addWidget(metricCard("累计充电量",m_demoMode?"1,423,680 kWh":"加载中…","已结束记录口径")); v->addLayout(cards);
     auto *charts = new QHBoxLayout;
     m_trendHost = new QFrame; m_trendHost->setObjectName("panel"); m_statusHost = new QFrame; m_statusHost->setObjectName("panel");
@@ -112,7 +112,9 @@ void MainWindow::buildTrendChart(const QJsonArray &points)
     auto *revenue = new QLineSeries; revenue->setName("营收（元）"); auto *orders = new QLineSeries; orders->setName("订单数"); double maxRevenue=0; int maxOrders=0; QDate firstDate,lastDate;
     for (const auto &value : points) {
         const QJsonObject p = value.toObject(); const QDate date = QDate::fromString(p.value("date").toString(), Qt::ISODate);
-        if (!date.isValid()) continue; if(!firstDate.isValid())firstDate=date;lastDate=date;const qreal x = QDateTime(date, QTime(0,0)).toMSecsSinceEpoch();
+        if (!date.isValid()) continue;
+        if(!firstDate.isValid())firstDate=date;
+        lastDate=date;const qreal x = QDateTime(date, QTime(0,0)).toMSecsSinceEpoch();
         const double revenueY=p.value("revenue_cents").toDouble()/100.0;const int orderY=p.value("order_count").toInt();revenue->append(x,revenueY);orders->append(x,orderY);maxRevenue=qMax(maxRevenue,revenueY);maxOrders=qMax(maxOrders,orderY);
     }
     auto *chart = new QChart; chart->addSeries(revenue); chart->addSeries(orders); chart->legend()->setAlignment(Qt::AlignBottom); chart->setBackgroundVisible(false);
@@ -202,7 +204,8 @@ void MainWindow::toggleUserStatus(){int id=selectedId(m_userTable);if(id<0){info
 void MainWindow::loadDashboard(int days)
 {
     if (m_demoMode) return;
-    m_api->get(QString("/admin/revenue?days=%1").arg(days));
+    m_api->get("/admin/overview");
+    m_api->get(QString("/admin/revenue-trend?days=%1").arg(days));
     m_api->get("/dashboard/pile-status");
 }
 
@@ -246,8 +249,7 @@ static QString userDetailText(const QJsonObject &data)
 void MainWindow::handleApiSuccess(const QString &path, const QJsonValue &data, const QJsonObject &)
 {
     ui->statusbar->showMessage("数据已更新 · " + path, 4000);
-    if (path.startsWith("/admin/revenue?")) {
-        if (!path.contains(QString("days=%1").arg(m_trendDays))) return;
+    if (path == "/admin/overview") {
         const QJsonObject d = data.toObject();
         if (m_metricValues.size() >= 5) {
             m_metricValues[0]->setText(QString("¥ %1").arg(d.value("today_revenue_cents").toDouble()/100.0,0,'f',2));
@@ -256,7 +258,11 @@ void MainWindow::handleApiSuccess(const QString &path, const QJsonValue &data, c
             m_metricValues[3]->setText(QString::number(d.value("today_order_count").toInt()));
             m_metricValues[4]->setText(QString("%1 kWh").arg(d.value("total_energy_wh").toDouble()/1000.0,0,'f',1));
         }
-        buildTrendChart(d.value("trend").toArray()); return;
+        return;
+    }
+    if (path.startsWith("/admin/revenue-trend?")) {
+        if (!path.contains(QString("days=%1").arg(m_trendDays))) return;
+        buildTrendChart(data.toObject().value("items").toArray()); return;
     }
     if (path == "/dashboard/pile-status") {
         const QJsonObject d=data.toObject(); buildStatusChart(d.value("items").toArray()); return;
@@ -282,6 +288,7 @@ void MainWindow::handleApiSuccess(const QString &path, const QJsonValue &data, c
 
 void MainWindow::handleApiFailure(const QString &path, int httpStatus, int code, const QString &message)
 {
-    ui->statusbar->showMessage(QString("请求失败 · HTTP %1 · code %2").arg(httpStatus).arg(code), 8000);
-    QMessageBox::warning(this, "操作失败", message + QString("\n\n接口：%1\nHTTP：%2　业务码：%3").arg(path).arg(httpStatus).arg(code));
+    Q_UNUSED(httpStatus);
+    ui->statusbar->showMessage(QString("Qt Socket 请求失败 · code %1").arg(code), 8000);
+    QMessageBox::warning(this, "操作失败", message + QString("\n\n操作：%1\n业务码：%2").arg(path).arg(code));
 }

@@ -1397,6 +1397,11 @@
             "minimum": -180,
             "maximum": 180
           },
+          "radius_km": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
           "page": {
             "type": "integer",
             "minimum": 1,
@@ -1905,6 +1910,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "total_energy_wh": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -1912,7 +1922,8 @@
           "month_revenue_cents",
           "total_revenue_cents",
           "today_order_count",
-          "today_energy_wh"
+          "today_energy_wh",
+          "total_energy_wh"
         ],
         "additionalProperties": false
       }
@@ -2362,6 +2373,11 @@
               "FAST",
               "SLOW"
             ]
+          },
+          "keyword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           },
           "page": {
             "type": "integer",

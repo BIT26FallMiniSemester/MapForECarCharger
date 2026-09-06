@@ -8,13 +8,17 @@ SOURCES += \
     loginwindow.cpp \
     mainwindow.cpp \
     apiclient.cpp \
-    mockrepository.cpp
+    mockrepository.cpp \
+    ../common/socketclient.cpp
 
 HEADERS += \
     loginwindow.h \
     mainwindow.h \
     apiclient.h \
-    mockrepository.h
+    mockrepository.h \
+    ../common/socketclient.h
+
+INCLUDEPATH += ../common
 
 FORMS += \
     loginwindow.ui \

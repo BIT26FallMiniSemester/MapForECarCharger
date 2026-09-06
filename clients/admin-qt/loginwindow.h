@@ -4,7 +4,6 @@
 #include <QWidget>
 namespace Ui { class LoginWindow; }
 class ApiClient;
-class QCheckBox;
 class QLineEdit;
 class LoginWindow : public QWidget
 {
@@ -17,7 +16,6 @@ private slots:
 private:
     Ui::LoginWindow *ui;
     ApiClient *m_api;
-    QCheckBox *m_demoCheck;
     QLineEdit *m_serverEdit;
     void openMainWindow(bool demoMode, const QString &token = QString());
 };

@@ -18,6 +18,7 @@ public:
     void importLegacy(const QString &path);
     void importCatalog(const QString &path,const QString &idSource={});
     void createAdmin(const QString &name,const QString &password);
+    void seedDemo();
     QString path() const { return db.databaseName(); }
 private:
     QSqlDatabase db;

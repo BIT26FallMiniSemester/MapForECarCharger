@@ -12,6 +12,17 @@ ctest --test-dir server-qt/build --output-on-failure
 
 Required Qt modules: Core, Network, Sql, Test, plus the QSQLITE plugin. CMake is the only supported build entry point.
 
+## Qt-only demonstration
+
+Create an isolated demonstration database and start the server:
+
+```bash
+server-qt/build/charger-server --database runtime/demo.db --seed-demo \
+  --host 0.0.0.0 --port 9000
+```
+
+The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Without `TENCENT_MAP_KEY`, `stations.nearby` uses the built-in Haversine distance implementation; geocoding and routing still require a key.
+
 ## Database initialization and migration
 
 Create a new target database:

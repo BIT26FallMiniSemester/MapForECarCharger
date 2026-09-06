@@ -1,402 +1,170 @@
 #include "apiclient.h"
 
-#include <algorithm>
+#include "socketclient.h"
 
-#include <QDateTime>
 #include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QTimer>
-#include <QUrlQuery>
 #include <QUuid>
-#include <QtMath>
 
-ApiClient::ApiClient(QObject *parent)
-    : QObject(parent)
-    , m_nam(new QNetworkAccessManager(this))
+ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClient(this))
 {
-    // 演示站点围绕北京天安门附近，便于默认坐标 39.90,116.40 能查到 10km 内结果。
-    auto add = [&](qint64 id, const QString &name, const QString &addr,
-                   double lat, double lng, int price, int total, int idle, double online) {
-        StationSummary s;
-        s.id = id;
-        s.name = name;
-        s.address = addr;
-        s.latitude = lat;
-        s.longitude = lng;
-        s.priceCentsPerKwh = price;
-        s.status = QStringLiteral("ACTIVE");
-        s.totalPiles = total;
-        s.availablePiles = idle;
-        s.onlineRate = online;
-        m_seedStations.push_back(s);
-    };
-    add(1, QStringLiteral("市民中心充电站"), QStringLiteral("北京市东城区示例路 1 号"),
-        39.9050, 116.4000, 125, 20, 8, 90.0);
-    add(2, QStringLiteral("中关村充电站"), QStringLiteral("北京市海淀区示例路 8 号"),
-        39.9836, 116.3159, 138, 12, 3, 83.3);
-    add(3, QStringLiteral("科技园充电站"), QStringLiteral("北京市海淀区示例路 16 号"),
-        39.9800, 116.3100, 132, 16, 5, 87.5);
-    add(4, QStringLiteral("望京充电站"), QStringLiteral("北京市朝阳区示例路 3 号"),
-        39.9960, 116.4700, 129, 10, 2, 80.0);
-    add(5, QStringLiteral("上海演示站（应被 10km 滤掉）"), QStringLiteral("上海市浦东新区"),
-        31.2304, 121.4737, 150, 8, 8, 100.0);
+    connect(m_socket, &SocketClient::succeeded, this,
+            [this](const QString &context, const QJsonValue &data, const QJsonObject &) {
+        emit requestFinished();
+        handleSuccess(context, data);
+    });
+    connect(m_socket, &SocketClient::failed, this,
+            [this](const QString &, int code, const QString &message) {
+        emit requestFinished();
+        emit apiFailed(code, chineseMessage(code, message));
+    });
 }
 
-void ApiClient::setBaseUrl(const QString &url)
-{
-    m_baseUrl = url.trimmed();
-    while (m_baseUrl.endsWith(QLatin1Char('/')))
-        m_baseUrl.chop(1);
-}
-
-void ApiClient::setDemoMode(bool enabled)
-{
-    m_demoMode = enabled;
-}
-
-void ApiClient::setToken(const QString &token)
-{
-    m_token = token;
-}
-
-void ApiClient::clearSession()
-{
-    m_token.clear();
-    m_demoUser = User{};
-    m_demoRecharges.clear();
-}
-
-QNetworkRequest ApiClient::makeRequest(const QString &path, bool withAuth) const
-{
-    QNetworkRequest req{QUrl(m_baseUrl + path)};
-    req.setHeader(QNetworkRequest::ContentTypeHeader,
-                  QStringLiteral("application/json; charset=utf-8"));
-    req.setTransferTimeout(15000);
-    if (withAuth && !m_token.isEmpty()) {
-        req.setRawHeader("Authorization",
-                         QByteArray("Bearer ") + m_token.toUtf8());
-    }
-    return req;
-}
+void ApiClient::setBaseUrl(const QString &endpoint) { m_socket->setEndpoint(endpoint); }
+void ApiClient::setDemoMode(bool enabled) { Q_UNUSED(enabled); }
+void ApiClient::setToken(const QString &token) { m_token = token; }
+void ApiClient::clearSession() { m_token.clear(); }
 
 void ApiClient::login(const QString &phone)
 {
-    if (m_demoMode) {
-        demoLogin(phone);
-        return;
-    }
-    QJsonObject body;
-    body.insert(QStringLiteral("phone"), phone);
-    sendJson(QStringLiteral("POST"), QStringLiteral("/user/login"), body, false);
-    m_pendingKind = QStringLiteral("login");
+    send(QStringLiteral("login"), QStringLiteral("auth.user.login"),
+         QJsonObject{{QStringLiteral("phone"), phone}}, false);
 }
 
 void ApiClient::fetchProfile()
 {
-    if (m_demoMode) {
-        emit requestStarted();
-        QTimer::singleShot(120, this, [this]() {
-            emit profileReady(m_demoUser);
-            emit requestFinished();
-        });
-        return;
-    }
-    m_pendingKind = QStringLiteral("profile");
-    get(QStringLiteral("/user/profile"));
+    send(QStringLiteral("profile"), QStringLiteral("users.me.get"));
 }
 
 void ApiClient::updateNickname(const QString &nickname)
 {
-    if (m_demoMode) {
-        m_demoUser.nickname = nickname.trimmed();
-        emit requestStarted();
-        QTimer::singleShot(120, this, [this]() {
-            emit nicknameUpdated(m_demoUser);
-            emit requestFinished();
-        });
-        return;
-    }
-    QJsonObject body;
-    body.insert(QStringLiteral("nickname"), nickname.trimmed());
-    m_pendingKind = QStringLiteral("nickname");
-    sendJson(QStringLiteral("PUT"), QStringLiteral("/user/profile"), body, true);
+    send(QStringLiteral("nickname"), QStringLiteral("users.me.update"),
+         QJsonObject{{QStringLiteral("nickname"), nickname.trimmed()}});
 }
 
 void ApiClient::recharge(double amountYuan)
 {
-    const qint64 cents = yuanToCents(amountYuan);
-    if (m_demoMode) {
-        emit requestStarted();
-        QTimer::singleShot(180, this, [this, cents]() {
-            RechargeRecord rec;
-            rec.rechargeNo = QStringLiteral("RC") + QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMddhhmmss"));
-            rec.amountCents = cents;
-            rec.balanceAfterCents = m_demoUser.balanceCents + cents;
-            rec.status = QStringLiteral("SUCCESS");
-            rec.createdAt = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-            m_demoUser.balanceCents = rec.balanceAfterCents;
-            m_demoRecharges.prepend(rec);
-            emit rechargeSucceeded(m_demoUser.balanceCents, rec);
-            emit requestFinished();
-        });
-        return;
-    }
-    QJsonObject body;
-    body.insert(QStringLiteral("amount_cents"), cents);
-    // 幂等请求号：同一号重试不会重复加余额
-    body.insert(QStringLiteral("client_request_id"),
-                QStringLiteral("qt-") + QUuid::createUuid().toString(QUuid::WithoutBraces));
-    m_pendingKind = QStringLiteral("recharge");
-    sendJson(QStringLiteral("POST"), QStringLiteral("/user/recharge"), body, true);
+    send(QStringLiteral("recharge"), QStringLiteral("wallet.recharges.create"),
+         QJsonObject{{QStringLiteral("amount_cents"), yuanToCents(amountYuan)},
+                     {QStringLiteral("client_request_id"), QStringLiteral("qt-")
+                          + QUuid::createUuid().toString(QUuid::WithoutBraces)}});
 }
 
 void ApiClient::fetchRechargeRecords()
 {
-    if (m_demoMode) {
-        emit requestStarted();
-        QTimer::singleShot(80, this, [this]() {
-            emit rechargeRecordsReady(m_demoRecharges);
-            emit requestFinished();
-        });
-        return;
-    }
-    m_pendingKind = QStringLiteral("rechargeRecords");
-    get(QStringLiteral("/user/recharge-records?page=1&page_size=20"));
+    send(QStringLiteral("rechargeRecords"), QStringLiteral("wallet.recharges.list"),
+         QJsonObject{{QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 20}});
 }
 
 void ApiClient::fetchNearbyStations(double latitude, double longitude, double radiusKm)
 {
-    if (m_demoMode) {
-        demoNearby(latitude, longitude, radiusKm);
-        return;
-    }
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("latitude"), QString::number(latitude, 'f', 7));
-    query.addQueryItem(QStringLiteral("longitude"), QString::number(longitude, 'f', 7));
-    query.addQueryItem(QStringLiteral("radius_km"), QString::number(radiusKm, 'f', 1));
-    m_pendingKind = QStringLiteral("nearby");
-    get(QStringLiteral("/stations/nearby?") + query.toString(QUrl::FullyEncoded));
+    send(QStringLiteral("nearby"), QStringLiteral("stations.nearby"),
+         QJsonObject{{QStringLiteral("latitude"), latitude},
+                     {QStringLiteral("longitude"), longitude},
+                     {QStringLiteral("radius_km"), radiusKm},
+                     {QStringLiteral("page"), 1},
+                     {QStringLiteral("page_size"), 100}});
 }
 
-void ApiClient::get(const QString &path)
+void ApiClient::send(const QString &context, const QString &action,
+                     const QJsonObject &data, bool withToken)
 {
     emit requestStarted();
-    QNetworkReply *reply = m_nam->get(makeRequest(path, true));
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        handleReply(reply);
-    });
+    m_socket->send(context, action, data, withToken ? m_token : QString());
 }
 
-void ApiClient::sendJson(const QString &method, const QString &path,
-                         const QJsonObject &body, bool withAuth)
+void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
 {
-    emit requestStarted();
-    const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    QNetworkReply *reply = nullptr;
-    const QNetworkRequest req = makeRequest(path, withAuth);
-    if (method == QLatin1String("POST"))
-        reply = m_nam->post(req, payload);
-    else if (method == QLatin1String("PUT"))
-        reply = m_nam->put(req, payload);
-    else
-        reply = m_nam->sendCustomRequest(req, method.toLatin1(), payload);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        handleReply(reply);
-    });
-}
-
-void ApiClient::handleReply(QNetworkReply *reply)
-{
-    reply->deleteLater();
-    const Envelope env = parseEnvelope(reply);
-    emit requestFinished();
-
-    if (!env.ok()) {
-        emit apiFailed(env.code, chineseMessage(env.code, env.message));
-        return;
-    }
-
-    const QString kind = m_pendingKind;
-    m_pendingKind.clear();
-
-    if (kind == QLatin1String("login")) {
-        const QJsonObject data = env.data.toObject();
-        const User user = parseUser(data.value(QStringLiteral("user")).toObject());
-        const QString token = data.value(QStringLiteral("access_token")).toString();
+    if (context == QStringLiteral("login")) {
+        const QJsonObject object = data.toObject();
+        const QString token = object.value(QStringLiteral("access_token")).toString();
         setToken(token);
-        emit loginSucceeded(token, user, data.value(QStringLiteral("is_new_user")).toBool());
+        emit loginSucceeded(token,
+                            parseUser(object.value(QStringLiteral("user")).toObject()),
+                            object.value(QStringLiteral("is_new_user")).toBool());
         return;
     }
-    if (kind == QLatin1String("profile") || kind == QLatin1String("nickname")) {
-        const User user = parseUser(env.data.toObject());
-        if (kind == QLatin1String("nickname"))
+    if (context == QStringLiteral("profile") || context == QStringLiteral("nickname")) {
+        const User user = parseUser(data.toObject());
+        if (context == QStringLiteral("nickname"))
             emit nicknameUpdated(user);
         else
             emit profileReady(user);
         return;
     }
-    if (kind == QLatin1String("recharge")) {
-        const QJsonObject data = env.data.toObject();
-        RechargeRecord rec = parseRecharge(data);
-        emit rechargeSucceeded(data.value(QStringLiteral("balance_after_cents")).toVariant().toLongLong(), rec);
+    if (context == QStringLiteral("recharge")) {
+        const RechargeRecord record = parseRecharge(data.toObject());
+        emit rechargeSucceeded(record.balanceAfterCents, record);
         return;
     }
-    if (kind == QLatin1String("rechargeRecords")) {
-        QVector<RechargeRecord> list;
-        QJsonArray items = env.data.toArray();
-        if (env.data.isObject())
-            items = env.data.toObject().value(QStringLiteral("items")).toArray();
-        for (const QJsonValue &v : items)
-            list.push_back(parseRecharge(v.toObject()));
-        emit rechargeRecordsReady(list);
+    if (context == QStringLiteral("rechargeRecords")) {
+        QVector<RechargeRecord> records;
+        for (const QJsonValue &value : data.toObject().value(QStringLiteral("items")).toArray())
+            records.push_back(parseRecharge(value.toObject()));
+        emit rechargeRecordsReady(records);
         return;
     }
-    if (kind == QLatin1String("nearby")) {
-        QVector<StationSummary> list;
-        QJsonArray items = env.data.toArray();
-        if (env.data.isObject())
-            items = env.data.toObject().value(QStringLiteral("items")).toArray();
-        for (const QJsonValue &v : items)
-            list.push_back(parseStation(v.toObject()));
-        emit nearbyStationsReady(list);
+    if (context == QStringLiteral("nearby")) {
+        QVector<StationSummary> stations;
+        for (const QJsonValue &value : data.toObject().value(QStringLiteral("items")).toArray())
+            stations.push_back(parseStation(value.toObject()));
+        emit nearbyStationsReady(stations);
     }
 }
 
-ApiClient::Envelope ApiClient::parseEnvelope(QNetworkReply *reply) const
+User ApiClient::parseUser(const QJsonObject &object) const
 {
-    Envelope env;
-    env.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    if (reply->error() != QNetworkReply::NoError && env.httpStatus == 0) {
-        env.code = 50001;
-        env.message = QStringLiteral("无法连接服务器，请检查地址或改用演示模式");
-        return env;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-    if (!doc.isObject()) {
-        env.code = 50000;
-        env.message = QStringLiteral("服务器返回了无法解析的数据");
-        return env;
-    }
-    const QJsonObject obj = doc.object();
-    env.code = obj.value(QStringLiteral("code")).toInt(-1);
-    env.message = obj.value(QStringLiteral("message")).toString();
-    env.data = obj.value(QStringLiteral("data"));
-    return env;
+    User user;
+    user.id = object.value(QStringLiteral("id")).toInteger();
+    user.phone = object.value(QStringLiteral("phone")).toString();
+    user.nickname = object.value(QStringLiteral("nickname")).toString();
+    user.avatarUrl = object.value(QStringLiteral("avatar_id")).toString();
+    user.balanceCents = object.value(QStringLiteral("balance_cents")).toInteger();
+    user.status = object.value(QStringLiteral("status")).toString();
+    return user;
 }
 
-User ApiClient::parseUser(const QJsonObject &obj) const
+StationSummary ApiClient::parseStation(const QJsonObject &object) const
 {
-    User u;
-    u.id = obj.value(QStringLiteral("id")).toVariant().toLongLong();
-    u.phone = obj.value(QStringLiteral("phone")).toString();
-    u.nickname = obj.value(QStringLiteral("nickname")).toString();
-    u.avatarUrl = obj.value(QStringLiteral("avatar_url")).toString();
-    u.balanceCents = obj.value(QStringLiteral("balance_cents")).toVariant().toLongLong();
-    u.status = obj.value(QStringLiteral("status")).toString();
-    return u;
+    StationSummary station;
+    station.id = object.value(QStringLiteral("id")).toInteger();
+    station.name = object.value(QStringLiteral("name")).toString();
+    station.address = object.value(QStringLiteral("address")).toString();
+    station.latitude = object.value(QStringLiteral("latitude")).toDouble();
+    station.longitude = object.value(QStringLiteral("longitude")).toDouble();
+    station.priceCentsPerKwh = object.value(QStringLiteral("price_cents_per_kwh")).toInt();
+    station.status = object.value(QStringLiteral("status")).toString();
+    station.totalPiles = object.value(QStringLiteral("total_piles")).toInt();
+    station.availablePiles = object.value(QStringLiteral("available_piles")).toInt();
+    station.onlineRate = station.totalPiles ? station.availablePiles * 100.0 / station.totalPiles : 0.0;
+    station.distanceKm = object.value(QStringLiteral("route_distance_meters")).toDouble() / 1000.0;
+    return station;
 }
 
-StationSummary ApiClient::parseStation(const QJsonObject &obj) const
+RechargeRecord ApiClient::parseRecharge(const QJsonObject &object) const
 {
-    StationSummary s;
-    s.id = obj.value(QStringLiteral("id")).toVariant().toLongLong();
-    s.name = obj.value(QStringLiteral("name")).toString();
-    s.address = obj.value(QStringLiteral("address")).toString();
-    s.latitude = obj.value(QStringLiteral("latitude")).toDouble();
-    s.longitude = obj.value(QStringLiteral("longitude")).toDouble();
-    s.priceCentsPerKwh = obj.value(QStringLiteral("price_cents_per_kwh")).toInt();
-    s.status = obj.value(QStringLiteral("status")).toString();
-    s.totalPiles = obj.value(QStringLiteral("total_piles")).toInt();
-    s.availablePiles = obj.value(QStringLiteral("available_piles")).toInt();
-    s.onlineRate = obj.value(QStringLiteral("online_rate")).toDouble();
-    if (obj.value(QStringLiteral("distance_km")).isNull())
-        s.distanceKm = -1;
-    else
-        s.distanceKm = obj.value(QStringLiteral("distance_km")).toDouble();
-    return s;
-}
-
-RechargeRecord ApiClient::parseRecharge(const QJsonObject &obj) const
-{
-    RechargeRecord r;
-    r.rechargeNo = obj.value(QStringLiteral("recharge_no")).toString();
-    r.amountCents = obj.value(QStringLiteral("amount_cents")).toVariant().toLongLong();
-    r.balanceAfterCents = obj.value(QStringLiteral("balance_after_cents")).toVariant().toLongLong();
-    r.status = obj.value(QStringLiteral("status")).toString();
-    r.createdAt = obj.value(QStringLiteral("created_at")).toString();
-    return r;
+    RechargeRecord record;
+    record.rechargeNo = QStringLiteral("RC%1").arg(object.value(QStringLiteral("record_id")).toInteger());
+    record.amountCents = object.value(QStringLiteral("amount_cents")).toInteger();
+    record.balanceAfterCents = object.value(QStringLiteral("balance_cents")).toInteger();
+    record.status = QStringLiteral("SUCCESS");
+    record.createdAt = object.value(QStringLiteral("created_at")).toString();
+    return record;
 }
 
 QString ApiClient::chineseMessage(int code, const QString &fallback) const
 {
     switch (code) {
-    case 10001: return QStringLiteral("参数错误，请检查手机号或输入内容");
-    case 20001: return QStringLiteral("登录已过期，请重新登录");
-    case 20003: return QStringLiteral("该账号已被冻结，无法登录");
-    case 20004: return QStringLiteral("账号或密码错误");
-    case 50001: return fallback.isEmpty()
-                   ? QStringLiteral("服务暂不可用")
-                   : fallback;
-    default:
-        if (!fallback.isEmpty() && fallback != QLatin1String("success"))
-            return fallback;
-        return QStringLiteral("请求失败（错误码 %1）").arg(code);
+    case 40001: return QStringLiteral("参数错误，请检查手机号或输入内容");
+    case 40002: return QStringLiteral("当前已有未完成订单");
+    case 40003: return QStringLiteral("站点或电桩当前不可用");
+    case 40004: return QStringLiteral("订单状态不允许该操作");
+    case 40006: return QStringLiteral("余额不足，请先充值");
+    case 40101: return QStringLiteral("登录已过期，请重新登录");
+    case 40301: return QStringLiteral("该账号已被冻结或无权操作");
+    case 40401: return QStringLiteral("目标记录不存在");
+    case 50301: return QStringLiteral("地图服务暂不可用");
+    case 50001: return fallback;
+    default: break;
     }
-}
-
-void ApiClient::demoLogin(const QString &phone)
-{
-    emit requestStarted();
-    QTimer::singleShot(200, this, [this, phone]() {
-        // 说明书：已存在则登录，不存在则自动注册，默认昵称「用户+后四位」
-        if (phone == QLatin1String("13800000000")) {
-            emit apiFailed(20003, chineseMessage(20003, QString()));
-            emit requestFinished();
-            return;
-        }
-        m_demoUser.id = 1;
-        m_demoUser.phone = phone;
-        m_demoUser.nickname = QStringLiteral("用户") + phone.right(4);
-        m_demoUser.avatarUrl.clear();
-        m_demoUser.balanceCents = 0;
-        m_demoUser.status = QStringLiteral("NORMAL");
-        m_token = QStringLiteral("demo-token-") + phone;
-        emit requestFinished();
-        emit loginSucceeded(m_token, m_demoUser, true);
-    });
-}
-
-void ApiClient::demoNearby(double latitude, double longitude, double radiusKm)
-{
-    emit requestStarted();
-    QTimer::singleShot(180, this, [this, latitude, longitude, radiusKm]() {
-        QVector<StationSummary> result;
-        for (StationSummary s : m_seedStations) {
-            s.distanceKm = haversineKm(latitude, longitude, s.latitude, s.longitude);
-            if (s.distanceKm <= radiusKm)
-                result.push_back(s);
-        }
-        std::sort(result.begin(), result.end(), [](const StationSummary &a, const StationSummary &b) {
-            return a.distanceKm < b.distanceKm;
-        });
-        emit nearbyStationsReady(result);
-        emit requestFinished();
-    });
-}
-
-double ApiClient::haversineKm(double lat1, double lon1, double lat2, double lon2) const
-{
-    constexpr double kEarthKm = 6371.0;
-    constexpr double kPi = 3.14159265358979323846;
-    const auto rad = [](double deg) { return deg * kPi / 180.0; };
-    const double dLat = rad(lat2 - lat1);
-    const double dLon = rad(lon2 - lon1);
-    const double a = qSin(dLat / 2) * qSin(dLat / 2)
-        + qCos(rad(lat1)) * qCos(rad(lat2)) * qSin(dLon / 2) * qSin(dLon / 2);
-    return 2 * kEarthKm * qAsin(qSqrt(a));
+    return fallback.isEmpty() ? QStringLiteral("Qt 后端请求失败（错误码 %1）").arg(code) : fallback;
 }

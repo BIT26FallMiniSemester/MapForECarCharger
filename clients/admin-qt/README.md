@@ -5,7 +5,7 @@
 ## 演示账号
 
 - 账号：`admin`
-- 密码：`123456`
+- 密码：`admin123`
 
 ## 已实现功能
 
@@ -20,8 +20,8 @@
 - 用户列表、脱敏手机号模糊查询、详情、冻结和解冻。
 - 成功、校验、权限/冲突类错误统一弹窗反馈。
 - 电桩、站点和用户列表均支持上一页/下一页；真实接口模式按 `page/page_size` 请求。
-- 登录页可切换内置演示数据与真实后端，真实模式已接入管理端 REST/JSON 接口。
-- 统一解析 `{code,message,data,request_id}`，同时检查 HTTP 状态和业务错误码。
+- 登录页连接 Qt Socket 后端，默认地址为 `127.0.0.1:9000`。
+- 统一解析 `{code,message,data,request_id}`，支持请求关联、分帧和业务错误码。
 - 金额、电量、功率按接口约定在分/元、Wh/kWh、W/kW之间转换。
 
 ## Ubuntu 22.04+ 构建
@@ -30,7 +30,7 @@
 
 ```bash
 sudo apt update
-sudo apt install build-essential qmake6 qt6-base-dev libqt6charts6-dev
+sudo apt install build-essential qmake6 qt6-base-dev qt6-charts-dev
 ```
 
 在工程目录执行：
@@ -45,17 +45,13 @@ make -j$(nproc)
 
 ## 联调说明
 
-默认 API 地址为 `http://127.0.0.1:8000/api/v1`。登录页勾选“使用内置演示数据”即可离线演示；取消勾选则调用真实后端。`ApiClient` 支持 JSON、Bearer Token、GET/POST/PUT/PATCH 和统一成功/失败信号。
+默认后端地址为 `127.0.0.1:9000`。客户端通过 4 字节大端长度头加 UTF-8 JSON 的长连接调用 `server-qt`，不使用 HTTP 或 Python 后端。演示前运行：
 
-- `POST /api/v1/admin/login`
-- `GET /api/v1/admin/revenue`
-- `GET /api/v1/admin/piles`
-- `POST /api/v1/admin/piles/{pile_id}/restart`
-- `GET/POST/PUT /api/v1/admin/stations`
-- `POST /api/v1/admin/stations/{station_id}/piles`
-- `GET /api/v1/admin/users`
-- `POST /api/v1/admin/users/{user_id}/freeze|unfreeze`
-- `GET /api/v1/dashboard/pile-status`
+```bash
+server-qt/build/charger-server --database runtime/demo.db --seed-demo --port 9000
+```
+
+管理端已连接登录、运营总览、营收趋势、电桩状态、电桩/站点/用户列表及管理操作等 Socket actions。
 
 客户端不直接连接数据库，所有真实数据均应由后端接口提供。
 

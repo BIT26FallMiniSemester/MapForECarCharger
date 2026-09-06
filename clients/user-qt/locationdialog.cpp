@@ -1,19 +1,14 @@
 #include "locationdialog.h"
 #include "ui_locationdialog.h"
 
-#include "mapconfig.h"
-#include "tencentgeocoder.h"
-
 #include <QComboBox>
 #include <QDialogButtonBox>
-#include <QLineEdit>
 #include <QPushButton>
 #include <QVariant>
 
 LocationDialog::LocationDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::LocationDialog)
-    , m_geo(new TencentGeocoder(this))
 {
     ui->setupUi(this);
     ui->titleLabel->setObjectName(QStringLiteral("titleLabel"));
@@ -25,16 +20,14 @@ LocationDialog::LocationDialog(QWidget *parent)
 
     ui->keyHint->hide();
     ui->keyEdit->hide();
-    m_geo->setApiKey(tencentMapKey());
+    ui->locateMeButton->hide();
+    ui->addressEdit->hide();
+    ui->searchButton->hide();
+    ui->addressHint->setText(QStringLiteral("演示环境可直接选择预设区域"));
 
     fillRegions();
 
-    connect(ui->locateMeButton, &QPushButton::clicked, this, &LocationDialog::onLocateMyself);
     connect(ui->useRegionButton, &QPushButton::clicked, this, &LocationDialog::onUseRegion);
-    connect(ui->searchButton, &QPushButton::clicked, this, &LocationDialog::onSearchAddress);
-    connect(ui->addressEdit, &QLineEdit::returnPressed, this, &LocationDialog::onSearchAddress);
-    connect(m_geo, &TencentGeocoder::geocodeSucceeded, this, &LocationDialog::onGeocodeOk);
-    connect(m_geo, &TencentGeocoder::geocodeFailed, this, &LocationDialog::onGeocodeFail);
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &LocationDialog::onAccepted);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &LocationDialog::reject);
 }
@@ -89,34 +82,12 @@ void LocationDialog::applyLocation(double lat, double lng, const QString &name)
     ui->statusLabel->setText(QStringLiteral("已选择：%1").arg(name));
 }
 
-void LocationDialog::onLocateMyself()
-{
-    ui->statusLabel->setText(QStringLiteral("正在定位…"));
-    m_geo->locateByIp();
-}
-
 void LocationDialog::onUseRegion()
 {
     const QVariantMap data = ui->regionCombo->currentData().toMap();
     applyLocation(data.value(QStringLiteral("lat")).toDouble(),
                   data.value(QStringLiteral("lng")).toDouble(),
                   data.value(QStringLiteral("display")).toString());
-}
-
-void LocationDialog::onSearchAddress()
-{
-    ui->statusLabel->setText(QStringLiteral("正在搜索位置…"));
-    m_geo->searchPlace(ui->addressEdit->text());
-}
-
-void LocationDialog::onGeocodeOk(double lat, double lng, const QString &name)
-{
-    applyLocation(lat, lng, name);
-}
-
-void LocationDialog::onGeocodeFail(const QString &message)
-{
-    ui->statusLabel->setText(message);
 }
 
 void LocationDialog::onAccepted()

@@ -11,6 +11,7 @@ LoginPage::LoginPage(QWidget *parent)
     , ui(new Ui::LoginPage)
 {
     ui->setupUi(this);
+    ui->demoCheck->hide();
     ui->brandLabel->setObjectName(QStringLiteral("brandLabel"));
     ui->titleLabel->setObjectName(QStringLiteral("titleLabel"));
     ui->subtitleLabel->setObjectName(QStringLiteral("subtitleLabel"));
@@ -42,7 +43,7 @@ QString LoginPage::apiBaseUrl() const
 
 bool LoginPage::demoMode() const
 {
-    return ui->demoCheck->isChecked();
+    return false;
 }
 
 void LoginPage::setBusy(bool busy)

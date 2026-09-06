@@ -9,8 +9,6 @@ class LocationDialog;
 }
 QT_END_NAMESPACE
 
-class TencentGeocoder;
-
 class LocationDialog : public QDialog
 {
     Q_OBJECT
@@ -27,10 +25,6 @@ public:
 
 private slots:
     void onUseRegion();
-    void onSearchAddress();
-    void onLocateMyself();
-    void onGeocodeOk(double lat, double lng, const QString &name);
-    void onGeocodeFail(const QString &message);
     void onAccepted();
 
 private:
@@ -38,7 +32,6 @@ private:
     void fillRegions();
 
     Ui::LocationDialog *ui;
-    TencentGeocoder *m_geo = nullptr;
     double m_lat = 39.9042;
     double m_lng = 116.4074;
     QString m_displayName = QStringLiteral("北京市东城区（模拟定位）");

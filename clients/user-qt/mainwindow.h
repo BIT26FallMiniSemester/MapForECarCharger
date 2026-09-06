@@ -12,7 +12,6 @@ class MainWindow;
 QT_END_NAMESPACE
 
 class ApiClient;
-class TencentGeocoder;
 
 class MainWindow : public QMainWindow
 {
@@ -25,8 +24,6 @@ public:
 private slots:
     void onLoginClicked();
     void onLoginSucceeded(const QString &token, const User &user, bool isNewUser);
-    void onSelfLocated(double lat, double lng, const QString &name);
-    void onSelfLocateFailed(const QString &message);
     void onQueryNearby();
     void onChangeLocation();
     void onSaveNickname();
@@ -44,7 +41,6 @@ private:
 
     Ui::MainWindow *ui;
     ApiClient *m_api = nullptr;
-    TencentGeocoder *m_geo = nullptr;
     User m_user;
     int m_inflight = 0;
 };

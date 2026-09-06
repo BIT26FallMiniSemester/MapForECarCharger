@@ -5,9 +5,7 @@
 #include "homepage.h"
 #include "locationdialog.h"
 #include "loginpage.h"
-#include "mapconfig.h"
 #include "profilepage.h"
-#include "tencentgeocoder.h"
 
 #include <QDialog>
 #include <QFileDialog>
@@ -19,11 +17,9 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_api(new ApiClient(this))
-    , m_geo(new TencentGeocoder(this))
 {
     ui->setupUi(this);
     applyTheme();
-    m_geo->setApiKey(tencentMapKey());
 
     ui->tabHome->setObjectName(QStringLiteral("tabButton"));
     ui->tabMine->setObjectName(QStringLiteral("tabButton"));
@@ -66,8 +62,6 @@ MainWindow::MainWindow(QWidget *parent)
         m_api->fetchRechargeRecords();
     });
     connect(m_api, &ApiClient::rechargeRecordsReady, ui->profilePage, &ProfilePage::showRechargeRecords);
-    connect(m_geo, &TencentGeocoder::geocodeSucceeded, this, &MainWindow::onSelfLocated);
-    connect(m_geo, &TencentGeocoder::geocodeFailed, this, &MainWindow::onSelfLocateFailed);
 }
 
 MainWindow::~MainWindow()
@@ -83,7 +77,6 @@ void MainWindow::onLoginClicked()
         return;
     }
     ui->loginPage->setStatus(QString());
-    m_api->setDemoMode(ui->loginPage->demoMode());
     m_api->setBaseUrl(ui->loginPage->apiBaseUrl());
     m_api->login(phone);
 }
@@ -98,20 +91,8 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
                             : QStringLiteral("登录成功");
     QMessageBox::information(this, QStringLiteral("欢迎"),
                              tip + QStringLiteral("\n%1").arg(user.nickname));
-    ui->homePage->showHint(QStringLiteral("正在定位当前位置…"));
-    m_geo->locateByIp();
-}
-
-void MainWindow::onSelfLocated(double lat, double lng, const QString &name)
-{
-    ui->homePage->setLocation(lat, lng, name);
-    onQueryNearby();
-}
-
-void MainWindow::onSelfLocateFailed(const QString &message)
-{
     ui->homePage->useSimulatedGps();
-    ui->homePage->showHint(message + QStringLiteral("，已改用模拟定位"));
+    ui->homePage->showHint(QStringLiteral("Qt 后端已连接，使用北京演示定位"));
     onQueryNearby();
 }
 
