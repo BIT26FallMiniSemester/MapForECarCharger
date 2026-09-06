@@ -67,6 +67,11 @@ void ApiClient::fetchNearbyStations(double latitude, double longitude, double ra
                      {QStringLiteral("page_size"), 100}});
 }
 
+void ApiClient::fetchMapSnapshot(double latitude, double longitude)
+{
+    send(QStringLiteral("map"),QStringLiteral("map.snapshot"),QJsonObject{{QStringLiteral("latitude"),latitude},{QStringLiteral("longitude"),longitude},{QStringLiteral("zoom"),12}});
+}
+
 void ApiClient::geocode(const QString &address)
 {
     send(QStringLiteral("geocode"), QStringLiteral("map.geocode"),
@@ -184,6 +189,10 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
         emit nearbyStationsReady(stations);
         return;
     }
+    if(context==QStringLiteral("map")) {
+        const auto bytes=QByteArray::fromBase64(data.toObject().value(QStringLiteral("content_base64")).toString().toLatin1());
+        if(bytes.isEmpty()){emit requestFailed(context,50000,QStringLiteral("地图图片无效"));return;}emit mapSnapshotReady(bytes);return;
+    }
     if (context == QStringLiteral("geocode")) {
         const QJsonObject object = data.toObject();
         emit locationResolved(object.value(QStringLiteral("latitude")).toDouble(),
@@ -240,12 +249,16 @@ StationSummary ApiClient::parseStation(const QJsonObject &object) const
     station.id = object.value(QStringLiteral("id")).toInteger();
     station.name = object.value(QStringLiteral("name")).toString();
     station.address = object.value(QStringLiteral("address")).toString();
+    station.operatorName = object.value(QStringLiteral("operator_name")).toString();
+    station.district = object.value(QStringLiteral("district")).toString();
     station.latitude = object.value(QStringLiteral("latitude")).toDouble();
     station.longitude = object.value(QStringLiteral("longitude")).toDouble();
     station.priceCentsPerKwh = object.value(QStringLiteral("price_cents_per_kwh")).toInt();
     station.status = object.value(QStringLiteral("status")).toString();
     station.totalPiles = object.value(QStringLiteral("total_piles")).toInt();
     station.availablePiles = object.value(QStringLiteral("available_piles")).toInt();
+    station.fastConnectorCount = object.value(QStringLiteral("fast_connector_count")).toInt();
+    station.slowConnectorCount = object.value(QStringLiteral("slow_connector_count")).toInt();
     station.onlineRate = station.totalPiles ? station.availablePiles * 100.0 / station.totalPiles : 0.0;
     station.distanceKm = object.value(QStringLiteral("route_distance_meters")).toDouble() / 1000.0;
     return station;

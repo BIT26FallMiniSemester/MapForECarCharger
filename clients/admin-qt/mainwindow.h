@@ -23,6 +23,7 @@ private:
     QWidget *createPilePage();
     QWidget *createStationPage();
     QWidget *createUserPage();
+    QWidget *createOrderPage();
     QWidget *metricCard(const QString &title, const QString &value, const QString &hint);
     void buildTrendChart(int days);
     void buildStatusChart();
@@ -31,6 +32,8 @@ private:
     void refreshPiles();
     void refreshStations();
     void refreshUsers();
+    void refreshOrders();
+    void refreshLiveData();
     void showPileDetails();
     void restartSelectedPile();
     void showStationDetails();
@@ -44,20 +47,25 @@ private:
     bool m_demoMode = true;
     ApiClient *m_api = nullptr;
     int m_trendDays = 7;
-    int m_pilePage = 1, m_stationPage = 1, m_userPage = 1;
-    int m_pilePages = 1, m_stationPages = 1, m_userPages = 1;
+    int m_pilePage = 1, m_stationPage = 1, m_userPage = 1, m_orderPage = 1;
+    int m_pilePages = 1, m_stationPages = 1, m_userPages = 1, m_orderPages = 1;
     QList<QLabel *> m_metricValues;
     class QLabel *m_pilePageLabel = nullptr;
     class QLabel *m_stationPageLabel = nullptr;
     class QLabel *m_userPageLabel = nullptr;
+    class QLabel *m_orderPageLabel = nullptr;
     QTableWidget *m_pileTable = nullptr;
     QTableWidget *m_stationTable = nullptr;
     QTableWidget *m_userTable = nullptr;
+    QTableWidget *m_orderTable = nullptr;
     QWidget *m_trendHost = nullptr;
     QWidget *m_statusHost = nullptr;
     class QComboBox *m_stationFilter = nullptr;
     class QComboBox *m_statusFilter = nullptr;
     class QLineEdit *m_pileSearch = nullptr;
     class QLineEdit *m_userSearch = nullptr;
+    class QLineEdit *m_orderSearch = nullptr;
+    class QComboBox *m_orderStatusFilter = nullptr;
+    class QTimer *m_refreshTimer = nullptr;
 };
 #endif

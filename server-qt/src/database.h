@@ -19,6 +19,7 @@ public:
     void importCatalog(const QString &path,const QString &idSource={});
     void createAdmin(const QString &name,const QString &password);
     void seedDemo();
+    void seedShowcase();
     QString path() const { return db.databaseName(); }
 private:
     QSqlDatabase db;

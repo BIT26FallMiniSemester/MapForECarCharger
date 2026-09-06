@@ -36,7 +36,13 @@ void Database::migrate() {
         for(const auto &sql:QString::fromUtf8(file.readAll()).split(';',Qt::SkipEmptyParts)) if(!sql.trimmed().isEmpty()) execute(sql);
         execute("INSERT INTO schema_migrations VALUES(1,?)",{utcNow()}); tx.commit();
     }
-    if(scalar("SELECT count(*) FROM schema_migrations")!=1 || scalar("SELECT max(version) FROM schema_migrations")!=1) fail(50001);
+    const auto version=scalar("SELECT max(version) FROM schema_migrations");
+    if(version<1||version>2||scalar("SELECT count(*) FROM schema_migrations")!=version) fail(50001);
+    if(version==1) {
+        Transaction tx(*this);QFile file(":/migrations/002_catalog_details.sql");if(!file.open(QIODevice::ReadOnly))fail(50000);
+        for(const auto &sql:QString::fromUtf8(file.readAll()).split(';',Qt::SkipEmptyParts))if(!sql.trimmed().isEmpty())execute(sql);
+        execute("INSERT INTO schema_migrations VALUES(2,?)",{utcNow()});tx.commit();
+    }
     for(const auto &table:QStringList{"users","admins","stations","charging_piles","charging_orders","recharge_records","pile_status_logs","operation_logs"})
         if(!db.tables().contains(table)) fail(50001);
     if(!rows("PRAGMA foreign_key_check").isEmpty()) fail(50001);
@@ -109,6 +115,18 @@ void Database::seedDemo() {
             {stamp(-1),stamp(-2),stamp(0,-2),stamp(0,-32),stamp(0,-30)});
     tx.commit();
 }
+void Database::seedShowcase() {
+    if(!scalar("SELECT count(*) FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'"))fail(40001);
+    if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")||scalar("SELECT count(*) FROM users")||scalar("SELECT count(*) FROM charging_piles")||scalar("SELECT count(*) FROM charging_orders"))fail(40002);
+    createAdmin("admin","admin123");
+    const auto stationId=scalar("SELECT id FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM' AND fast_connector_count>0 ORDER BY CAST(external_id AS INTEGER),id LIMIT 1");
+    if(!stationId)fail(40001);
+    Transaction tx(*this);const auto now=utcNow();
+    execute("INSERT INTO users(phone,nickname,balance_cents,status,created_at,updated_at) VALUES('13900000000','测试车主',30000,'NORMAL',?,?)",{now,now});
+    execute("UPDATE stations SET price_cents_per_kwh=150,updated_at=? WHERE id=?",{now,stationId});
+    execute("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,'COURSE-TEST-F01','FAST',120000,'IDLE',?,?)",{stationId,now,now});
+    tx.commit();
+}
 void Database::importCatalog(const QString &path,const QString &idSource) {
     QFile file(path); if(!file.open(QIODevice::ReadOnly)) fail(40001);
     const auto doc=QJsonDocument::fromJson(file.readAll());
@@ -142,16 +160,16 @@ void Database::importCatalog(const QString &path,const QString &idSource) {
            ||s["name"].toString().trimmed().isEmpty()||s["address"].toString().trimmed().isEmpty()
            ||!s["latitude"].isDouble()||!s["longitude"].isDouble()) fail(40001);
         const auto key=s["data_source"].toString()+QChar(0x1f)+s["external_id"].toString();
-        QVariantList values{s["name"].toString(),s["address"].toString(),s["latitude"].toDouble(),s["longitude"].toDouble(),s["operator_name"].toVariant(),s["district"].toVariant(),s["data_source"].toString(),s["external_id"].toString(),utcNow(),utcNow()};
+        QVariantList values{s["name"].toString(),s["address"].toString(),s["latitude"].toDouble(),s["longitude"].toDouble(),s["operator_name"].toVariant(),s["district"].toVariant(),s["data_source"].toString(),s["external_id"].toString(),s["service_type"].toVariant(),s["region_scope"].toVariant(),s["location_type"].toVariant(),s["fast_connector_count"].toInt(),s["slow_connector_count"].toInt(),utcNow(),utcNow()};
         if(idSource.isEmpty()) {
-            execute("INSERT INTO stations(name,address,latitude,longitude,operator_name,district,data_source,external_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(data_source,external_id) DO UPDATE SET name=excluded.name,address=excluded.address,latitude=excluded.latitude,longitude=excluded.longitude,operator_name=excluded.operator_name,district=excluded.district,updated_at=excluded.updated_at",values);
+            execute("INSERT INTO stations(name,address,latitude,longitude,operator_name,district,data_source,external_id,service_type,region_scope,location_type,fast_connector_count,slow_connector_count,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(data_source,external_id) DO UPDATE SET name=excluded.name,address=excluded.address,latitude=excluded.latitude,longitude=excluded.longitude,operator_name=excluded.operator_name,district=excluded.district,service_type=excluded.service_type,region_scope=excluded.region_scope,location_type=excluded.location_type,fast_connector_count=excluded.fast_connector_count,slow_connector_count=excluded.slow_connector_count,updated_at=excluded.updated_at",values);
         } else {
             if(!preservedIds.contains(key)) fail(40001);
             const auto preserved=preservedIds[key];
             const auto existing=scalar("SELECT id FROM stations WHERE data_source=? AND external_id=?",{s["data_source"].toString(),s["external_id"].toString()});
             if(existing&&existing!=preserved) fail(40001);
             values.prepend(preserved);
-            execute("INSERT INTO stations(id,name,address,latitude,longitude,operator_name,district,data_source,external_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(data_source,external_id) DO UPDATE SET name=excluded.name,address=excluded.address,latitude=excluded.latitude,longitude=excluded.longitude,operator_name=excluded.operator_name,district=excluded.district,updated_at=excluded.updated_at",values);
+            execute("INSERT INTO stations(id,name,address,latitude,longitude,operator_name,district,data_source,external_id,service_type,region_scope,location_type,fast_connector_count,slow_connector_count,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(data_source,external_id) DO UPDATE SET name=excluded.name,address=excluded.address,latitude=excluded.latitude,longitude=excluded.longitude,operator_name=excluded.operator_name,district=excluded.district,service_type=excluded.service_type,region_scope=excluded.region_scope,location_type=excluded.location_type,fast_connector_count=excluded.fast_connector_count,slow_connector_count=excluded.slow_connector_count,updated_at=excluded.updated_at",values);
         }
     } tx.commit();
 }

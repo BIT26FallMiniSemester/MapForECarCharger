@@ -20,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSettings>
+#include <QTimer>
 #include <QUrlQuery>
 #include <numeric>
 
@@ -27,6 +28,7 @@ static QLabel *titleLabel(const QString &text) { auto *l = new QLabel(text); l->
 static void resetHost(QWidget *host) { if (auto *old = host->layout()) { QLayoutItem *i; while ((i = old->takeAt(0))) { delete i->widget(); delete i; } delete old; } }
 static int selectedId(QTableWidget *t) { return t && t->currentRow() >= 0 ? t->item(t->currentRow(), 0)->data(Qt::UserRole).toInt() : -1; }
 static void info(QWidget *p, const QString &title, const QString &text) { QMessageBox::information(p, title, text); }
+static QString orderStatusText(const QString &status) { static const QMap<QString,QString> names{{"PENDING","待预约"},{"RESERVED","已预约"},{"CHARGING","充电中"},{"UNPAID","待支付"},{"COMPLETED","已完成"},{"CANCELLED","已取消"}};return names.value(status,status); }
 
 MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &token, QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow), m_demoMode(demoMode), m_api(new ApiClient(this))
 {
@@ -37,11 +39,14 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
     m_api->setToken(token);
     connect(m_api, &ApiClient::succeeded, this, &MainWindow::handleApiSuccess);
     connect(m_api, &ApiClient::failed, this, &MainWindow::handleApiFailure);
+    ui->navigationList->insertItem(3, QStringLiteral("▣  订单管理"));
     ui->stackedWidget->addWidget(createDashboard());
     ui->stackedWidget->addWidget(createPilePage());
     ui->stackedWidget->addWidget(createStationPage());
+    ui->stackedWidget->addWidget(createOrderPage());
     ui->stackedWidget->addWidget(createUserPage());
     connect(ui->navigationList, &QListWidget::currentRowChanged, ui->stackedWidget, &QStackedWidget::setCurrentIndex);
+    connect(ui->navigationList, &QListWidget::currentRowChanged, this, [this]{refreshLiveData();});
     ui->navigationList->setCurrentRow(0);
     ui->statusbar->showMessage(m_demoMode ? "内置演示数据模式" : "已连接 Qt 后端 · " + m_api->baseUrl());
     for(QLabel *label:ui->sidebar->findChildren<QLabel*>())if(label->text().contains("演示数据模式"))label->setText(m_demoMode?"管理员：admin\n演示数据模式":"管理员：admin\n真实后端模式");
@@ -50,6 +55,11 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
         refreshStations();
         refreshPiles();
         refreshUsers();
+        refreshOrders();
+        m_refreshTimer = new QTimer(this);
+        m_refreshTimer->setInterval(2000);
+        connect(m_refreshTimer, &QTimer::timeout, this, &MainWindow::refreshLiveData);
+        m_refreshTimer->start();
     }
 }
 MainWindow::~MainWindow() { delete ui; }
@@ -149,9 +159,9 @@ void MainWindow::refreshPiles(){if(!m_demoMode){QUrlQuery q;q.addQueryItem("page
 void MainWindow::showPileDetails(){int id=selectedId(m_pileTable);if(id<0){info(this,"提示","请先选择电桩");return;}if(!m_demoMode){m_api->get(QString("/admin/piles/%1").arg(id));return;}for(const auto&p:MockRepository::instance().piles())if(p.id==id){info(this,"电桩详情",QString("编号：%1\n站点：%2\n类型/功率：%3 / %4 kW\n状态：%5\n累计充电：%6 次\n累计时长：%7 小时\n最近心跳：%8\n\n最近状态日志：\n10:20 心跳正常\n09:56 状态同步\n08:31 订单结束").arg(p.number,p.station,p.type).arg(p.power).arg(p.status).arg(p.sessions).arg(p.minutes/60.0,0,'f',1).arg(p.heartbeat));return;}}
 void MainWindow::restartSelectedPile(){int id=selectedId(m_pileTable);if(id<0){info(this,"提示","请先选择电桩");return;}const QString status=m_pileTable->item(m_pileTable->currentRow(),4)->text();if(status!="FAULT"){QMessageBox::warning(this,"状态限制","仅故障（FAULT）电桩可以执行恢复操作");return;}if(QMessageBox::question(this,"恢复故障电桩","确定将所选故障电桩恢复为空闲状态吗？")!=QMessageBox::Yes)return;if(!m_demoMode){m_api->post(QString("/admin/piles/%1/restart").arg(id));return;}QString msg;bool ok=MockRepository::instance().restartPile(id,msg);if(ok)info(this,"操作成功",msg);else QMessageBox::warning(this,"操作失败",msg);refreshPiles();buildStatusChart();}
 
-QWidget *MainWindow::createStationPage(){auto*p=new QWidget;auto*v=new QVBoxLayout(p);v->addWidget(titleLabel("充电站管理"));auto*b=new QHBoxLayout;auto*detail=new QPushButton("站点及站内详情");auto*add=new QPushButton("新增站点");auto*edit=new QPushButton("修改站点");auto*ap=new QPushButton("新增电桩");b->addStretch();b->addWidget(detail);b->addWidget(add);b->addWidget(edit);b->addWidget(ap);v->addLayout(b);m_stationTable=new QTableWidget;m_stationTable->setColumnCount(8);m_stationTable->setHorizontalHeaderLabels({"名称","地址","坐标","电价(元/kWh)","总桩数","空闲数","在线率","状态"});m_stationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);m_stationTable->setSelectionBehavior(QAbstractItemView::SelectRows);m_stationTable->setEditTriggers(QAbstractItemView::NoEditTriggers);v->addWidget(m_stationTable);auto*pager=new QHBoxLayout;auto*prev=new QPushButton("上一页");auto*next=new QPushButton("下一页");m_stationPageLabel=new QLabel("第 1 / 1 页");pager->addStretch();pager->addWidget(prev);pager->addWidget(m_stationPageLabel);pager->addWidget(next);v->addLayout(pager);connect(prev,&QPushButton::clicked,this,[this]{if(m_stationPage>1){--m_stationPage;refreshStations();}});connect(next,&QPushButton::clicked,this,[this]{if(m_stationPage<m_stationPages){++m_stationPage;refreshStations();}});connect(detail,&QPushButton::clicked,this,&MainWindow::showStationDetails);connect(add,&QPushButton::clicked,this,[this]{editStation(true);});connect(edit,&QPushButton::clicked,this,[this]{editStation(false);});connect(ap,&QPushButton::clicked,this,&MainWindow::addPile);if(m_demoMode)refreshStations();return p;}
+QWidget *MainWindow::createStationPage(){auto*p=new QWidget;auto*v=new QVBoxLayout(p);v->addWidget(titleLabel("北京公共充电站"));auto*b=new QHBoxLayout;auto*detail=new QPushButton("查看站点详情");auto*add=new QPushButton("新增站点");auto*edit=new QPushButton("修改站点");auto*ap=new QPushButton("新增测试桩");b->addStretch();b->addWidget(detail);b->addWidget(add);b->addWidget(edit);b->addWidget(ap);v->addLayout(b);m_stationTable=new QTableWidget;m_stationTable->setColumnCount(9);m_stationTable->setHorizontalHeaderLabels({"名称","地址","行政区","运营商","备案接口（快/慢）","受管测试桩","空闲测试桩","测试电价","状态"});m_stationTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);m_stationTable->setSelectionBehavior(QAbstractItemView::SelectRows);m_stationTable->setEditTriggers(QAbstractItemView::NoEditTriggers);v->addWidget(m_stationTable);auto*pager=new QHBoxLayout;auto*prev=new QPushButton("上一页");auto*next=new QPushButton("下一页");m_stationPageLabel=new QLabel("第 1 / 1 页");pager->addStretch();pager->addWidget(prev);pager->addWidget(m_stationPageLabel);pager->addWidget(next);v->addLayout(pager);connect(prev,&QPushButton::clicked,this,[this]{if(m_stationPage>1){--m_stationPage;refreshStations();}});connect(next,&QPushButton::clicked,this,[this]{if(m_stationPage<m_stationPages){++m_stationPage;refreshStations();}});connect(detail,&QPushButton::clicked,this,&MainWindow::showStationDetails);connect(add,&QPushButton::clicked,this,[this]{editStation(true);});connect(edit,&QPushButton::clicked,this,[this]{editStation(false);});connect(ap,&QPushButton::clicked,this,&MainWindow::addPile);if(m_demoMode)refreshStations();return p;}
 void MainWindow::refreshStations(){if(!m_demoMode){m_api->get(QString("/admin/stations?page=%1&page_size=20").arg(m_stationPage));return;}auto&rows=MockRepository::instance().stations();const int total=int(rows.size());m_stationPages=qMax(1,(total+4)/5);m_stationPage=qMin(m_stationPage,m_stationPages);m_stationPageLabel->setText(QString("第 %1 / %2 页").arg(m_stationPage).arg(m_stationPages));m_stationTable->setRowCount(0);for(int k=(m_stationPage-1)*5;k<qMin(m_stationPage*5,total);++k){const auto&s=rows[k];int r=m_stationTable->rowCount();m_stationTable->insertRow(r);QStringList x{s.name,s.address,QString("%1, %2").arg(s.latitude,0,'f',4).arg(s.longitude,0,'f',4),QString::number(s.price,'f',2),QString::number(s.total),QString::number(s.idle),QString::number(s.onlineRate,'f',1)+"%",s.status};for(int i=0;i<x.size();++i)m_stationTable->setItem(r,i,new QTableWidgetItem(x[i]));m_stationTable->item(r,0)->setData(Qt::UserRole,s.id);}}
-void MainWindow::showStationDetails(){int id=selectedId(m_stationTable);if(id<0){info(this,"提示","请先选择站点");return;}if(!m_demoMode){int r=m_stationTable->currentRow();QString stationName=m_stationTable->item(r,0)->text();info(this,"站点详情",QString("%1\n地址：%2\n坐标：%3\n电价：¥%4/kWh\n总桩数：%5\n空闲数：%6\n在线率：%7\n状态：%8\n\n关闭此窗口后将自动进入电桩管理并筛选该站点。").arg(stationName,m_stationTable->item(r,1)->text(),m_stationTable->item(r,2)->text(),m_stationTable->item(r,3)->text(),m_stationTable->item(r,4)->text(),m_stationTable->item(r,5)->text(),m_stationTable->item(r,6)->text(),m_stationTable->item(r,7)->text()));int index=m_stationFilter->findData(id);if(index<0){m_stationFilter->addItem(stationName,id);index=m_stationFilter->count()-1;}m_stationFilter->setCurrentIndex(index);ui->navigationList->setCurrentRow(1);return;}for(const auto&s:MockRepository::instance().stations())if(s.id==id){QString piles;for(const auto&p:MockRepository::instance().piles())if(p.station==s.name)piles+=QString("\n• %1  %2  %3 kW").arg(p.number,p.status).arg(p.power);info(this,"站点详情",QString("%1\n地址：%2\n坐标：%3, %4\n电价：¥%5/kWh\n在线率：%6%\n\n站内电桩：%7").arg(s.name,s.address).arg(s.latitude).arg(s.longitude).arg(s.price,0,'f',2).arg(s.onlineRate,0,'f',1).arg(piles.isEmpty()?"\n暂无电桩":piles));return;}}
+void MainWindow::showStationDetails(){int id=selectedId(m_stationTable);if(id<0){info(this,"提示","请先选择站点");return;}if(!m_demoMode){int r=m_stationTable->currentRow();QString stationName=m_stationTable->item(r,0)->text();info(this,"站点详情",QString("%1\n地址：%2\n行政区：%3\n运营商：%4\n备案接口（快/慢）：%5\n受管测试桩：%6\n空闲测试桩：%7\n测试电价：%8\n状态：%9\n\n公共数据不提供实时空闲状态；受管测试桩仅用于课程演示。").arg(stationName,m_stationTable->item(r,1)->text(),m_stationTable->item(r,2)->text(),m_stationTable->item(r,3)->text(),m_stationTable->item(r,4)->text(),m_stationTable->item(r,5)->text(),m_stationTable->item(r,6)->text(),m_stationTable->item(r,7)->text(),m_stationTable->item(r,8)->text()));int index=m_stationFilter->findData(id);if(index<0){m_stationFilter->addItem(stationName,id);index=m_stationFilter->count()-1;}m_stationFilter->setCurrentIndex(index);return;}for(const auto&s:MockRepository::instance().stations())if(s.id==id){QString piles;for(const auto&p:MockRepository::instance().piles())if(p.station==s.name)piles+=QString("\n• %1  %2  %3 kW").arg(p.number,p.status).arg(p.power);info(this,"站点详情",QString("%1\n地址：%2\n坐标：%3, %4\n电价：¥%5/kWh\n在线率：%6%\n\n站内电桩：%7").arg(s.name,s.address).arg(s.latitude).arg(s.longitude).arg(s.price,0,'f',2).arg(s.onlineRate,0,'f',1).arg(piles.isEmpty()?"\n暂无电桩":piles));return;}}
 void MainWindow::editStation(bool create)
 {
     auto &list = MockRepository::instance().stations();
@@ -200,6 +210,35 @@ QWidget *MainWindow::createUserPage(){auto*p=new QWidget;auto*v=new QVBoxLayout(
 void MainWindow::refreshUsers(){if(!m_demoMode){QUrlQuery q;q.addQueryItem("page",QString::number(m_userPage));q.addQueryItem("page_size","20");if(!m_userSearch->text().trimmed().isEmpty())q.addQueryItem("phone_keyword",m_userSearch->text().trimmed());m_api->get("/admin/users?"+q.toString(QUrl::FullyEncoded));return;}QList<User> rows;for(const auto&u:MockRepository::instance().users())if(u.phone.contains(m_userSearch->text(),Qt::CaseInsensitive))rows.append(u);const int total=int(rows.size());m_userPages=qMax(1,(total+4)/5);m_userPage=qMin(m_userPage,m_userPages);m_userPageLabel->setText(QString("第 %1 / %2 页").arg(m_userPage).arg(m_userPages));m_userTable->setRowCount(0);for(int k=(m_userPage-1)*5;k<qMin(m_userPage*5,total);++k){const auto&u=rows[k];int r=m_userTable->rowCount();m_userTable->insertRow(r);QStringList x{QString::number(u.id),u.phone,u.nickname,"¥"+QString::number(u.balance,'f',2),u.registered,u.status,QString::number(u.orders)};for(int i=0;i<x.size();++i)m_userTable->setItem(r,i,new QTableWidgetItem(x[i]));m_userTable->item(r,0)->setData(Qt::UserRole,u.id);}}
 void MainWindow::showUserDetails(){int id=selectedId(m_userTable);if(id<0){info(this,"提示","请先选择用户");return;}if(!m_demoMode){m_api->get(QString("/admin/users/%1").arg(id));return;}for(const auto&u:MockRepository::instance().users())if(u.id==id){info(this,"用户详情",QString("用户ID：%1\n手机号：%2\n昵称：%3\n余额：¥%4\n状态：%5\n\n订单数：%6\n累计消费：¥%7\n最近订单：#20260903086 已完成 ¥42.60\n充值摘要：2026-08-30 +¥200.00").arg(u.id).arg(u.phone,u.nickname).arg(u.balance,0,'f',2).arg(u.status).arg(u.orders).arg(u.spent,0,'f',2));return;}}
 void MainWindow::toggleUserStatus(){int id=selectedId(m_userTable);if(id<0){info(this,"提示","请先选择用户");return;}QString current=m_userTable->item(m_userTable->currentRow(),5)->text();bool freeze=current=="NORMAL";QString verb=freeze?"冻结":"解冻";QString phone=m_userTable->item(m_userTable->currentRow(),1)->text();if(QMessageBox::question(this,verb+"确认",QString("确定%1用户 %2 吗？\n\n冻结操作会由后端检查该用户是否存在未完成订单；重复操作按幂等成功处理。").arg(verb,phone))!=QMessageBox::Yes)return;if(!m_demoMode){m_api->post(QString("/admin/users/%1/%2").arg(id).arg(freeze?"freeze":"unfreeze"));return;}for(auto&u:MockRepository::instance().users())if(u.id==id){if(freeze&&u.hasActiveOrder){QMessageBox::warning(this,"操作冲突","用户存在未完成订单，暂时不能冻结");return;}u.status=freeze?"FROZEN":"NORMAL";refreshUsers();info(this,"操作成功","用户已"+verb);return;}}
+
+QWidget *MainWindow::createOrderPage()
+{
+    auto *page=new QWidget;auto *layout=new QVBoxLayout(page);auto *head=new QHBoxLayout;
+    head->addWidget(titleLabel("订单管理"));head->addStretch();auto *live=new QLabel("● 每 2 秒实时更新");live->setStyleSheet("color:#0d9488;font-weight:600");head->addWidget(live);layout->addLayout(head);
+    auto *filters=new QHBoxLayout;m_orderStatusFilter=new QComboBox;m_orderStatusFilter->addItem("全部状态",QString());
+    for(const auto &status:QStringList{"PENDING","RESERVED","CHARGING","UNPAID","COMPLETED","CANCELLED"})m_orderStatusFilter->addItem(orderStatusText(status),status);
+    m_orderSearch=new QLineEdit;m_orderSearch->setPlaceholderText("订单号、手机号或站点名称");filters->addWidget(m_orderStatusFilter);filters->addWidget(m_orderSearch,1);layout->addLayout(filters);
+    m_orderTable=new QTableWidget;m_orderTable->setColumnCount(8);m_orderTable->setHorizontalHeaderLabels({"订单号","用户","站点","电桩","状态","电量(kWh)","金额","更新时间"});m_orderTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);m_orderTable->setSelectionBehavior(QAbstractItemView::SelectRows);m_orderTable->setEditTriggers(QAbstractItemView::NoEditTriggers);layout->addWidget(m_orderTable);
+    auto *pager=new QHBoxLayout;auto *prev=new QPushButton("上一页");auto *next=new QPushButton("下一页");m_orderPageLabel=new QLabel("第 1 / 1 页");pager->addStretch();pager->addWidget(prev);pager->addWidget(m_orderPageLabel);pager->addWidget(next);layout->addLayout(pager);
+    connect(prev,&QPushButton::clicked,this,[this]{if(m_orderPage>1){--m_orderPage;refreshOrders();}});connect(next,&QPushButton::clicked,this,[this]{if(m_orderPage<m_orderPages){++m_orderPage;refreshOrders();}});
+    connect(m_orderStatusFilter,&QComboBox::currentIndexChanged,this,[this]{m_orderPage=1;refreshOrders();});connect(m_orderSearch,&QLineEdit::textChanged,this,[this]{m_orderPage=1;refreshOrders();});return page;
+}
+
+void MainWindow::refreshOrders()
+{
+    if(m_demoMode||!m_orderTable)return;
+    QUrlQuery query;query.addQueryItem("page",QString::number(m_orderPage));query.addQueryItem("page_size","20");
+    if(!m_orderStatusFilter->currentData().toString().isEmpty())query.addQueryItem("status",m_orderStatusFilter->currentData().toString());
+    if(!m_orderSearch->text().trimmed().isEmpty())query.addQueryItem("keyword",m_orderSearch->text().trimmed());
+    m_api->get("/admin/orders?"+query.toString(QUrl::FullyEncoded));
+}
+
+void MainWindow::refreshLiveData()
+{
+    if(m_demoMode)return;
+    refreshOrders();refreshUsers();const int page=ui->navigationList->currentRow();
+    if(page==0)loadDashboard(m_trendDays);else if(page==1)refreshPiles();else if(page==2)refreshStations();
+}
 
 void MainWindow::loadDashboard(int days)
 {
@@ -274,7 +313,12 @@ void MainWindow::handleApiSuccess(const QString &path, const QJsonValue &data, c
     }
     if (path.startsWith("/admin/stations?")) {
         const QJsonObject d=data.toObject();const QJsonArray items=d.value("items").toArray();const QJsonObject pg=d.value("pagination").toObject();m_stationPages=qMax(1,pg.value("total_pages").toInt(1));m_stationPage=pg.value("page").toInt(m_stationPage);m_stationPageLabel->setText(QString("第 %1 / %2 页 · 共 %3 条").arg(m_stationPage).arg(m_stationPages).arg(pg.value("total").toInt()));m_stationTable->setRowCount(0);
-        bool rebuildFilter=m_stationFilter->count()==1;for(const auto&v:items){const auto s=v.toObject();int r=m_stationTable->rowCount();m_stationTable->insertRow(r);QString coords=(s.value("latitude").isNull()||s.value("longitude").isNull())?"未配置":QString("%1, %2").arg(s.value("latitude").toDouble(),0,'f',6).arg(s.value("longitude").toDouble(),0,'f',6);QString price=s.value("price_cents_per_kwh").isNull()?"未配置":QString::number(s.value("price_cents_per_kwh").toDouble()/100.0,'f',2);QStringList x{s.value("name").toString(),s.value("address").toString(),coords,price,QString::number(s.value("total_piles").toInt()),QString::number(s.value("available_piles").toInt()),QString::number(s.value("online_rate").toDouble(),'f',1)+"%",s.value("status").toString()};for(int i=0;i<x.size();++i)m_stationTable->setItem(r,i,new QTableWidgetItem(x[i]));int id=s.value("id").toInt();m_stationTable->item(r,0)->setData(Qt::UserRole,id);if(rebuildFilter)m_stationFilter->addItem(s.value("name").toString(),id);}return;
+        bool rebuildFilter=m_stationFilter->count()==1;for(const auto&v:items){const auto s=v.toObject();int r=m_stationTable->rowCount();m_stationTable->insertRow(r);QString price=s.value("price_cents_per_kwh").isNull()?"未公开":QString("¥%1").arg(s.value("price_cents_per_kwh").toDouble()/100.0,0,'f',2);QStringList x{s.value("name").toString(),s.value("address").toString(),s.value("district").toString(),s.value("operator_name").toString(),QString("%1 / %2").arg(s.value("fast_connector_count").toInt()).arg(s.value("slow_connector_count").toInt()),QString::number(s.value("total_piles").toInt()),QString::number(s.value("available_piles").toInt()),price,s.value("status").toString()};for(int i=0;i<x.size();++i)m_stationTable->setItem(r,i,new QTableWidgetItem(x[i]));int id=s.value("id").toInt();m_stationTable->item(r,0)->setData(Qt::UserRole,id);if(rebuildFilter)m_stationFilter->addItem(s.value("name").toString(),id);}return;
+    }
+    if(path.startsWith("/admin/orders?")) {
+        const auto object=data.toObject();const auto page=object.value("pagination").toObject();m_orderPages=qMax(1,page.value("total_pages").toInt(1));m_orderPage=page.value("page").toInt(m_orderPage);m_orderPageLabel->setText(QString("第 %1 / %2 页 · 共 %3 条").arg(m_orderPage).arg(m_orderPages).arg(page.value("total").toInt()));m_orderTable->setRowCount(0);
+        for(const auto &value:object.value("items").toArray()){const auto item=value.toObject(),order=item.value("order").toObject(),user=item.value("user").toObject(),station=order.value("station").toObject(),pile=order.value("pile").toObject();const int row=m_orderTable->rowCount();m_orderTable->insertRow(row);QStringList cells{order.value("order_no").toString(),maskedPhone(user.value("phone").toString())+" · "+user.value("nickname").toString(),station.value("name").toString(),pile.value("pile_no").toString(),orderStatusText(order.value("status").toString()),QString::number(order.value("energy_wh").toDouble()/1000.0,'f',2),QString("¥%1").arg(order.value("amount_cents").toDouble()/100.0,0,'f',2),order.value("updated_at").toString()};for(int i=0;i<cells.size();++i)m_orderTable->setItem(row,i,new QTableWidgetItem(cells[i]));m_orderTable->item(row,0)->setData(Qt::UserRole,order.value("id").toInt());}
+        return;
     }
     if (path.startsWith("/admin/users?")) {
         const QJsonObject d=data.toObject();const QJsonArray items=d.value("items").toArray();const QJsonObject pg=d.value("pagination").toObject();m_userPages=qMax(1,pg.value("total_pages").toInt(1));m_userPage=pg.value("page").toInt(m_userPage);m_userPageLabel->setText(QString("第 %1 / %2 页 · 共 %3 条").arg(m_userPage).arg(m_userPages).arg(pg.value("total").toInt()));m_userTable->setRowCount(0);for(const auto&v:items){const auto u=v.toObject();int r=m_userTable->rowCount();m_userTable->insertRow(r);QStringList x{QString::number(u.value("id").toInt()),maskedPhone(u.value("phone").toString()),u.value("nickname").toString(),QString("¥%1").arg(u.value("balance_cents").toDouble()/100.0,0,'f',2),u.value("created_at").toString(),u.value("status").toString(),QString::number(u.value("order_count").toInt())};for(int i=0;i<x.size();++i)m_userTable->setItem(r,i,new QTableWidgetItem(x[i]));m_userTable->item(r,0)->setData(Qt::UserRole,u.value("id").toInt());}return;
@@ -290,5 +334,6 @@ void MainWindow::handleApiFailure(const QString &path, int httpStatus, int code,
 {
     Q_UNUSED(httpStatus);
     ui->statusbar->showMessage(QString("Qt Socket 请求失败 · code %1").arg(code), 8000);
+    if (path.startsWith("/admin/orders?") || path.startsWith("/admin/users?") || path == "/admin/overview" || path == "/dashboard/pile-status" || path.startsWith("/admin/revenue-trend?")) return;
     QMessageBox::warning(this, "操作失败", message + QString("\n\n操作：%1\n业务码：%2").arg(path).arg(code));
 }

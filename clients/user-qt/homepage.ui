@@ -36,7 +36,7 @@
    <item>
     <widget class="QLabel" name="descLabel">
      <property name="text">
-      <string>按「我的位置」查询附近充电站。点位置可切换区域或搜索地址。</string>
+      <string>地图展示当前位置和北京真实公共充电站；编号与下方驾车距离推荐一致。</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -50,7 +50,7 @@
      </property>
      <property name="text">
       <string>我的位置
-北京市东城区（模拟定位）</string>
+北京市中心（可修改）</string>
      </property>
     </widget>
    </item>

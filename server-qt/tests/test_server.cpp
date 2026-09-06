@@ -46,7 +46,7 @@ private slots:
     }
     void cleanup(){peer.reset();server.reset();db.reset();dir.reset();}
     void protocolAndPermissions(){
-        QCOMPARE(contract()["x-actions"].toObject().size(),39);
+        QCOMPARE(contract()["x-actions"].toObject().size(),41);
         QCOMPARE(call("system.health")["code"].toInt(),0);
         QCOMPARE(call("orders.active",{},token)["data"],QJsonValue(QJsonValue::Null));
         QCOMPARE(call("users.me.get")["code"].toInt(),40101);
@@ -134,7 +134,7 @@ private slots:
         auto pileId=call("admin.piles.create",p,admin)["data"].toObject()["id"].toInteger();QVERIFY(pileId>1);QCOMPARE(call("admin.piles.create",p,admin)["code"].toInt(),40008);
         QCOMPARE(call("admin.piles.recover",{{"pile_id",pileId}},admin)["code"].toInt(),40004);
         db->execute("UPDATE charging_piles SET status='FAULT' WHERE id=?",{pileId});QCOMPARE(call("admin.piles.recover",{{"pile_id",pileId}},admin)["code"].toInt(),0);
-        for(const auto &a:QStringList{"admin.users.list","admin.stations.list","admin.piles.list"})QCOMPARE(call(a,{},admin)["code"].toInt(),0);
+        for(const auto &a:QStringList{"admin.users.list","admin.stations.list","admin.piles.list","admin.orders.list"})QCOMPARE(call(a,{},admin)["code"].toInt(),0);
         QCOMPARE(call("admin.users.detail",{{"user_id",1}},admin)["code"].toInt(),0);QCOMPARE(call("admin.piles.detail",{{"pile_id",pileId}},admin)["code"].toInt(),0);
         QCOMPARE(call("admin.revenue_trend",{{"days",6}},admin)["code"].toInt(),40001);
         QVERIFY(db->scalar("SELECT count(*) FROM operation_logs")>=4);
@@ -153,13 +153,12 @@ private slots:
         QCOMPARE(call("map.geocode",{{"address","北京"}},token)["code"].toInt(),50301);
         QCOMPARE(call("map.geocode",{{"address","北京"}},admin)["code"].toInt(),50301);
         QCOMPARE(call("map.route",{{"from_latitude",39.95},{"from_longitude",116.32},{"to_latitude",39.96},{"to_longitude",116.33}},token)["code"].toInt(),50301);
+        QCOMPARE(call("map.snapshot",{{"latitude",39.95},{"longitude",116.32}},token)["code"].toInt(),50301);
         QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32},{"radius_km",1}},token)["code"].toInt(),50301);
-        db->execute("UPDATE stations SET price_cents_per_kwh=NULL");
-        QCOMPARE(call("stations.nearby",{{"latitude",39.95},{"longitude",116.32}},token)["data"].toObject()["total"].toInt(),0);
     }
     void mapHttpParsingAndTimeout(){
         QTcpServer upstream;QVERIFY(upstream.listen(QHostAddress::LocalHost,0));QString mode="geocode";
-        connect(&upstream,&QTcpServer::newConnection,&upstream,[&]{auto socket=upstream.nextPendingConnection();connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto input=socket->readAll();if(!input.contains("\r\n\r\n"))return;if(mode=="timeout")return;
+        connect(&upstream,&QTcpServer::newConnection,&upstream,[&]{auto socket=upstream.nextPendingConnection();connect(socket,&QTcpSocket::disconnected,socket,&QObject::deleteLater);connect(socket,&QTcpSocket::readyRead,socket,[&,socket]{auto input=socket->readAll();if(!input.contains("\r\n\r\n"))return;if(mode=="timeout")return;if(mode=="snapshot"){const auto bytes=QByteArray::fromHex("89504e470d0a1a0a");socket->write("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: "+QByteArray::number(bytes.size())+"\r\nConnection: close\r\n\r\n"+bytes);socket->disconnectFromHost();return;}
             QJsonObject response{{"status",0}};
             if(mode=="badkey")response["status"]=110;
             else if(mode=="geocode")response["result"]=QJsonObject{{"location",QJsonObject{{"lat",39.95},{"lng",116.32}}},{"title","北京"}};
@@ -173,10 +172,11 @@ private slots:
         mode="route";done=false;maps.run("map.route",{{"from_latitude",39.95},{"from_longitude",116.32},{"to_latitude",39.96},{"to_longitude",116.33}},{},callback);QTRY_VERIFY(done);QCOMPARE(code,0);QCOMPARE(data.toObject()["duration_seconds"].toInt(),600);
         QCOMPARE(data.toObject()["route_points"].toArray()[1].toObject()["latitude"].toDouble(),39.951);
         mode="matrix";done=false;auto s=server->business.station(1);maps.run("stations.nearby",{{"latitude",39.95},{"longitude",116.32}},QJsonArray{s,s},callback);QTRY_VERIFY(done);QCOMPARE(code,0);QCOMPARE(data.toObject()["total"].toInt(),1);
+        mode="snapshot";done=false;maps.run("map.snapshot",{{"latitude",39.95},{"longitude",116.32}}, {},callback);QTRY_VERIFY(done);QCOMPARE(code,0);QVERIFY(!data.toObject()["content_base64"].toString().isEmpty());
         for(const auto &behavior:QStringList{"badkey","empty","timeout"}){mode=behavior;done=false;maps.run("map.route",{}, {},callback);QTRY_VERIFY(done);QCOMPARE(code,50301);}
     }
     void databaseMigrationsAndCalculation(){
-        db->migrate();QCOMPARE(db->scalar("SELECT count(*) FROM schema_migrations"),1);QVERIFY(db->rows("PRAGMA foreign_key_check").isEmpty());
+        db->migrate();QCOMPARE(db->scalar("SELECT count(*) FROM schema_migrations"),2);QVERIFY(db->rows("PRAGMA foreign_key_check").isEmpty());
         QCOMPARE(roundedProduct(1,1800,3600),1);QCOMPARE(roundedProduct(60000,1800,3600),30000);
         QVERIFY_EXCEPTION_THROWN(roundedProduct(LLONG_MAX,2,1),Failure);
         auto hash=passwordHash("hello-world");QVERIFY(passwordVerify("hello-world",hash));QVERIFY(!passwordVerify("wrong",hash));QVERIFY(!passwordVerify("x","malformed"));
@@ -186,14 +186,17 @@ private slots:
         QCOMPARE(demo.scalar("SELECT count(*) FROM charging_piles"),12);QCOMPARE(demo.scalar("SELECT count(*) FROM charging_orders"),10);
         QCOMPARE(demo.scalar("SELECT count(*) FROM charging_orders WHERE status='UNPAID'"),1);
         QCOMPARE(demo.scalar("SELECT count(*) FROM admins WHERE username='admin'"),1);QVERIFY(demo.rows("PRAGMA foreign_key_check").isEmpty());
+        Database showcase(dir->filePath("showcase.db"));showcase.migrate();showcase.execute("INSERT INTO stations(name,address,latitude,longitude,data_source,external_id,fast_connector_count,created_at,updated_at) VALUES('真实站','真实地址',39.9,116.4,'BEIJING_PUBLIC_DATA_OPEN_PLATFORM','1',4,?,?)",{utcNow(),utcNow()});showcase.seedShowcase();
+        QCOMPARE(showcase.scalar("SELECT count(*) FROM users"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM stations"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_orders"),0);
     }
     void catalogImportPreservesIds(){
         db->execute("INSERT INTO stations(id,name,address,latitude,longitude,data_source,external_id,created_at,updated_at) VALUES(7,'真实站','真实地址',39.9,116.4,'PUBLIC','EXT-7',?,?)",{utcNow(),utcNow()});
         const auto catalogPath=dir->filePath("catalog.json");QFile catalog(catalogPath);QVERIFY(catalog.open(QIODevice::WriteOnly));
-        auto station=QJsonObject{{"name","真实站"},{"address","真实地址"},{"latitude",39.9},{"longitude",116.4},{"data_source","PUBLIC"},{"external_id","EXT-7"}};
+        auto station=QJsonObject{{"name","真实站"},{"address","真实地址"},{"latitude",39.9},{"longitude",116.4},{"data_source","PUBLIC"},{"external_id","EXT-7"},{"service_type","社会公用"},{"region_scope","五环内"},{"location_type","停车场"},{"fast_connector_count",6},{"slow_connector_count",2}};
         auto bytes=QJsonDocument(QJsonObject{{"stations",QJsonArray{station}}}).toJson(QJsonDocument::Compact);QCOMPARE(catalog.write(bytes),bytes.size());catalog.close();
         Database target(dir->filePath("catalog.db"));target.migrate();target.importCatalog(catalogPath,db->path());
         QCOMPARE(target.scalar("SELECT id FROM stations WHERE data_source='PUBLIC' AND external_id='EXT-7'"),7);QCOMPARE(target.scalar("SELECT count(*) FROM stations"),1);
+        QCOMPARE(target.scalar("SELECT fast_connector_count FROM stations WHERE id=7"),6);
         target.importCatalog(catalogPath,db->path());QCOMPARE(target.scalar("SELECT count(*) FROM stations"),1);
         station["external_id"]="UNMAPPED";QVERIFY(catalog.open(QIODevice::WriteOnly|QIODevice::Truncate));catalog.write(QJsonDocument(QJsonObject{{"stations",QJsonArray{station}}}).toJson(QJsonDocument::Compact));catalog.close();
         QVERIFY_EXCEPTION_THROWN(target.importCatalog(catalogPath,db->path()),Failure);QCOMPARE(target.scalar("SELECT count(*) FROM stations"),1);

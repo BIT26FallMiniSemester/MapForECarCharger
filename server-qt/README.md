@@ -23,6 +23,18 @@ server-qt/build/charger-server --database runtime/demo.db --seed-demo \
 
 The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Geocoding, nearby route distance and route planning all require a Tencent Map WebService key. A missing, disabled or rejected key returns business code `50301`; the server does not fabricate local distances.
 
+For the course showcase, prefer the real Beijing catalog instead of `--seed-demo`:
+
+```bash
+server-qt/build/charger-server --database runtime/showcase.db --migrate-only
+server-qt/build/charger-server --database runtime/showcase.db \
+  --import-catalog backend/data/processed/beijing_public_charging_stations.json
+server-qt/build/charger-server --database runtime/showcase.db \
+  --seed-showcase --migrate-only
+```
+
+`--seed-showcase` requires an otherwise empty business database. It keeps all 2,614 real catalog stations, adds only user `13900000000`, and attaches one clearly named course test pile to a real station. No other users, fake stations, orders or device states are generated.
+
 ## Database initialization and migration
 
 Create a new target database:

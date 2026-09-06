@@ -8,7 +8,7 @@ add_library(charger_core src/common.cpp src/database.cpp src/business.cpp src/ma
 target_include_directories(charger_core PUBLIC src)
 target_link_libraries(charger_core PUBLIC Qt6::Core Qt6::Network Qt6::Sql)
 target_compile_options(charger_core PRIVATE -Wall -Wextra -Wpedantic -Werror)
-qt_add_resources(charger_core resources PREFIX / FILES migrations/001_initial.sql)
+qt_add_resources(charger_core resources PREFIX / FILES migrations/001_initial.sql migrations/002_catalog_details.sql)
 qt_add_resources(charger_core socket_contract PREFIX / BASE ../contracts FILES ../contracts/schemas/socket.json)
 add_executable(charger-server src/main.cpp)
 target_link_libraries(charger-server PRIVATE charger_core)

@@ -30,6 +30,7 @@ public:
     void recharge(double amountYuan);
     void fetchRechargeRecords();
     void fetchNearbyStations(double latitude, double longitude, double radiusKm);
+    void fetchMapSnapshot(double latitude, double longitude);
     void geocode(const QString &address);
     void fetchStationPiles(qint64 stationId);
     void fetchActiveOrder();
@@ -52,6 +53,7 @@ signals:
     void rechargeSucceeded(qint64 balanceAfterCents, const RechargeRecord &record);
     void rechargeRecordsReady(const QVector<RechargeRecord> &records);
     void nearbyStationsReady(const QVector<StationSummary> &stations);
+    void mapSnapshotReady(const QByteArray &png);
     void locationResolved(double latitude, double longitude, const QString &displayName);
     void stationPilesReady(qint64 stationId, const QVector<ChargingPile> &piles);
     void activeOrderReady(bool hasOrder, const ChargingOrder &order);

@@ -13,6 +13,7 @@ int main(int argc,char **argv){
     parser.addOption({"catalog-id-source","Preserve station IDs from a read-only legacy database","database"});
     parser.addOption({"create-admin","Create administrator using INITIAL_ADMIN_PASSWORD environment variable and exit","username"});
     parser.addOption({"seed-demo","Create idempotent Qt-only demonstration data (admin/admin123)"});
+    parser.addOption({"seed-showcase","Add one test user and one test pile to an imported Beijing catalog"});
     parser.process(app);
     try{
         Database db(QFileInfo(parser.value("database")).absoluteFilePath());db.migrate();
@@ -21,6 +22,7 @@ int main(int argc,char **argv){
         if(parser.isSet("import-catalog")){db.importCatalog(parser.value("import-catalog"),parser.value("catalog-id-source"));std::cout<<"Catalog import complete\n";return 0;}
         if(parser.isSet("create-admin")){db.createAdmin(parser.value("create-admin"),qEnvironmentVariable("INITIAL_ADMIN_PASSWORD"));std::cout<<"Administrator initialized (existing credentials preserved)\n";return 0;}
         if(parser.isSet("seed-demo")){db.seedDemo();std::cout<<"Qt demo data ready (admin/admin123, user 13900000000)\n";}
+        if(parser.isSet("seed-showcase")){db.seedShowcase();std::cout<<"Real Beijing showcase ready (admin/admin123, user 13900000000)\n";}
         if(parser.isSet("migrate-only"))return 0;
         bool ok=false;int port=parser.value("port").toInt(&ok);QHostAddress address(parser.value("host"));if(!ok||port<1||port>65535||address.isNull())fail(40001);
         Server server(db,qEnvironmentVariable("TENCENT_MAP_KEY"));if(!server.listen(address,quint16(port)))fail(50000);

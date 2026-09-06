@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -75,7 +76,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_api, &ApiClient::requestFinished, this, [this]() { setBusy(false); });
     connect(m_api, &ApiClient::loginSucceeded, this, &MainWindow::onLoginSucceeded);
     connect(m_api, &ApiClient::apiFailed, this, &MainWindow::onApiFailed);
-    connect(m_api, &ApiClient::nearbyStationsReady, ui->homePage, &HomePage::showStations);
+    connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations){ui->homePage->showStations(stations);QTimer::singleShot(3000,this,[this]{m_api->fetchMapSnapshot(ui->homePage->latitude(),ui->homePage->longitude());});});
+    connect(m_api, &ApiClient::mapSnapshotReady, ui->homePage, &HomePage::showMap);
     connect(m_api, &ApiClient::profileReady, this, &MainWindow::applyUser);
     connect(m_api, &ApiClient::nicknameUpdated, this, [this](const User &user) {
         applyUser(user);
@@ -96,6 +98,8 @@ MainWindow::MainWindow(QWidget *parent)
             [this](const QString &context, int, const QString &message) {
         if (context == QStringLiteral("nearby"))
             ui->homePage->showHint(message);
+        else if(context==QStringLiteral("map"))
+            ui->homePage->showMapError(message);
     });
 }
 
@@ -127,7 +131,7 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
     QMessageBox::information(this, QStringLiteral("欢迎"),
                              tip + QStringLiteral("\n%1").arg(user.nickname));
     ui->homePage->useSimulatedGps();
-    ui->homePage->showHint(QStringLiteral("Qt 后端已连接，使用北京演示定位"));
+    ui->homePage->showHint(QStringLiteral("Qt 后端已连接，正在加载北京真实站点"));
     onQueryNearby();
     m_chargingPage->restoreActiveOrder();
 }
@@ -357,6 +361,7 @@ void MainWindow::applyTheme()
         #chargeCard #cardTitle, #chargeStatus, #chargeMetrics { color: white; }
         #chargeMetrics { font-size: 18px; font-weight: 700; line-height: 1.5; }
         #routeInfo { color: #b45309; font-weight: 600; }
+        #mapDetail { background:#ffffff; color:#315b54; border:1px solid #c9e4dc; border-radius:12px; padding:10px 14px; }
         QCheckBox { color: #3f5c55; spacing: 8px; }
         QScrollArea { background: transparent; border: none; }
         QDialog { background: #f4f7f2; }

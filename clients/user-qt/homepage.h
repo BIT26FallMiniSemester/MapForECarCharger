@@ -3,6 +3,7 @@
 
 #include "models.h"
 
+#include <QByteArray>
 #include <QVector>
 #include <QWidget>
 
@@ -29,6 +30,8 @@ public:
     void showStations(const QVector<StationSummary> &stations);
     void showHint(const QString &text);
     void setLocation(double lat, double lng, const QString &displayName);
+    void showMap(const QByteArray &png);
+    void showMapError(const QString &message);
     void useSimulatedGps();
 
 signals:
@@ -41,12 +44,15 @@ private:
     void setupRadiusControl();
     void setRadiusKm(int km);
     void clearCards();
+    void focusStation(const StationSummary &station);
 
     Ui::HomePage *ui;
     double m_lat = 39.9042;
     double m_lng = 116.4074;
     int m_radiusKm = 10;
-    QString m_displayName = QStringLiteral("北京市东城区（模拟定位）");
+    QString m_displayName = QStringLiteral("北京市中心（可修改）");
+    class StationMapWidget *m_map = nullptr;
+    class QLabel *m_mapDetail = nullptr;
 };
 
 #endif

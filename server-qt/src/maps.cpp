@@ -28,6 +28,18 @@ public:
             try{callback(doc.object()["result"].toObject());}catch(const Failure&){finish({},50301);}
         });
     }
+    void getImage(const QString &path,QUrlQuery params){
+        if(finished)return;
+        params.addQueryItem("key",key);auto url=base;url.setPath(path);url.setQuery(params);
+        QNetworkRequest request(url);request.setTransferTimeout(timeout);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);
+        reply=manager.get(request);auto r=reply;
+        auto timer=new QTimer(r);timer->setSingleShot(true);connect(timer,&QTimer::timeout,r,[r]{r->abort();});timer->start(timeout);
+        connect(r,&QNetworkReply::finished,this,[this,r,timer]{
+            timer->stop();r->deleteLater();if(finished)return;const auto bytes=r->readAll();const int httpStatus=r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if(r->error()!=QNetworkReply::NoError||httpStatus!=200||bytes.size()>700000||!bytes.startsWith(QByteArray::fromHex("89504e470d0a1a0a"))){qWarning().noquote()<<"Tencent static map request failed:"<<"network="<<int(r->error())<<r->errorString()<<"http="<<httpStatus<<"bytes="<<bytes.size();finish({},50301);return;}
+            finish(QJsonObject{{"content_type","image/png"},{"content_base64",QString::fromLatin1(bytes.toBase64())},{"width",600},{"height",300}});
+        });
+    }
     void batch(){
         if(offset>=stations.size()){
             if(items.isEmpty()&&!stations.isEmpty()){finish({},50301);return;}
@@ -56,11 +68,18 @@ void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,
     if(a=="stations.nearby"&&stations.isEmpty()){done(QJsonObject{{"items",QJsonArray{}},{"page",d["page"].toInteger(1)},{"page_size",d["page_size"].toInteger(20)},{"total",0}},0);return;}
     if(key.trimmed().isEmpty()){done({},50301);return;}
     auto job=new MapJob(network,key,base,requestTimeout,totalTimeout,done,this);job->data=d;job->stations=stations;
-    if(a=="stations.nearby"){job->batch();return;}
+    if(a=="stations.nearby"){
+        QList<QPair<double,QJsonObject>> candidates;const double lat=d["latitude"].toDouble(),lng=d["longitude"].toDouble(),lngScale=std::cos(lat*0.017453292519943295);
+        for(const auto &value:stations){const auto station=value.toObject();const double dy=station["latitude"].toDouble()-lat,dx=(station["longitude"].toDouble()-lng)*lngScale;candidates.append({dx*dx+dy*dy,station});}
+        std::sort(candidates.begin(),candidates.end(),[](const auto &left,const auto &right){return left.first<right.first;});job->stations={};
+        for(int i=0;i<qMin(5,candidates.size());++i)job->stations.append(candidates[i].second);
+        job->batch();return;
+    }
     if(a=="map.geocode") {
         auto address=d["address"].toString().trimmed();if(address.isEmpty()){job->finish({},40001);return;}
         job->get("/ws/geocoder/v1/",QUrlQuery{{"address",address}},[job,address](auto result){auto loc=result["location"].toObject();job->finish(QJsonObject{{"latitude",number(loc["lat"],-90,90)},{"longitude",number(loc["lng"],-180,180)},{"formatted_address",result["title"].toString(address)}});});return;
     }
+    if(a=="map.snapshot") {job->getImage("/ws/staticmap/v2/",QUrlQuery{{"center",MapJob::point(d,"latitude","longitude")},{"zoom",QString::number(d["zoom"].toInt(12))},{"size","600*300"},{"maptype","roadmap"}});return;}
     const auto mode=d["mode"].toString("driving");
     job->get("/ws/direction/v1/"+mode,QUrlQuery{{"from",MapJob::point(d,"from_latitude","from_longitude")},{"to",MapJob::point(d,"to_latitude","to_longitude")}},[job,mode](auto result){
         auto routes=result["routes"].toArray();if(routes.isEmpty())fail(50301);auto r=routes[0].toObject();auto poly=r["polyline"].toArray();if(poly.size()<2||poly.size()%2)fail(50301);

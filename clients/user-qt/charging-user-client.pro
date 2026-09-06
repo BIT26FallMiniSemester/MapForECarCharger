@@ -11,6 +11,7 @@ SOURCES += \
     apiclient.cpp \
     loginpage.cpp \
     homepage.cpp \
+    stationmapwidget.cpp \
     profilepage.cpp \
     locationdialog.cpp \
     ../common/socketclient.cpp
@@ -22,6 +23,7 @@ HEADERS += \
     models.h \
     loginpage.h \
     homepage.h \
+    stationmapwidget.h \
     profilepage.h \
     locationdialog.h \
     ../common/socketclient.h

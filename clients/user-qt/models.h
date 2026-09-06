@@ -29,12 +29,16 @@ struct StationSummary {
     qint64 id = 0;
     QString name;
     QString address;
+    QString operatorName;
+    QString district;
     double latitude = 0;
     double longitude = 0;
     int priceCentsPerKwh = 0;   // 分/千瓦时，125 表示 1.25 元/度
     QString status;             // ACTIVE / INACTIVE
     int totalPiles = 0;
     int availablePiles = 0;
+    int fastConnectorCount = 0;
+    int slowConnectorCount = 0;
     double onlineRate = 0;
     double distanceKm = 0;      // 附近查询时由后端计算
 };
