@@ -19,7 +19,12 @@ public:
         connect(r,&QNetworkReply::finished,this,[this,r,callback,timer]{
             timer->stop();r->deleteLater();if(finished)return;
             auto doc=QJsonDocument::fromJson(r->readAll());
-            if(r->error()!=QNetworkReply::NoError||r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()!=200||!doc.isObject()||doc.object()["status"]!=0){finish({},50301);return;}
+            const int httpStatus=r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const int upstreamStatus=doc.isObject()?doc.object()["status"].toInt(-1):-1;
+            if(r->error()!=QNetworkReply::NoError||httpStatus!=200||!doc.isObject()||upstreamStatus!=0){
+                qWarning().noquote()<<"Tencent map request failed:"<<"network="<<int(r->error())<<r->errorString()<<"http="<<httpStatus<<"status="<<upstreamStatus<<"message="<<(doc.isObject()?doc.object()["message"].toString():QStringLiteral("invalid JSON"));
+                finish({},50301);return;
+            }
             try{callback(doc.object()["result"].toObject());}catch(const Failure&){finish({},50301);}
         });
     }

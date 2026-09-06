@@ -69,7 +69,7 @@ export TENCENT_MAP_KEY='configured-outside-git'
 server-qt/build/charger-server
 ```
 
-For the course development host, keep the secret outside Git in `/etc/map-for-ecar/server.env`, load it with `set -a; . /etc/map-for-ecar/server.env; set +a`, then start the server. The Key must have **WebService API** enabled in the Tencent Location console.
+For the course development host, keep the secret outside Git in `/etc/map-for-ecar/server.env`, load it with `set -a; . /etc/map-for-ecar/server.env; set +a`, then start the server. The Key must have **WebService API** enabled in the Tencent Location console. Enabling the product alone does not allocate request capacity: in **Quota Management → Account Quota**, allocate daily and concurrency quota to this Key for address geocoding, distance matrix and driving directions. Tencent status `121` means the Key has no remaining daily quota.
 
 Use a reachable `SERVER_HOST` for LAN integration. Plain TCP is for the controlled course network; use TLS before an untrusted-network deployment. Runtime database, avatar files, logs, keys, and build output are excluded from Git.
 

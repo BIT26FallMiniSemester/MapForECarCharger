@@ -1,14 +1,8 @@
-# MapForECarCharger
+# Qt Socket backend
 
-电动汽车充电管理课程项目，由用户端 Qt、PC 管理端 Qt、Qt/C++ Socket 后端和 SQLite 数据库组成。
+The runtime backend is a headless C++17/Qt 6 application. It uses `QTcpServer` and length-prefixed UTF-8 JSON for client messages, Qt SQL with the QSQLITE driver, and `QNetworkAccessManager` for Tencent Map HTTPS requests.
 
-新版后端位于 `server-qt/`，基于 C++17、Qt 6、CMake、QTcpServer、Qt SQL 和 QNetworkAccessManager。两个客户端通过“4 字节大端长度头 + UTF-8 JSON”的 TCP 协议调用后端，业务操作使用 `action` 标识。通信契约见 `contracts/socket-protocol.md`。
-
-核心演示流程为：登录或注册、模拟充值、查找站点、创建订单、预约、开始充电、动态查看电量和金额、结束充电、余额付款，以及管理端统计核对。
-
-`backend/` 保存原 Python/FastAPI 实现，供迁移核对和旧数据转换使用；它不是新版客户端的运行依赖。`contracts/openapi.yaml` 也只描述旧 HTTP 服务。
-
-## Qt 后端构建
+## Build and test on Ubuntu
 
 ```bash
 cmake -S server-qt -B server-qt/build -DBUILD_TESTING=ON
@@ -16,20 +10,67 @@ cmake --build server-qt/build -j
 ctest --test-dir server-qt/build --output-on-failure
 ```
 
-运行、数据库迁移和旧库导入说明见 `server-qt/README.md`。密钥、数据库、头像、日志和构建产物不得进入 Git。
+Required Qt modules: Core, Network, Sql, Test, plus the QSQLITE plugin. CMake is the only supported build entry point.
 
-## 当前演示环境
+## Qt-only demonstration
+
+Create an isolated demonstration database and start the server:
 
 ```bash
-set -a
-. /etc/map-for-ecar/server.env
-set +a
-server-qt/build/charger-server --database server-qt/runtime/showcase.db \
-  --host 127.0.0.1 --port 9000
+server-qt/build/charger-server --database runtime/demo.db --seed-demo \
+  --host 0.0.0.0 --port 9000
 ```
 
-`showcase.db` 包含 4 个明确标记为 `DEMO` 的可预约站点、12 个受管电桩，以及 2,614 条来自北京市公共数据开放平台的只读站点目录。公共目录缺少可信电价和单桩资料，因此不会伪造成可预约站点。
+The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Geocoding, nearby route distance and route planning all require a Tencent Map WebService key. A missing, disabled or rejected key returns business code `50301`; the server does not fabricate local distances.
 
-用户端使用 `13900000000` 体验新订单，`13600000000` 查看充电中订单，`13500000000` 查看待支付订单；管理端使用 `admin / admin123`。地址解析、附近路线距离和路线规划必须使用腾讯地图 WebService，Key 缺失或不可用时返回 `50301`，不会伪造直线距离。
+## Database initialization and migration
 
-用户端构建和完整流程见 `clients/user-qt/README.md`，管理端见 `clients/admin-qt/README.md`。
+Create a new target database:
+
+```bash
+server-qt/build/charger-server --database /absolute/path/charger.db --migrate-only
+```
+
+Import a supported Python database into an empty migrated target. The source is opened read-only and must remain separate from the running Python service:
+
+```bash
+server-qt/build/charger-server --database /absolute/path/charger-qt.db \
+  --import-legacy /absolute/path/map_for_ecar_charger.db
+```
+
+Import or refresh the cleaned public station catalog:
+
+```bash
+server-qt/build/charger-server --database /absolute/path/charger-qt.db \
+  --import-catalog backend/data/processed/beijing_public_charging_stations.json \
+  --catalog-id-source /absolute/path/map_for_ecar_charger.db
+```
+
+`--catalog-id-source` opens the legacy database read-only and preserves every existing `(data_source, external_id) → stations.id` mapping while excluding unrelated demo stations. Omit it only for a database that has never assigned station IDs.
+
+Create the first administrator without putting its password in command history:
+
+```bash
+read -rsp 'Initial administrator password: ' INITIAL_ADMIN_PASSWORD
+export INITIAL_ADMIN_PASSWORD
+server-qt/build/charger-server --database /absolute/path/charger-qt.db --create-admin admin
+unset INITIAL_ADMIN_PASSWORD
+```
+
+The operation preserves an existing administrator and never resets its password.
+
+## Run
+
+```bash
+export SERVER_HOST=127.0.0.1
+export SERVER_PORT=9000
+export DATABASE_PATH=/absolute/path/charger-qt.db
+export TENCENT_MAP_KEY='configured-outside-git'
+server-qt/build/charger-server
+```
+
+For the course development host, keep the secret outside Git in `/etc/map-for-ecar/server.env`, load it with `set -a; . /etc/map-for-ecar/server.env; set +a`, then start the server. The Key must have **WebService API** enabled in the Tencent Location console. Enabling the product alone does not allocate request capacity: in **Quota Management → Account Quota**, allocate daily and concurrency quota to this Key for address geocoding, distance matrix and driving directions. Tencent status `121` means the Key has no remaining daily quota.
+
+Use a reachable `SERVER_HOST` for LAN integration. Plain TCP is for the controlled course network; use TLS before an untrusted-network deployment. Runtime database, avatar files, logs, keys, and build output are excluded from Git.
+
+The wire contract is `contracts/socket-protocol.md`; its machine-readable action schemas are in `contracts/schemas/socket.json`.
