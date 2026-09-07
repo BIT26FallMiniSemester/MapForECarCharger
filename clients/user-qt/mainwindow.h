@@ -62,9 +62,6 @@ private:
     void showAppPage();
 // 保存用户资料并刷新个人中心和本地头像。
     void applyUser(const User &user);
-// 生成按手机号区分的本地头像设置键。
-    QString avatarSettingKey() const;
-
     Ui::MainWindow *ui;
     ApiClient *m_api = nullptr;
     ChargingPage *m_chargingPage = nullptr;

@@ -71,6 +71,17 @@ void ProfilePage::setAvatarPath(const QString &path)
     ui->avatarLabel->setStyleSheet(QStringLiteral("border-radius:36px;"));
 }
 
+void ProfilePage::setAvatarData(const QByteArray &content)
+{
+    QPixmap pix;
+    if (!pix.loadFromData(content))
+        return;
+    ui->avatarLabel->setText(QString());
+    ui->avatarLabel->setPixmap(pix.scaled(72, 72, Qt::KeepAspectRatioByExpanding,
+                                          Qt::SmoothTransformation));
+    ui->avatarLabel->setStyleSheet(QStringLiteral("border-radius:36px;"));
+}
+
 /// 维护请求计数器并统一切换各页面的忙碌状态。
 void ProfilePage::setBusy(bool busy)
 {

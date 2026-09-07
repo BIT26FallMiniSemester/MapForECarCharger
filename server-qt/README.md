@@ -18,10 +18,10 @@ Create an isolated demonstration database and start the server:
 
 ```bash
 server-qt/build/charger-server --database runtime/demo.db --seed-demo \
-  --host 0.0.0.0 --port 9000
+  --host 0.0.0.0 --port 9000 --dashboard-port 9001
 ```
 
-The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / admin123` for the admin client and `13900000000` for the user client. Geocoding, nearby route distance and route planning all require a Tencent Map WebService key. A missing, disabled or rejected key returns business code `50301`; the server does not fabricate local distances.
+The seed is idempotent and intentionally refuses to mix demo records into a non-demo business database. Credentials are `admin / 123456` for the admin client and `13900000000` for the user client. Geocoding, nearby route distance and route planning all require a Tencent Map WebService key. A missing, disabled or rejected key returns business code `50301`; the server does not fabricate local distances.
 
 For the course showcase, prefer the real Beijing catalog instead of `--seed-demo`:
 
@@ -70,10 +70,13 @@ The operation preserves an existing administrator and never resets its password.
 ```bash
 export SERVER_HOST=127.0.0.1
 export SERVER_PORT=9000
+export DASHBOARD_PORT=9001
 export DATABASE_PATH=/absolute/path/charger-qt.db
 export TENCENT_MAP_KEY='configured-outside-git'
 server-qt/build/charger-server
 ```
+
+The same Qt process serves the ECharts operations dashboard at `http://127.0.0.1:9001/`. Its 1/6/24-hour forecasts use an hourly/weekday historical-average model on actual SQLite orders in a dedicated `QThread`; no synthetic orders are inserted.
 
 For the course development host, keep the secret outside Git in `/etc/map-for-ecar/server.env`, load it with `set -a; . /etc/map-for-ecar/server.env; set +a`, then start the server. The Key must have **WebService API** enabled in the Tencent Location console. Enabling the product alone does not allocate request capacity: in **Quota Management → Account Quota**, allocate daily and concurrency quota to this Key for address geocoding, distance matrix and driving directions. Tencent status `121` means the Key has no remaining daily quota.
 

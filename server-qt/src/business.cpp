@@ -3,6 +3,7 @@
 
 #include "business.h"
 #include <QTimeZone>
+#include <QtMath>
 
 namespace {
 /// 实现 text 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -53,7 +54,45 @@ QJsonObject Business::station(qint64 id) {
 }
 /// 读取启用站点作为地图距离矩阵的候选集合。
 QJsonArray Business::nearbyCandidates() {
-    QJsonArray out;for(auto o:db.rows("SELECT id FROM stations WHERE status='ACTIVE' ORDER BY id"))out.append(station(o.toObject()["id"].toInteger()));return out;
+    QHash<qint64,int> expected;
+    for(const auto &value:db.rows("SELECT station_id,count(*) orders,count(distinct substr(started_at,1,10)) days FROM charging_orders WHERE started_at IS NOT NULL GROUP BY station_id")) {
+        const auto row=value.toObject();
+        expected[row["station_id"].toInteger()]=qRound(double(row["orders"].toInt())/qMax(1,row["days"].toInt())/24.0);
+    }
+    QJsonArray out;
+    for(auto value:db.rows("SELECT id FROM stations WHERE status='ACTIVE' ORDER BY id")) {
+        auto item=station(value.toObject()["id"].toInteger());
+        item["predicted_available_piles_1h"]=qMax(0,item["available_piles"].toInt()-expected.value(item["id"].toInteger()));
+        out.append(item);
+    }
+    return out;
+}
+
+QJsonObject Business::analyticsInput() {
+    const QTimeZone zone("Asia/Shanghai");const auto today=QDateTime::currentDateTimeUtc().toTimeZone(zone).date();
+    auto boundary=[&](QDate day){return QDateTime(day,QTime(0,0),zone).toUTC().toString(Qt::ISODateWithMs);};
+    QJsonArray trend;
+    for(int i=29;i>=0;--i){const auto day=today.addDays(-i);trend.append(QJsonObject{{"date",day.toString(Qt::ISODate)},{"orders",db.scalar("SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?",{boundary(day),boundary(day.addDays(1))})},{"energy_wh",db.scalar("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE started_at>=? AND started_at<?",{boundary(day),boundary(day.addDays(1))})},{"revenue_cents",db.scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?",{boundary(day),boundary(day.addDays(1))})}});}
+    QJsonArray status;
+    for(const auto &state:states())status.append(QJsonObject{{"name",state},{"value",db.scalar("SELECT count(*) FROM charging_piles WHERE status=?",{state})}});
+    QJsonArray recommendations;
+    for(auto value:db.rows("SELECT s.id,s.name,s.address,count(p.id) total_piles,coalesce(sum(p.status='IDLE'),0) available_piles FROM stations s LEFT JOIN charging_piles p ON p.station_id=s.id WHERE s.status='ACTIVE' GROUP BY s.id ORDER BY available_piles DESC,s.id LIMIT 10")) {
+        auto item=value.toObject();
+        const auto history=db.one("SELECT count(*) orders,count(distinct substr(started_at,1,10)) days FROM charging_orders WHERE station_id=? AND started_at IS NOT NULL",{item["id"].toInteger()});
+        const int demand=qRound(history["orders"].toDouble()/qMax(1,history["days"].toInt())/24.0);
+        item["predicted_available_piles_1h"]=qMax(0,item["available_piles"].toInt()-demand);recommendations.append(item);
+    }
+    return QJsonObject{
+        {"generated_at",utcNow()},
+        {"station_count",db.scalar("SELECT count(*) FROM stations WHERE status='ACTIVE'")},
+        {"pile_count",db.scalar("SELECT count(*) FROM charging_piles")},
+        {"busy_piles",db.scalar("SELECT count(*) FROM charging_piles WHERE status IN ('RESERVED','CHARGING')")},
+        {"today_orders",db.scalar("SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?",{boundary(today),boundary(today.addDays(1))})},
+        {"today_revenue_cents",db.scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?",{boundary(today),boundary(today.addDays(1))})},
+        {"trend",trend},{"pile_status",status},
+        {"hourly_profile",db.rows("SELECT cast(strftime('%w',started_at) as integer) weekday,cast(strftime('%H',started_at) as integer) hour,count(*) orders,coalesce(sum(energy_wh),0) energy_wh,count(distinct substr(started_at,1,10)) days FROM charging_orders WHERE started_at IS NOT NULL GROUP BY weekday,hour")},
+        {"recommended_stations",recommendations}
+    };
 }
 /// 查询订单资料，补充站点/电桩信息，并估算进行中订单的电量与金额。
 QJsonObject Business::order(qint64 id) {
@@ -260,7 +299,12 @@ QJsonValue Business::adminAction(const QString &a,const QJsonObject &d,qint64 ad
         if(u["status"]!=desired){db.execute("UPDATE users SET status=?,updated_at=? WHERE id=?",{desired,utcNow(),id});operationLog(adminId,a,"USER",id,d);}tx.commit();return user(id);
     }
     if(a=="admin.stations.create") {
-        auto id=db.insert("INSERT INTO stations(name,address,latitude,longitude,price_cents_per_kwh,operator_name,district,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",{text(d,"name"),text(d,"address"),d["latitude"].toDouble(),d["longitude"].toDouble(),idOf(d,"price_cents_per_kwh"),d["operator_name"].toVariant(),d["district"].toVariant(),utcNow(),utcNow()});operationLog(adminId,a,"STATION",id,d);tx.commit();return station(id);
+        auto id=db.insert("INSERT INTO stations(name,address,latitude,longitude,price_cents_per_kwh,operator_name,district,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",{text(d,"name"),text(d,"address"),d["latitude"].toDouble(),d["longitude"].toDouble(),idOf(d,"price_cents_per_kwh"),d["operator_name"].toVariant(),d["district"].toVariant(),utcNow(),utcNow()});
+        const int pileCount=d["pile_count"].toInt();
+        for(int i=1;i<=pileCount;++i)
+            db.insert("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,?, 'FAST',120000,'IDLE',?,?)",
+                      {id,QString("ST-%1-F%2").arg(id).arg(i,3,10,QChar('0')),utcNow(),utcNow()});
+        operationLog(adminId,a,"STATION",id,d);tx.commit();return station(id);
     }
     if(a=="admin.stations.update") {
         const auto id=idOf(d,"station_id");station(id);QStringList sets;QVariantList args;

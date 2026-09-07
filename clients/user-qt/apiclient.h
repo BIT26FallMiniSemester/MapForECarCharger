@@ -7,6 +7,7 @@
 #include "models.h"
 
 #include <QJsonObject>
+#include <QHash>
 #include <QObject>
 #include <QVector>
 
@@ -40,6 +41,8 @@ public:
     void fetchProfile();
 // 实现 updateNickname 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void updateNickname(const QString &nickname);
+    void uploadAvatar(const QByteArray &content, const QString &contentType);
+    void fetchAvatar(const QString &avatarId);
 // 实现 recharge 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void recharge(double amountYuan);
 // 实现 fetchRechargeRecords 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -69,7 +72,7 @@ public:
 // 实现 cancelOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void cancelOrder(qint64 orderId);
     void planRoute(double fromLatitude, double fromLongitude,
-                   double toLatitude, double toLongitude);
+                   double toLatitude, double toLongitude, const QString &mode = QStringLiteral("driving"));
 
 signals:
 // 实现 requestStarted 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -82,6 +85,8 @@ signals:
     void profileReady(const User &user);
 // 实现 nicknameUpdated 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void nicknameUpdated(const User &user);
+    void avatarUploaded(const QString &avatarId);
+    void avatarReady(const QByteArray &content);
 // 实现 rechargeSucceeded 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void rechargeSucceeded(qint64 balanceAfterCents, const RechargeRecord &record);
 // 实现 rechargeRecordsReady 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -126,6 +131,7 @@ private:
 
     SocketClient *m_socket = nullptr;
     QString m_token;
+    QHash<qint64, QVector<ChargingPile>> m_pileBatches;
 };
 
 #endif

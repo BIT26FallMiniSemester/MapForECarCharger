@@ -20,6 +20,8 @@ public:
     QJsonObject station(qint64 id);
 // 读取启用站点作为地图距离矩阵的候选集合。
     QJsonArray nearbyCandidates();
+// 提供预测线程所需的脱敏聚合数据。
+    QJsonObject analyticsInput();
 private:
     Database &db;
     QHash<QString,Identity> sessions;

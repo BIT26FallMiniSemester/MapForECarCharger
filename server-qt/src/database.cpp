@@ -60,7 +60,7 @@ void Database::migrate() {
 }
 /// 以幂等方式创建管理员，校验账号长度并保存加密密码摘要。
 void Database::createAdmin(const QString &name,const QString &password) {
-    if(name.trimmed().isEmpty() || name.size()>32 || password.size()<8 || password.size()>128) fail(40001);
+    if(name.trimmed().isEmpty() || name.size()>32 || password.size()<6 || password.size()>128) fail(40001);
     if(scalar("SELECT count(*) FROM admins WHERE username=?",{name})) return;
     execute("INSERT INTO admins(username,password_hash,display_name,created_at,updated_at) VALUES(?,?,?,?,?)",{name,passwordHash(password),name,utcNow(),utcNow()});
 }
@@ -69,7 +69,7 @@ void Database::seedDemo() {
     if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")) return;
     for(const auto &table:QStringList{"users","stations","charging_piles","charging_orders","recharge_records"})
         if(scalar("SELECT count(*) FROM "+table)) fail(40002);
-    createAdmin("admin","admin123");
+    createAdmin("admin","123456");
     const auto now=QDateTime::currentDateTimeUtc();
     auto stamp=[&](int days,int minutes=0){return now.addDays(days).addSecs(minutes*60).toString(Qt::ISODateWithMs);};
     Transaction tx(*this);
@@ -132,7 +132,7 @@ void Database::seedDemo() {
 void Database::seedShowcase() {
     if(!scalar("SELECT count(*) FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'"))fail(40001);
     if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")||scalar("SELECT count(*) FROM users")||scalar("SELECT count(*) FROM charging_piles")||scalar("SELECT count(*) FROM charging_orders"))fail(40002);
-    createAdmin("admin","admin123");
+    createAdmin("admin","123456");
     Transaction tx(*this);const auto now=utcNow();
     execute("INSERT INTO users(phone,nickname,balance_cents,status,created_at,updated_at) VALUES('13900000000','测试车主',30000,'NORMAL',?,?)",{now,now});
     execute("UPDATE stations SET price_cents_per_kwh=150,updated_at=? WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'",{now});

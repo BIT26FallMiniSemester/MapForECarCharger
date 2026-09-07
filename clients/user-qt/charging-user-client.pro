@@ -1,6 +1,10 @@
 # 配置用户端 Qt 源文件、Qt 模块和构建目标。
 
 QT += core gui widgets network
+qtHaveModule(webenginewidgets) {
+    QT += webenginewidgets
+    DEFINES += HAVE_QT_WEBENGINE
+}
 
 CONFIG += c++17
 TEMPLATE = app
@@ -16,6 +20,7 @@ SOURCES += \
     stationmapwidget.cpp \
     profilepage.cpp \
     locationdialog.cpp \
+    navigationdialog.cpp \
     ../common/socketclient.cpp
 
 HEADERS += \
@@ -28,6 +33,7 @@ HEADERS += \
     stationmapwidget.h \
     profilepage.h \
     locationdialog.h \
+    navigationdialog.h \
     ../common/socketclient.h
 
 INCLUDEPATH += ../common

@@ -35,6 +35,7 @@ public:
     void setUser(const User &user);
 // 从本地文件加载并缩放头像。
     void setAvatarPath(const QString &path);
+    void setAvatarData(const QByteArray &content);
 // 维护请求计数器并统一切换各页面的忙碌状态。
     void setBusy(bool busy);
 // 把充值记录渲染为列表。

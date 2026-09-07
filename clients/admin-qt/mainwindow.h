@@ -10,6 +10,7 @@
 #include <QJsonValue>
 #include <QJsonArray>
 #include <QList>
+#include <QHash>
 namespace Ui { class MainWindow; }
 // 创建用户端 API 客户端并连接 SocketClient 的成功/失败信号。
 class ApiClient;
@@ -95,6 +96,7 @@ private:
     QTableWidget *m_stationTable = nullptr;
     QTableWidget *m_userTable = nullptr;
     QTableWidget *m_orderTable = nullptr;
+    QHash<int, QJsonObject> m_stationRows;
     QWidget *m_trendHost = nullptr;
     QWidget *m_statusHost = nullptr;
 // 实现 QComboBox 的本地处理逻辑，保持与项目其他模块的接口约定一致。

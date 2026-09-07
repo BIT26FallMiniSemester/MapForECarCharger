@@ -284,6 +284,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "predicted_available_piles_1h": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -835,6 +840,11 @@
           "maximum": 9007199254740991
         },
         "online_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "predicted_available_piles_1h": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -2478,6 +2488,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 32
+          },
+          "pile_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
           }
         },
         "required": [

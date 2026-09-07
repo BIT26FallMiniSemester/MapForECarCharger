@@ -1,4 +1,4 @@
-# 为充电站目录补充服务类型、区域、位置类型及快慢接口数量。
+-- 为充电站目录补充服务类型、区域、位置类型及快慢接口数量。
 
 ALTER TABLE stations ADD COLUMN service_type TEXT;
 ALTER TABLE stations ADD COLUMN region_scope TEXT;

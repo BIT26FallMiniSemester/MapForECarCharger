@@ -9,13 +9,15 @@
 #include "homepage.h"
 #include "locationdialog.h"
 #include "loginpage.h"
+#include "navigationdialog.h"
 #include "profilepage.h"
 
 #include <QDialog>
 #include <QFileDialog>
+#include <QBuffer>
+#include <QImage>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QSettings>
 #include <QTimer>
 
 /// 组装管理端导航、各业务页面、图表和 API 刷新状态。
@@ -48,6 +50,10 @@ MainWindow::MainWindow(QWidget *parent)
         ui->tabHome->setChecked(false);
         m_tabCharging->setChecked(true);
         ui->tabMine->setChecked(false);
+    });
+    connect(ui->homePage, &HomePage::navigationRequested, this, [this](const StationSummary &station) {
+        NavigationDialog dialog(ui->homePage->latitude(), ui->homePage->longitude(), station, this);
+        dialog.exec();
     });
     connect(ui->profilePage, &ProfilePage::saveNicknameClicked, this, &MainWindow::onSaveNickname);
     connect(ui->profilePage, &ProfilePage::chooseAvatarClicked, this, &MainWindow::onChooseAvatar);
@@ -84,6 +90,23 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations){ui->homePage->showStations(stations);QTimer::singleShot(3000,this,[this]{m_api->fetchMapSnapshot(ui->homePage->latitude(),ui->homePage->longitude(),14);});});
     connect(m_api, &ApiClient::mapSnapshotReady, ui->homePage, &HomePage::showMap);
     connect(m_api, &ApiClient::profileReady, this, &MainWindow::applyUser);
+    connect(m_api, &ApiClient::avatarUploaded, this, [this](const QString &avatarId) {
+        m_user.avatarUrl = avatarId;
+        m_api->fetchAvatar(avatarId);
+        ui->profilePage->setStatus(QStringLiteral("头像已保存到 Qt 后端"));
+    });
+    connect(m_api, &ApiClient::avatarReady, ui->profilePage, &ProfilePage::setAvatarData);
+    connect(m_chargingPage, &ChargingPage::activeOrderRestored, this,
+            [this](const ChargingOrder &order) {
+        ui->contentStack->setCurrentWidget(m_chargingPage);
+        ui->tabHome->setChecked(false);
+        m_tabCharging->setChecked(true);
+        ui->tabMine->setChecked(false);
+        QMessageBox::information(this, QStringLiteral("发现未完成订单"),
+            order.status == QStringLiteral("UNPAID")
+                ? QStringLiteral("上次充电订单尚未支付，已进入结算页面。")
+                : QStringLiteral("发现进行中的充电订单，已进入充电页面。"));
+    });
     connect(m_api, &ApiClient::nicknameUpdated, this, [this](const User &user) {
         applyUser(user);
         ui->profilePage->setStatus(QStringLiteral("昵称已保存"));
@@ -184,7 +207,7 @@ void MainWindow::onSaveNickname()
     m_api->updateNickname(name);
 }
 
-/// 打开本地图片选择器并显示本地头像。
+/// 打开本地图片选择器，压缩后上传到 Qt 后端。
 void MainWindow::onChooseAvatar()
 {
     const QString path = QFileDialog::getOpenFileName(
@@ -192,10 +215,28 @@ void MainWindow::onChooseAvatar()
         QStringLiteral("图片 (*.png *.jpg *.jpeg *.bmp)"));
     if (path.isEmpty())
         return;
-    QSettings settings;
-    settings.setValue(avatarSettingKey(), path);
-    ui->profilePage->setAvatarPath(path);
-    ui->profilePage->setStatus(QStringLiteral("已使用本地头像（稍后对接上传接口）"));
+    QImage image(path);
+    if (image.isNull()) {
+        ui->profilePage->setStatus(QStringLiteral("无法读取所选图片"));
+        return;
+    }
+    image = image.scaled(512, 512, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QByteArray content;
+    QBuffer buffer(&content);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "JPEG", 85);
+    if (content.size() > 262144) {
+        content.clear(); buffer.close(); buffer.open(QIODevice::WriteOnly);
+        image.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            .save(&buffer, "JPEG", 70);
+    }
+    if (content.isEmpty() || content.size() > 262144) {
+        ui->profilePage->setStatus(QStringLiteral("图片压缩失败，请选择较小的图片"));
+        return;
+    }
+    ui->profilePage->setAvatarData(content);
+    ui->profilePage->setStatus(QStringLiteral("正在上传头像…"));
+    m_api->uploadAvatar(content, QStringLiteral("image/jpeg"));
 }
 
 /// 把个人中心输入金额转换为分后发起充值。
@@ -251,20 +292,13 @@ void MainWindow::showAppPage()
     ui->tabMine->setChecked(false);
 }
 
-/// 保存用户资料并刷新个人中心和本地头像。
+/// 保存用户资料并刷新个人中心和后端头像。
 void MainWindow::applyUser(const User &user)
 {
     m_user = user;
     ui->profilePage->setUser(user);
-    const QString localAvatar = QSettings().value(avatarSettingKey()).toString();
-    if (!localAvatar.isEmpty())
-        ui->profilePage->setAvatarPath(localAvatar);
-}
-
-/// 生成按手机号区分的本地头像设置键。
-QString MainWindow::avatarSettingKey() const
-{
-    return QStringLiteral("avatar/") + m_user.phone;
+    if (!user.avatarUrl.isEmpty())
+        m_api->fetchAvatar(user.avatarUrl);
 }
 
 /// 设置用户端整体 Qt 样式表和控件状态样式。

@@ -54,6 +54,19 @@ void ApiClient::updateNickname(const QString &nickname)
          QJsonObject{{QStringLiteral("nickname"), nickname.trimmed()}});
 }
 
+void ApiClient::uploadAvatar(const QByteArray &content, const QString &contentType)
+{
+    send(QStringLiteral("avatar:set"), QStringLiteral("users.avatar.set"),
+         QJsonObject{{QStringLiteral("content_type"), contentType},
+                     {QStringLiteral("content_base64"), QString::fromLatin1(content.toBase64())}});
+}
+
+void ApiClient::fetchAvatar(const QString &avatarId)
+{
+    send(QStringLiteral("avatar:get"), QStringLiteral("users.avatar.get"),
+         QJsonObject{{QStringLiteral("avatar_id"), avatarId}});
+}
+
 /// 实现 recharge 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::recharge(double amountYuan)
 {
@@ -97,7 +110,8 @@ void ApiClient::geocode(const QString &address)
 /// 实现 fetchStationPiles 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchStationPiles(qint64 stationId)
 {
-    send(QStringLiteral("piles:%1").arg(stationId), QStringLiteral("stations.piles.list"),
+    m_pileBatches[stationId].clear();
+    send(QStringLiteral("piles:%1:1").arg(stationId), QStringLiteral("stations.piles.list"),
          QJsonObject{{QStringLiteral("station_id"), stationId},
                      {QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 100}});
 }
@@ -160,14 +174,14 @@ void ApiClient::cancelOrder(qint64 orderId)
 
 /// 实现 planRoute 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::planRoute(double fromLatitude, double fromLongitude,
-                          double toLatitude, double toLongitude)
+                          double toLatitude, double toLongitude, const QString &mode)
 {
     send(QStringLiteral("route"), QStringLiteral("map.route"),
          QJsonObject{{QStringLiteral("from_latitude"), fromLatitude},
                      {QStringLiteral("from_longitude"), fromLongitude},
                      {QStringLiteral("to_latitude"), toLatitude},
                      {QStringLiteral("to_longitude"), toLongitude},
-                     {QStringLiteral("mode"), QStringLiteral("driving")}});
+                     {QStringLiteral("mode"), mode}});
 }
 
 /// 为 action 生成 request_id，加入待处理上下文并排队发送请求。
@@ -196,6 +210,15 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
             emit nicknameUpdated(user);
         else
             emit profileReady(user);
+        return;
+    }
+    if (context == QStringLiteral("avatar:set")) {
+        emit avatarUploaded(data.toObject().value(QStringLiteral("avatar_id")).toString());
+        return;
+    }
+    if (context == QStringLiteral("avatar:get")) {
+        emit avatarReady(QByteArray::fromBase64(
+            data.toObject().value(QStringLiteral("content_base64")).toString().toLatin1()));
         return;
     }
     if (context == QStringLiteral("recharge")) {
@@ -230,13 +253,24 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
     }
     if (context.startsWith(QStringLiteral("piles:"))) {
         const QJsonObject object = data.toObject();
-        QVector<ChargingPile> piles;
         const qint64 stationId = context.section(QLatin1Char(':'), 1).toLongLong();
+        const int page = context.section(QLatin1Char(':'), 2).toInt();
+        QVector<ChargingPile> &piles = m_pileBatches[stationId];
         for (const QJsonValue &value : object.value(QStringLiteral("items")).toArray()) {
             ChargingPile pile = parsePile(value.toObject());
             piles.push_back(pile);
         }
+        const qint64 total = object.value(QStringLiteral("total")).toInteger();
+        if (piles.size() < total) {
+            send(QStringLiteral("piles:%1:%2").arg(stationId).arg(page + 1),
+                 QStringLiteral("stations.piles.list"),
+                 QJsonObject{{QStringLiteral("station_id"), stationId},
+                             {QStringLiteral("page"), page + 1},
+                             {QStringLiteral("page_size"), 100}});
+            return;
+        }
         emit stationPilesReady(stationId, piles);
+        m_pileBatches.remove(stationId);
         return;
     }
     if (context == QStringLiteral("order:active")) {
@@ -287,6 +321,8 @@ StationSummary ApiClient::parseStation(const QJsonObject &object) const
     station.status = object.value(QStringLiteral("status")).toString();
     station.totalPiles = object.value(QStringLiteral("total_piles")).toInt();
     station.availablePiles = object.value(QStringLiteral("available_piles")).toInt();
+    station.predictedAvailablePiles1h = object.value(QStringLiteral("predicted_available_piles_1h"))
+                                             .toInt(station.availablePiles);
     station.fastConnectorCount = object.value(QStringLiteral("fast_connector_count")).toInt();
     station.slowConnectorCount = object.value(QStringLiteral("slow_connector_count")).toInt();
     station.onlineRate = station.totalPiles ? station.availablePiles * 100.0 / station.totalPiles : 0.0;

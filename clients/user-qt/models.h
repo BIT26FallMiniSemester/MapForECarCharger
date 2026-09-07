@@ -44,6 +44,7 @@ struct StationSummary {
     QString status;             // ACTIVE / INACTIVE
     int totalPiles = 0;
     int availablePiles = 0;
+    int predictedAvailablePiles1h = 0;
     int fastConnectorCount = 0;
     int slowConnectorCount = 0;
     double onlineRate = 0;

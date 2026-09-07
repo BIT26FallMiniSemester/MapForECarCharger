@@ -66,6 +66,7 @@ signals:
     void changeLocationClicked();
 // 实现 stationSelected 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void stationSelected(const StationSummary &station);
+    void navigationRequested(const StationSummary &station);
 // 实现 mapZoomRequested 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void mapZoomRequested(double centerLatitude, double centerLongitude, int zoom);
 

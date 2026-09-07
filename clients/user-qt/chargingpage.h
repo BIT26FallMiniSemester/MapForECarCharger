@@ -35,6 +35,9 @@ public:
 // 维护请求计数器并统一切换各页面的忙碌状态。
     void setBusy(bool busy);
 
+signals:
+    void activeOrderRestored(const ChargingOrder &order);
+
 private:
 // 实现 clearPiles 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void clearPiles();

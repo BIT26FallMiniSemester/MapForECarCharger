@@ -150,7 +150,7 @@ private slots:
         QCOMPARE(call("stations.list",{},token)["code"].toInt(),0);QCOMPARE(call("stations.detail",{{"station_id",1}},token)["code"].toInt(),0);
         QCOMPARE(call("stations.piles.list",{{"station_id",1}},token)["code"].toInt(),0);QCOMPARE(call("piles.detail",{{"pile_id",1}},token)["code"].toInt(),0);
         QCOMPARE(call("stations.detail",{{"station_id",999}},token)["code"].toInt(),40401);
-        auto s=call("admin.stations.create",{{"name","新测试站"},{"address","测试地址"},{"latitude",39.96},{"longitude",116.32},{"price_cents_per_kwh",200}},admin)["data"].toObject();auto id=s["id"].toInteger();QVERIFY(id>1);
+        auto s=call("admin.stations.create",{{"name","新测试站"},{"address","测试地址"},{"latitude",39.96},{"longitude",116.32},{"price_cents_per_kwh",200},{"pile_count",2}},admin)["data"].toObject();auto id=s["id"].toInteger();QVERIFY(id>1);QCOMPARE(s["total_piles"].toInt(),2);
         QCOMPARE(call("admin.stations.update",{{"station_id",id},{"price_cents_per_kwh",180}},admin)["code"].toInt(),0);
         auto p=QJsonObject{{"station_id",id},{"pile_no","NEW-1"},{"charge_type","SLOW"},{"rated_power_w",7000}};
         auto pileId=call("admin.piles.create",p,admin)["data"].toObject()["id"].toInteger();QVERIFY(pileId>1);QCOMPARE(call("admin.piles.create",p,admin)["code"].toInt(),40008);
@@ -215,6 +215,11 @@ private slots:
         QCOMPARE(demo.scalar("SELECT count(*) FROM admins WHERE username='admin'"),1);QVERIFY(demo.rows("PRAGMA foreign_key_check").isEmpty());
         Database showcase(dir->filePath("showcase.db"));showcase.migrate();showcase.execute("INSERT INTO stations(id,name,address,latitude,longitude,data_source,external_id,fast_connector_count,slow_connector_count,created_at,updated_at) VALUES(1,'接口站','接口地址',40.2,116.8,'BEIJING_PUBLIC_DATA_OPEN_PLATFORM','1',2,1,?,?),(2,'零接口站','中心地址',39.9043,116.4075,'BEIJING_PUBLIC_DATA_OPEN_PLATFORM','2',0,0,?,?)",{utcNow(),utcNow(),utcNow(),utcNow()});showcase.seedShowcase();
         QCOMPARE(showcase.scalar("SELECT count(*) FROM users"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM stations"),2);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles"),4);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles WHERE status='IDLE'"),4);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles WHERE station_id=1 AND charge_type='FAST'"),2);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles WHERE station_id=1 AND charge_type='SLOW'"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_piles WHERE station_id=2 AND pile_no='BJ-2-T001'"),1);QCOMPARE(showcase.scalar("SELECT count(*) FROM stations WHERE price_cents_per_kwh=150"),2);QCOMPARE(showcase.scalar("SELECT count(*) FROM charging_orders"),0);
+    }
+    void defaultAdminPassword(){
+        QTemporaryDir temporary;Database seeded(temporary.filePath("seed.db"));seeded.migrate();
+        seeded.createAdmin("admin","123456");
+        QVERIFY(passwordVerify("123456",seeded.one("SELECT password_hash FROM admins WHERE username='admin'")["password_hash"].toString()));
     }
 /// 实现 catalogImportPreservesIds 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void catalogImportPreservesIds(){

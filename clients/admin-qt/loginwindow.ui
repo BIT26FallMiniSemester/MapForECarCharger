@@ -1,6 +1,5 @@
-<!-- 负责 loginwindow 的配置、数据或界面资源，作为项目构建或运行所需的一部分。 -->
-
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- 负责 loginwindow 的配置、数据或界面资源，作为项目构建或运行所需的一部分。 -->
 <!-- 以下节点由 Qt Designer 维护，uic 会据此生成 ui_*.h 界面类。 -->
 <ui version="4.0">
  <class>LoginWindow</class>
@@ -26,10 +25,10 @@
     <item><widget class="QLabel" name="loginTitle"><property name="text"><string>欢迎回来</string></property></widget></item>
     <item><widget class="QLabel" name="loginSubtitle"><property name="text"><string>登录充电林运营管理后台</string></property></widget></item>
     <item><widget class="QLineEdit" name="accountEdit"><property name="placeholderText"><string>管理员账号</string></property><property name="text"><string>admin</string></property></widget></item>
-    <item><widget class="QLineEdit" name="passwordEdit"><property name="placeholderText"><string>登录密码</string></property><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="text"><string>admin123</string></property></widget></item>
+    <item><widget class="QLineEdit" name="passwordEdit"><property name="placeholderText"><string>登录密码</string></property><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="text"><string>123456</string></property></widget></item>
     <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property></widget></item>
     <item><widget class="QPushButton" name="loginButton"><property name="text"><string>登 录</string></property><property name="objectName"><string>primaryButton</string></property></widget></item>
-    <item><widget class="QLabel" name="demoHint"><property name="text"><string>Qt 演示账号  admin  /  admin123</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+    <item><widget class="QLabel" name="demoHint"><property name="text"><string>Qt 演示账号  admin  /  123456</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
     <item><spacer name="loginBottomSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
    </layout></widget></item>
   </layout>

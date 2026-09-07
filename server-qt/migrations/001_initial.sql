@@ -1,4 +1,4 @@
-# 创建充电平台基础表、索引、外键和初始字段。
+-- 创建充电平台基础表、索引、外键和初始字段。
 
 CREATE TABLE users(id INTEGER PRIMARY KEY,phone TEXT NOT NULL UNIQUE CHECK(length(phone)=11),nickname TEXT NOT NULL,avatar_id TEXT,balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents>=0),status TEXT NOT NULL DEFAULT 'NORMAL' CHECK(status IN ('NORMAL','FROZEN')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE admins(id INTEGER PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'NORMAL' CHECK(status IN ('NORMAL','DISABLED')),last_login_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);

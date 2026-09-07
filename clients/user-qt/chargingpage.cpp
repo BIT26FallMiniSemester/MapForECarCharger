@@ -174,8 +174,10 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
             m_routeInfo->setText(QStringLiteral("这是后端恢复的当前订单"));
         }
         renderOrder();
-        if (hasOrder)
+        if (hasOrder) {
             setHint(QStringLiteral("已恢复后端保存的未完成订单。"));
+            emit activeOrderRestored(order);
+        }
     });
     connect(m_api, &ApiClient::orderReady, this,
             [this](const QString &operation, const ChargingOrder &order) {

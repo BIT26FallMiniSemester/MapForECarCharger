@@ -142,7 +142,7 @@ void HomePage::focusStation(const StationSummary &station)
 {
     m_focusedStation=station;m_map->selectStation(station.id);
     const QString price=station.priceCentsPerKwh>0?QStringLiteral("测试计费 ¥%1/度").arg(centsToYuanText(station.priceCentsPerKwh)):QStringLiteral("电价未公开");
-    m_mapDetail->setText(QStringLiteral("%1\n%2 · %3 km · 快充 %4 / 慢充 %5 · %6").arg(station.name,station.district).arg(station.distanceKm,0,'f',2).arg(station.fastConnectorCount).arg(station.slowConnectorCount).arg(price));
+    m_mapDetail->setText(QStringLiteral("%1\n%2 · %3 km · 未来1小时预计空闲 %4 · 快充 %5 / 慢充 %6 · %7").arg(station.name,station.district).arg(station.distanceKm,0,'f',2).arg(station.predictedAvailablePiles1h).arg(station.fastConnectorCount).arg(station.slowConnectorCount).arg(price));
     m_mapDetail->setToolTip(QStringLiteral("%1\n坐标 %2, %3").arg(station.operatorName).arg(station.latitude,0,'f',6).arg(station.longitude,0,'f',6));
     m_mapCharge->setEnabled(station.availablePiles>0);m_mapCharge->setToolTip(station.availablePiles>0?QStringLiteral("进入充电界面"):QStringLiteral("该公共站点没有接入可控制电桩"));
     for(auto it=m_cards.begin();it!=m_cards.end();++it){it.value()->setProperty("selected",it.key()==station.id);it.value()->style()->unpolish(it.value());it.value()->style()->polish(it.value());}
@@ -206,10 +206,10 @@ void HomePage::showStations(const QVector<StationSummary> &stations)
         const QString price = s.priceCentsPerKwh>0?centsToYuanText(s.priceCentsPerKwh)+QStringLiteral(" 元/度（测试）"):QStringLiteral("电价未公开");
         const QString availability=s.totalPiles>0?QStringLiteral("测试桩空闲 %1 / %2").arg(s.availablePiles).arg(s.totalPiles):QStringLiteral("实时空闲状态未公开");
         auto *info = new QLabel(
-            QStringLiteral("%1  ·  %2  ·  %3 km\n%4 · %5 · 快充 %6 / 慢充 %7")
+            QStringLiteral("%1  ·  %2  ·  未来1小时预计空闲 %3\n%4 · %5 · 快充 %6 / 慢充 %7")
                 .arg(price)
                 .arg(availability)
-                .arg(s.distanceKm, 0, 'f', 2)
+                .arg(s.predictedAvailablePiles1h)
                 .arg(s.address,s.operatorName)
                 .arg(s.fastConnectorCount).arg(s.slowConnectorCount));
         info->setObjectName(QStringLiteral("cardInfo"));
@@ -222,9 +222,16 @@ void HomePage::showStations(const QVector<StationSummary> &stations)
         connect(choose, &QPushButton::clicked, this, [this, s]() {
             emit stationSelected(s);
         });
+        auto *distance = new QLabel(QStringLiteral("<a href=\"route\">%1 km · 查看路线</a>")
+            .arg(s.distanceKm, 0, 'f', 2));
+        distance->setTextFormat(Qt::RichText);
+        distance->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
+        distance->setOpenExternalLinks(false);
+        connect(distance, &QLabel::linkActivated, this, [this, s] { emit navigationRequested(s); });
 
         header->addWidget(name,1);header->addWidget(choose);box->addLayout(header);
         box->addWidget(info);
+        box->addWidget(distance);
         ui->stationListLayout->insertWidget(ui->stationListLayout->count() - 1, card);
     }
     focusStation(stations.first());
