@@ -119,12 +119,24 @@ void Database::seedShowcase() {
     if(!scalar("SELECT count(*) FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'"))fail(40001);
     if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")||scalar("SELECT count(*) FROM users")||scalar("SELECT count(*) FROM charging_piles")||scalar("SELECT count(*) FROM charging_orders"))fail(40002);
     createAdmin("admin","admin123");
-    const auto stationId=scalar("SELECT id FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM' AND fast_connector_count>0 ORDER BY CAST(external_id AS INTEGER),id LIMIT 1");
-    if(!stationId)fail(40001);
     Transaction tx(*this);const auto now=utcNow();
     execute("INSERT INTO users(phone,nickname,balance_cents,status,created_at,updated_at) VALUES('13900000000','测试车主',30000,'NORMAL',?,?)",{now,now});
-    execute("UPDATE stations SET price_cents_per_kwh=150,updated_at=? WHERE id=?",{now,stationId});
-    execute("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,'COURSE-TEST-F01','FAST',120000,'IDLE',?,?)",{stationId,now,now});
+    execute("UPDATE stations SET price_cents_per_kwh=150,updated_at=? WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'",{now});
+    const auto stations=rows("SELECT id,max(fast_connector_count,0) fast_count,max(slow_connector_count,0) slow_count FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM' ORDER BY id");
+    for(const auto &value:stations) {
+        const auto station=value.toObject();
+        const auto stationId=station["id"].toInteger();
+        const int fast=station["fast_count"].toInt(),slow=station["slow_count"].toInt();
+        for(int i=1;i<=fast;++i)
+            execute("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,?,?,?, 'IDLE',?,?)",
+                    {stationId,QString("BJ-%1-F%2").arg(stationId).arg(i,3,10,QChar('0')),"FAST",120000,now,now});
+        for(int i=1;i<=slow;++i)
+            execute("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,?,?,?, 'IDLE',?,?)",
+                    {stationId,QString("BJ-%1-S%2").arg(stationId).arg(i,3,10,QChar('0')),"SLOW",7000,now,now});
+        if(fast+slow==0)
+            execute("INSERT INTO charging_piles(station_id,pile_no,charge_type,rated_power_w,status,created_at,updated_at) VALUES(?,?, 'FAST',120000,'IDLE',?,?)",
+                    {stationId,QString("BJ-%1-T001").arg(stationId),now,now});
+    }
     tx.commit();
 }
 void Database::importCatalog(const QString &path,const QString &idSource) {

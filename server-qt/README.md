@@ -33,7 +33,7 @@ server-qt/build/charger-server --database runtime/showcase.db \
   --seed-showcase --migrate-only
 ```
 
-`--seed-showcase` requires an otherwise empty business database. It keeps all 2,614 real catalog stations, adds only user `13900000000`, and attaches one clearly named course test pile to a real station. No other users, fake stations, orders or device states are generated.
+`--seed-showcase` requires an otherwise empty business database. It keeps all 2,614 real catalog stations, adds only user `13900000000`, and creates managed `IDLE` piles from every station's recorded fast/slow connector counts. A station whose recorded total is zero receives one fallback course-test pile, so every station can run the complete charging flow. All stations use a 150 cents/kWh course-demo tariff. These initial availability states and prices are demonstration values, not live operator data; no fake stations, extra users or orders are generated.
 
 Successful Tencent geocoding, distance, route and static-map responses are cached in memory for 10 minutes (up to 128 query variants). Repeating the same location query therefore does not consume the WebService quota again; restarting the server clears this cache.
 

@@ -13,7 +13,7 @@ int main(int argc,char **argv){
     parser.addOption({"catalog-id-source","Preserve station IDs from a read-only legacy database","database"});
     parser.addOption({"create-admin","Create administrator using INITIAL_ADMIN_PASSWORD environment variable and exit","username"});
     parser.addOption({"seed-demo","Create idempotent Qt-only demonstration data (admin/admin123)"});
-    parser.addOption({"seed-showcase","Add one test user and one test pile to an imported Beijing catalog"});
+    parser.addOption({"seed-showcase","Add one test user and all-IDLE managed piles to an imported Beijing catalog"});
     parser.process(app);
     try{
         Database db(QFileInfo(parser.value("database")).absoluteFilePath());db.migrate();
