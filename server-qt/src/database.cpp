@@ -1,5 +1,9 @@
+// 封装 SQLite 连接、参数化查询、事务、迁移、演示数据以及公共充电站目录导入。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "database.h"
 
+/// 封装数据库构造、析构和 SQLite 生命周期管理。
 Database::Database(const QString &path) {
     if(path!=":memory:") QDir().mkpath(QFileInfo(path).absolutePath());
     db=QSqlDatabase::addDatabase("QSQLITE",QUuid::createUuid().toString());
@@ -8,6 +12,7 @@ Database::Database(const QString &path) {
     execute("PRAGMA foreign_keys=ON"); execute("PRAGMA journal_mode=WAL"); execute("PRAGMA busy_timeout=10000");
 }
 Database::~Database() { const auto name=db.connectionName(); db.close(); db=QSqlDatabase(); QSqlDatabase::removeDatabase(name); }
+/// 准备并执行参数化 SQL，失败时转换为统一数据库错误。
 QSqlQuery Database::query(const QString &sql,const QVariantList &args) {
     QSqlQuery q(db);
     if(!q.prepare(sql)) { qWarning().noquote()<<"Database prepare failed:"<<q.lastError().text(); fail(50001); }
@@ -15,6 +20,7 @@ QSqlQuery Database::query(const QString &sql,const QVariantList &args) {
     if(!q.exec()) { qWarning().noquote()<<"Database query failed:"<<q.lastError().text(); fail(50001); }
     return q;
 }
+/// 执行查询并将结果集的每一列转换为 JSON 对象/数组。
 QJsonArray Database::rows(const QString &sql,const QVariantList &args) {
     auto q=query(sql,args); QJsonArray out;
     while(q.next()) {
@@ -23,10 +29,15 @@ QJsonArray Database::rows(const QString &sql,const QVariantList &args) {
         out.append(row);
     } return out;
 }
+/// 执行查询并返回第一行，没有结果时返回空 JSON 对象。
 QJsonObject Database::one(const QString &sql,const QVariantList &args) { const auto all=rows(sql,args); return all.isEmpty()?QJsonObject():all[0].toObject(); }
+/// 执行查询并返回第一列第一个值。
 qint64 Database::scalar(const QString &sql,const QVariantList &args) { auto q=query(sql,args); return q.next()?q.value(0).toLongLong():0; }
+/// 执行写操作并返回影响行数。
 qint64 Database::execute(const QString &sql,const QVariantList &args) { auto q=query(sql,args); return q.numRowsAffected(); }
+/// 执行插入并返回最后插入的行号。
 qint64 Database::insert(const QString &sql,const QVariantList &args) { auto q=query(sql,args); return q.lastInsertId().toLongLong(); }
+/// 按 schema_migrations 顺序应用数据库迁移并检查关键表和外键。
 void Database::migrate() {
     if(!db.tables().contains("schema_migrations")) {
         if(!db.tables().isEmpty()) fail(50001);
@@ -47,11 +58,13 @@ void Database::migrate() {
         if(!db.tables().contains(table)) fail(50001);
     if(!rows("PRAGMA foreign_key_check").isEmpty()) fail(50001);
 }
+/// 以幂等方式创建管理员，校验账号长度并保存加密密码摘要。
 void Database::createAdmin(const QString &name,const QString &password) {
     if(name.trimmed().isEmpty() || name.size()>32 || password.size()<8 || password.size()>128) fail(40001);
     if(scalar("SELECT count(*) FROM admins WHERE username=?",{name})) return;
     execute("INSERT INTO admins(username,password_hash,display_name,created_at,updated_at) VALUES(?,?,?,?,?)",{name,passwordHash(password),name,utcNow(),utcNow()});
 }
+/// 在空数据库中写入一组可重复使用的 Qt 演示数据。
 void Database::seedDemo() {
     if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")) return;
     for(const auto &table:QStringList{"users","stations","charging_piles","charging_orders","recharge_records"})
@@ -115,6 +128,7 @@ void Database::seedDemo() {
             {stamp(-1),stamp(-2),stamp(0,-2),stamp(0,-32),stamp(0,-30)});
     tx.commit();
 }
+/// 在已导入的北京公共目录上创建测试用户和受管测试电桩。
 void Database::seedShowcase() {
     if(!scalar("SELECT count(*) FROM stations WHERE data_source='BEIJING_PUBLIC_DATA_OPEN_PLATFORM'"))fail(40001);
     if(scalar("SELECT count(*) FROM stations WHERE data_source='DEMO'")||scalar("SELECT count(*) FROM users")||scalar("SELECT count(*) FROM charging_piles")||scalar("SELECT count(*) FROM charging_orders"))fail(40002);
@@ -139,6 +153,7 @@ void Database::seedShowcase() {
     }
     tx.commit();
 }
+/// 导入公共充电站 JSON，校验字段并在指定时保留旧数据库中的站点编号。
 void Database::importCatalog(const QString &path,const QString &idSource) {
     QFile file(path); if(!file.open(QIODevice::ReadOnly)) fail(40001);
     const auto doc=QJsonDocument::fromJson(file.readAll());
@@ -162,6 +177,7 @@ void Database::importCatalog(const QString &path,const QString &idSource) {
             }
             source.close();
         }
+/// 实现 removeDatabase 的本地处理逻辑，保持与项目其他模块的接口约定一致。
         QSqlDatabase::removeDatabase(idConnection);
         if(preservedIds.isEmpty()) fail(40001);
     }

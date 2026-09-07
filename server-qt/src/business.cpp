@@ -1,13 +1,22 @@
+// 实现登录、钱包、订单状态机、统计查询、后台管理、过期处理和日志记录。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "business.h"
 #include <QTimeZone>
 
 namespace {
+/// 实现 text 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 QString text(const QJsonObject &d,const QString &key) { auto s=d[key].toString().trimmed(); if(s.isEmpty()) fail(40001); return s; }
+/// 实现 idOf 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 qint64 idOf(const QJsonObject &d,const QString &key) { return integer(d[key]); }
+/// 实现 states 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 QStringList states(){return {"IDLE","RESERVED","CHARGING","FAULT","OFFLINE"};}
+/// 实现 activeSql 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 QString activeSql(){return "('PENDING','RESERVED','CHARGING','UNPAID')";}
+/// 实现 date 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 QDateTime date(const QJsonValue &v){return QDateTime::fromString(v.toString(),Qt::ISODateWithMs);}
 }
+/// 按 action 声明的角色校验令牌、账户状态和会话有效期。
 Identity Business::authorize(const QString &action,const QString &token) {
     const auto spec=contract()["x-actions"].toObject()[action].toObject();
     if(spec.isEmpty()) fail(40009);
@@ -22,26 +31,31 @@ Identity Business::authorize(const QString &action,const QString &token) {
     if(record["status"]!="NORMAL") fail(40301);
     return identity;
 }
+/// 查询用户资料及订单数、累计消费等汇总字段。
 QJsonObject Business::user(qint64 id) {
     auto o=db.one("SELECT u.id,u.phone,u.nickname,u.avatar_id,u.balance_cents,u.status,u.created_at,"
                   "(SELECT count(*) FROM charging_orders o WHERE o.user_id=u.id) order_count,"
                   "(SELECT coalesce(sum(o.amount_cents),0) FROM charging_orders o WHERE o.user_id=u.id AND o.status='COMPLETED') total_spent_cents "
                   "FROM users u WHERE u.id=?",{id}); if(o.isEmpty()) fail(40401); return o;
 }
+/// 查询电桩资料及累计充电次数和累计时长。
 QJsonObject Business::pile(qint64 id) {
     auto o=db.one("SELECT p.id,p.station_id,s.name station_name,p.pile_no,p.charge_type,p.rated_power_w,p.status,"
                   "(SELECT count(*) FROM charging_orders o WHERE o.pile_id=p.id AND o.status='COMPLETED') total_charge_count,"
                   "(SELECT coalesce(sum(o.duration_seconds),0) FROM charging_orders o WHERE o.pile_id=p.id AND o.status='COMPLETED') total_charge_duration_seconds "
                   "FROM charging_piles p JOIN stations s ON s.id=p.station_id WHERE p.id=?",{id}); if(o.isEmpty()) fail(40401); return o;
 }
+/// 查询站点基础信息并附加电桩总数、在线数和空闲数。
 QJsonObject Business::station(qint64 id) {
     auto o=db.one("SELECT * FROM stations WHERE id=?",{id}); if(o.isEmpty()) fail(40401);
     const auto stats=db.one("SELECT count(*) total_piles,coalesce(sum(status='IDLE'),0) available_piles,coalesce(sum(status!='OFFLINE'),0) online_piles FROM charging_piles WHERE station_id=?",{id});
     o["total_piles"]=stats["total_piles"];o["available_piles"]=stats["available_piles"];o["online_piles"]=stats["online_piles"];return o;
 }
+/// 读取启用站点作为地图距离矩阵的候选集合。
 QJsonArray Business::nearbyCandidates() {
     QJsonArray out;for(auto o:db.rows("SELECT id FROM stations WHERE status='ACTIVE' ORDER BY id"))out.append(station(o.toObject()["id"].toInteger()));return out;
 }
+/// 查询订单资料，补充站点/电桩信息，并估算进行中订单的电量与金额。
 QJsonObject Business::order(qint64 id) {
     auto o=db.one("SELECT * FROM charging_orders WHERE id=?",{id});if(o.isEmpty())fail(40401);
     auto s=db.one("SELECT id,name FROM stations WHERE id=?",{o["station_id"].toInteger()});
@@ -55,6 +69,7 @@ QJsonObject Business::order(qint64 id) {
         o["duration_seconds"]=seconds;o["energy_wh"]=energy;o["amount_cents"]=roundedProduct(energy,o["price_cents_per_kwh"].toInteger(),1000);
     }return o;
 }
+/// 为分页查询补充总数、当前页和转换后的项目列表。
 QJsonObject Business::listing(const QString &sql,const QVariantList &args,const QJsonObject &d,const std::function<QJsonObject(QJsonObject)> &transform) {
     const qint64 page=d["page"].toInteger(1), size=d["page_size"].toInteger(20);
     const auto total=db.scalar("SELECT count(*) FROM ("+sql+")",args);
@@ -63,12 +78,15 @@ QJsonObject Business::listing(const QString &sql,const QVariantList &args,const 
     if(transform){QJsonArray mapped;for(auto item:items)mapped.append(transform(item.toObject()));items=mapped;}
     return {{"items",items},{"page",page},{"page_size",size},{"total",total}};
 }
+/// 把电桩状态变化写入 pile_status_logs 供追溯。
 void Business::pileLog(qint64 p,qint64 o,const QString &before,const QString &after,const QString &reason) {
     db.execute("INSERT INTO pile_status_logs(pile_id,order_id,old_status,new_status,reason,created_at) VALUES(?,?,?,?,?,?)",{p,o?QVariant(o):QVariant(),before,after,reason,utcNow()});
 }
+/// 把管理员操作及详情写入 operation_logs 供审计。
 void Business::operationLog(qint64 admin,const QString &action,const QString &type,qint64 target,const QJsonObject &data) {
     db.execute("INSERT INTO operation_logs(admin_id,action,target_type,target_id,detail_json,created_at) VALUES(?,?,?,?,?,?)",{admin,action,type,target,QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact)),utcNow()});
 }
+/// 取消过期预约、释放电桩并清理已失效的内存会话。
 void Business::expire() {
     Transaction tx(db);
     for(auto item:db.rows("SELECT id,pile_id FROM charging_orders WHERE status='RESERVED' AND expires_at<=?",{utcNow()})) {
@@ -80,6 +98,7 @@ void Business::expire() {
     const auto now=QDateTime::currentDateTimeUtc();
     for(auto it=sessions.begin();it!=sessions.end();) if(it->expires<=now)it=sessions.erase(it);else ++it;
 }
+/// 根据 action 将请求分派到用户、钱包、订单、地图或管理员操作。
 QJsonValue Business::dispatch(const QString &a,const QJsonObject &d,const Identity &who) {
     if(a=="system.health"){db.scalar("SELECT 1");return QJsonObject{{"status","ok"},{"database","ok"}};}
     if(a=="auth.user.login"||a=="auth.admin.login") {
@@ -150,6 +169,7 @@ QJsonValue Business::dispatch(const QString &a,const QJsonObject &d,const Identi
         return listing(sql+" ORDER BY id",args,d,[this](auto o){return pile(o["id"].toInteger());});
     }fail(40009);
 }
+/// 实现用户侧订单列表、创建、预约、开始、结束、支付和取消状态流转。
 QJsonValue Business::orderAction(const QString &a,const QJsonObject &d,qint64 userId) {
     expire();
     if(a=="orders.list") {
@@ -206,6 +226,7 @@ QJsonValue Business::orderAction(const QString &a,const QJsonObject &d,qint64 us
     }else fail(40009);
     tx.commit();if(a=="orders.settle")return QJsonObject{{"order",order(id)},{"balance_cents",user(userId)["balance_cents"]}};return order(id);
 }
+/// 实现管理员统计、目录维护、用户状态、电桩恢复和操作日志。
 QJsonValue Business::adminAction(const QString &a,const QJsonObject &d,qint64 adminId) {
     if(a=="admin.pile_status") {QJsonObject out;for(const auto &s:states())out[s]=db.scalar("SELECT count(*) FROM charging_piles WHERE status=?",{s});return out;}
     const QTimeZone zone("Asia/Shanghai");const auto today=QDateTime::currentDateTimeUtc().toTimeZone(zone).date();

@@ -1,3 +1,5 @@
+# 配置管理端 Qt 源文件、Qt 模块、资源文件和构建目标。
+
 QT += core gui widgets charts network
 CONFIG += c++17
 TEMPLATE = app

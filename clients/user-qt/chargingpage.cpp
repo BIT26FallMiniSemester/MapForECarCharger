@@ -1,3 +1,6 @@
+// 实现电桩选择、预约/开始/结束/支付/取消订单和充电数据轮询展示。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "chargingpage.h"
 
 #include "apiclient.h"
@@ -21,6 +24,7 @@ QString durationText(qint64 seconds)
 }
 }
 
+/// 创建充电页布局、订单操作按钮、站点电桩容器和状态刷新定时器。
 ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     : QWidget(parent), m_api(api), m_timer(new QTimer(this))
 {
@@ -208,6 +212,7 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     renderOrder();
 }
 
+/// 选中指定站点并重新绘制地图标记。
 void ChargingPage::selectStation(const StationSummary &station, double fromLatitude, double fromLongitude)
 {
     if (hasActiveOrder()) {
@@ -232,11 +237,13 @@ void ChargingPage::selectStation(const StationSummary &station, double fromLatit
     m_api->planRoute(fromLatitude, fromLongitude, station.latitude, station.longitude);
 }
 
+/// 从后端恢复当前用户未完成订单。
 void ChargingPage::restoreActiveOrder()
 {
     m_api->fetchActiveOrder();
 }
 
+/// 清除本地充电站、订单和电桩显示状态。
 void ChargingPage::clearSession()
 {
     m_timer->stop();
@@ -246,6 +253,7 @@ void ChargingPage::clearSession()
     renderOrder();
 }
 
+/// 维护请求计数器并统一切换各页面的忙碌状态。
 void ChargingPage::setBusy(bool busy)
 {
     m_start->setEnabled(!busy && m_order.status == QStringLiteral("RESERVED"));
@@ -256,6 +264,7 @@ void ChargingPage::setBusy(bool busy)
     m_refresh->setEnabled(!busy);
 }
 
+/// 实现 clearPiles 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ChargingPage::clearPiles()
 {
     while (QLayoutItem *item = m_pileLayout->takeAt(0)) {
@@ -266,6 +275,7 @@ void ChargingPage::clearPiles()
     m_pileHost->setVisible(m_station.id > 0 && m_order.id == 0);
 }
 
+/// 根据当前订单状态更新操作按钮、指标和刷新定时器。
 void ChargingPage::renderOrder()
 {
     const bool exists = m_order.id > 0;
@@ -293,6 +303,7 @@ void ChargingPage::renderOrder()
     setBusy(false);
 }
 
+/// 显示操作提示，并按错误状态切换颜色。
 void ChargingPage::setHint(const QString &text, bool error)
 {
     m_hint->setObjectName(error ? QStringLiteral("statusLabel") : QStringLiteral("subtitleLabel"));
@@ -300,12 +311,14 @@ void ChargingPage::setHint(const QString &text, bool error)
     m_hint->setText(text);
 }
 
+/// 判断是否存在尚未完成或取消的订单。
 bool ChargingPage::hasActiveOrder() const
 {
     return m_order.id > 0 && m_order.status != QStringLiteral("COMPLETED") &&
            m_order.status != QStringLiteral("CANCELLED");
 }
 
+/// 把协议状态转换为用户可读中文。
 QString ChargingPage::statusText(const QString &status) const
 {
     if (status == QStringLiteral("IDLE")) return QStringLiteral("空闲");

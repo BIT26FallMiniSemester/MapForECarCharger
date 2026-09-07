@@ -1,3 +1,6 @@
+// 实现首页地图、定位入口、范围控制、站点卡片和地图/列表联动。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "homepage.h"
 #include "ui_homepage.h"
 #include "stationmapwidget.h"
@@ -15,6 +18,7 @@
 #include <QtGlobal>
 #include <QToolButton>
 
+/// 创建首页 UI、地图区域、位置按钮、范围控件和站点卡片容器。
 HomePage::HomePage(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::HomePage)
@@ -51,11 +55,13 @@ HomePage::~HomePage()
     delete ui;
 }
 
+/// 返回当前站点搜索半径。
 double HomePage::radiusKm() const
 {
     return m_radiusKm;
 }
 
+/// 初始化范围下拉框和增减按钮的交互。
 void HomePage::setupRadiusControl()
 {
     ui->radiusCombo->setEditable(false);
@@ -79,6 +85,7 @@ void HomePage::setupRadiusControl()
     setRadiusKm(m_radiusKm);
 }
 
+/// 把搜索半径限制在 1 到 100 公里并同步控件显示。
 void HomePage::setRadiusKm(int km)
 {
     m_radiusKm = qBound(1, km, 100);
@@ -103,11 +110,13 @@ void HomePage::setRadiusKm(int km)
     ui->radiusUp->setEnabled(m_radiusKm < 100);
 }
 
+/// 维护请求计数器并统一切换各页面的忙碌状态。
 void HomePage::setBusy(bool busy)
 {
     setEnabled(!busy);
 }
 
+/// 更新用户位置、地图中心点和位置按钮显示。
 void HomePage::setLocation(double lat, double lng, const QString &displayName)
 {
     m_lat = lat;
@@ -117,14 +126,18 @@ void HomePage::setLocation(double lat, double lng, const QString &displayName)
     refreshLocationButton();
 }
 
+/// 将定位重置为北京市中心模拟坐标。
 void HomePage::useSimulatedGps()
 {
     setLocation(39.9042, 116.4074, QStringLiteral("北京市中心（可修改）"));
 }
 
+/// 在地图控件中显示腾讯静态地图 PNG。
 void HomePage::showMap(const QByteArray &png){m_map->setImage(png);}
+/// 地图失败时显示降级提示，同时保留站点列表。
 void HomePage::showMapError(const QString &message){m_mapDetail->setText(QStringLiteral("地图暂时无法加载：%1。附近站点列表仍可使用。").arg(message));}
 
+/// 同步地图选中项、详情标签、卡片状态和滚动位置。
 void HomePage::focusStation(const StationSummary &station)
 {
     m_focusedStation=station;m_map->selectStation(station.id);
@@ -136,22 +149,27 @@ void HomePage::focusStation(const StationSummary &station)
     const qint64 stationId=station.id;QTimer::singleShot(0,this,[this,stationId]{if(auto *card=m_cards.value(stationId))ui->stationScroll->ensureWidgetVisible(card,0,12);});
 }
 
+/// 处理站点卡片和子控件的点击事件。
 bool HomePage::eventFilter(QObject *watched,QEvent *event)
 {
     if(event->type()==QEvent::MouseButtonRelease&&watched->property("stationId").isValid()){const qint64 id=watched->property("stationId").toLongLong();for(const auto &station:m_stations)if(station.id==id){focusStation(station);break;}return true;}
+/// 处理站点卡片和子控件的点击事件。
     return QWidget::eventFilter(watched,event);
 }
 
+/// 实现 refreshLocationButton 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void HomePage::refreshLocationButton()
 {
     ui->locationButton->setText(QStringLiteral("我的位置 · %1  ›").arg(m_displayName));
 }
 
+/// 更新首页提示文本。
 void HomePage::showHint(const QString &text)
 {
     ui->hintLabel->setText(text);
 }
 
+/// 删除旧的站点卡片及对应布局项。
 void HomePage::clearCards()
 {
     m_cards.clear();
@@ -163,6 +181,7 @@ void HomePage::clearCards()
     }
 }
 
+/// 把站点结果渲染为地图标记和站点卡片，并选中首项。
 void HomePage::showStations(const QVector<StationSummary> &stations)
 {
     clearCards();

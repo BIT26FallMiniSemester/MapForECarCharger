@@ -1,6 +1,10 @@
+// 服务端程序入口，解析启动参数、执行迁移/初始化并监听 TCP 端口。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "server.h"
 #include <iostream>
 
+/// 实现 main 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 int main(int argc,char **argv){
     QCoreApplication app(argc,argv);QCoreApplication::setApplicationName("charger-server");QCoreApplication::setApplicationVersion("0.4.0");
     QCommandLineParser parser;parser.addHelpOption();parser.addVersionOption();

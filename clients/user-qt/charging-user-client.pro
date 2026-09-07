@@ -1,3 +1,5 @@
+# 配置用户端 Qt 源文件、Qt 模块和构建目标。
+
 QT += core gui widgets network
 
 CONFIG += c++17

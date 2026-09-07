@@ -1,3 +1,6 @@
+// 实现用户资料展示、头像预览、充值金额读取和充值记录渲染。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "profilepage.h"
 #include "ui_profilepage.h"
 
@@ -5,6 +8,7 @@
 #include <QPixmap>
 #include <QPushButton>
 
+/// 创建个人中心表单、余额、头像、充值记录和操作按钮。
 ProfilePage::ProfilePage(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::ProfilePage)
@@ -31,16 +35,19 @@ ProfilePage::~ProfilePage()
     delete ui;
 }
 
+/// 返回清理后的昵称输入。
 QString ProfilePage::nickname() const
 {
     return ui->nicknameEdit->text().trimmed();
 }
 
+/// 返回用户输入的充值金额。
 double ProfilePage::rechargeYuan() const
 {
     return ui->rechargeSpin->value();
 }
 
+/// 把用户模型渲染到个人中心。
 void ProfilePage::setUser(const User &user)
 {
     ui->phoneLabel->setText(QStringLiteral("手机号  %1").arg(user.phone));
@@ -53,6 +60,7 @@ void ProfilePage::setUser(const User &user)
     }
 }
 
+/// 从本地文件加载并缩放头像。
 void ProfilePage::setAvatarPath(const QString &path)
 {
     QPixmap pix(path);
@@ -63,16 +71,19 @@ void ProfilePage::setAvatarPath(const QString &path)
     ui->avatarLabel->setStyleSheet(QStringLiteral("border-radius:36px;"));
 }
 
+/// 维护请求计数器并统一切换各页面的忙碌状态。
 void ProfilePage::setBusy(bool busy)
 {
     setEnabled(!busy);
 }
 
+/// 更新登录页状态文字。
 void ProfilePage::setStatus(const QString &text)
 {
     ui->statusLabel->setText(text);
 }
 
+/// 把充值记录渲染为列表。
 void ProfilePage::showRechargeRecords(const QVector<RechargeRecord> &records)
 {
     while (ui->recordListLayout->count() > 1) {

@@ -1,3 +1,5 @@
+# 定义充电服务端的 systemd 启动命令、环境和工作目录。
+
 [Unit]
 Description=MapForECarCharger Qt Socket backend
 After=network-online.target

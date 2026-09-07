@@ -1,3 +1,5 @@
+# 创建充电平台基础表、索引、外键和初始字段。
+
 CREATE TABLE users(id INTEGER PRIMARY KEY,phone TEXT NOT NULL UNIQUE CHECK(length(phone)=11),nickname TEXT NOT NULL,avatar_id TEXT,balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents>=0),status TEXT NOT NULL DEFAULT 'NORMAL' CHECK(status IN ('NORMAL','FROZEN')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE admins(id INTEGER PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'NORMAL' CHECK(status IN ('NORMAL','DISABLED')),last_login_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
 CREATE TABLE stations(id INTEGER PRIMARY KEY,name TEXT NOT NULL,address TEXT NOT NULL,latitude REAL NOT NULL CHECK(latitude BETWEEN -90 AND 90),longitude REAL NOT NULL CHECK(longitude BETWEEN -180 AND 180),price_cents_per_kwh INTEGER CHECK(price_cents_per_kwh>0),operator_name TEXT,district TEXT,data_source TEXT,external_id TEXT,status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','INACTIVE')),created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(data_source,external_id));

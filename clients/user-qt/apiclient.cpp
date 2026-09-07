@@ -1,3 +1,6 @@
+// 把界面路径映射为服务端 action，并把协议响应转换为界面使用的 JSON 结构。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "apiclient.h"
 
 #include "socketclient.h"
@@ -5,6 +8,7 @@
 #include <QJsonArray>
 #include <QUuid>
 
+/// 创建用户端 API 客户端并连接 SocketClient 的成功/失败信号。
 ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClient(this))
 {
     connect(m_socket, &SocketClient::succeeded, this,
@@ -21,28 +25,36 @@ ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClie
     });
 }
 
+/// 设置 API 后端 Socket 地址。
 void ApiClient::setBaseUrl(const QString &endpoint) { m_socket->setEndpoint(endpoint); }
+/// 预留演示模式开关，保持 API 客户端接口与其他端一致。
 void ApiClient::setDemoMode(bool enabled) { Q_UNUSED(enabled); }
+/// 设置后续需要认证的请求令牌。
 void ApiClient::setToken(const QString &token) { m_token = token; }
+/// 清除本地充电站、订单和电桩显示状态。
 void ApiClient::clearSession() { m_token.clear(); }
 
+/// 实现 login 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::login(const QString &phone)
 {
     send(QStringLiteral("login"), QStringLiteral("auth.user.login"),
          QJsonObject{{QStringLiteral("phone"), phone}}, false);
 }
 
+/// 实现 fetchProfile 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchProfile()
 {
     send(QStringLiteral("profile"), QStringLiteral("users.me.get"));
 }
 
+/// 实现 updateNickname 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::updateNickname(const QString &nickname)
 {
     send(QStringLiteral("nickname"), QStringLiteral("users.me.update"),
          QJsonObject{{QStringLiteral("nickname"), nickname.trimmed()}});
 }
 
+/// 实现 recharge 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::recharge(double amountYuan)
 {
     send(QStringLiteral("recharge"), QStringLiteral("wallet.recharges.create"),
@@ -51,12 +63,14 @@ void ApiClient::recharge(double amountYuan)
                           + QUuid::createUuid().toString(QUuid::WithoutBraces)}});
 }
 
+/// 实现 fetchRechargeRecords 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchRechargeRecords()
 {
     send(QStringLiteral("rechargeRecords"), QStringLiteral("wallet.recharges.list"),
          QJsonObject{{QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 20}});
 }
 
+/// 实现 fetchNearbyStations 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchNearbyStations(double latitude, double longitude, double radiusKm)
 {
     send(QStringLiteral("nearby"), QStringLiteral("stations.nearby"),
@@ -67,17 +81,20 @@ void ApiClient::fetchNearbyStations(double latitude, double longitude, double ra
                      {QStringLiteral("page_size"), 100}});
 }
 
+/// 实现 fetchMapSnapshot 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchMapSnapshot(double latitude, double longitude, int zoom)
 {
     send(QStringLiteral("map"),QStringLiteral("map.snapshot"),QJsonObject{{QStringLiteral("latitude"),latitude},{QStringLiteral("longitude"),longitude},{QStringLiteral("zoom"),zoom}});
 }
 
+/// 实现 geocode 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::geocode(const QString &address)
 {
     send(QStringLiteral("geocode"), QStringLiteral("map.geocode"),
          QJsonObject{{QStringLiteral("address"), address.trimmed()}});
 }
 
+/// 实现 fetchStationPiles 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchStationPiles(qint64 stationId)
 {
     send(QStringLiteral("piles:%1").arg(stationId), QStringLiteral("stations.piles.list"),
@@ -85,17 +102,20 @@ void ApiClient::fetchStationPiles(qint64 stationId)
                      {QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 100}});
 }
 
+/// 实现 fetchActiveOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchActiveOrder()
 {
     send(QStringLiteral("order:active"), QStringLiteral("orders.active"));
 }
 
+/// 实现 fetchOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::fetchOrder(qint64 orderId)
 {
     send(QStringLiteral("order:detail"), QStringLiteral("orders.detail"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 createOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::createOrder(qint64 stationId, qint64 pileId)
 {
     send(QStringLiteral("order:create"), QStringLiteral("orders.create"),
@@ -103,36 +123,42 @@ void ApiClient::createOrder(qint64 stationId, qint64 pileId)
                      {QStringLiteral("pile_id"), pileId}});
 }
 
+/// 实现 reserveOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::reserveOrder(qint64 orderId)
 {
     send(QStringLiteral("order:reserve"), QStringLiteral("orders.reserve"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 startOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::startOrder(qint64 orderId)
 {
     send(QStringLiteral("order:start"), QStringLiteral("orders.start"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 stopOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::stopOrder(qint64 orderId)
 {
     send(QStringLiteral("order:stop"), QStringLiteral("orders.stop"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 settleOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::settleOrder(qint64 orderId)
 {
     send(QStringLiteral("order:settle"), QStringLiteral("orders.settle"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 cancelOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::cancelOrder(qint64 orderId)
 {
     send(QStringLiteral("order:cancel"), QStringLiteral("orders.cancel"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
 }
 
+/// 实现 planRoute 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::planRoute(double fromLatitude, double fromLongitude,
                           double toLatitude, double toLongitude)
 {
@@ -144,6 +170,7 @@ void ApiClient::planRoute(double fromLatitude, double fromLongitude,
                      {QStringLiteral("mode"), QStringLiteral("driving")}});
 }
 
+/// 为 action 生成 request_id，加入待处理上下文并排队发送请求。
 void ApiClient::send(const QString &context, const QString &action,
                      const QJsonObject &data, bool withToken)
 {
@@ -151,6 +178,7 @@ void ApiClient::send(const QString &context, const QString &action,
     m_socket->send(context, action, data, withToken ? m_token : QString());
 }
 
+/// 根据请求上下文把 Socket 响应转换为领域信号。
 void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
 {
     if (context == QStringLiteral("login")) {
@@ -231,6 +259,7 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
     }
 }
 
+/// 把 JSON 用户对象转换为客户端 User 模型。
 User ApiClient::parseUser(const QJsonObject &object) const
 {
     User user;
@@ -243,6 +272,7 @@ User ApiClient::parseUser(const QJsonObject &object) const
     return user;
 }
 
+/// 把 JSON 站点对象转换为带距离和在线率的客户端模型。
 StationSummary ApiClient::parseStation(const QJsonObject &object) const
 {
     StationSummary station;
@@ -264,6 +294,7 @@ StationSummary ApiClient::parseStation(const QJsonObject &object) const
     return station;
 }
 
+/// 把 JSON 充值记录转换为客户端 RechargeRecord 模型。
 RechargeRecord ApiClient::parseRecharge(const QJsonObject &object) const
 {
     RechargeRecord record;
@@ -275,6 +306,7 @@ RechargeRecord ApiClient::parseRecharge(const QJsonObject &object) const
     return record;
 }
 
+/// 把 JSON 电桩对象转换为客户端 ChargingPile 模型。
 ChargingPile ApiClient::parsePile(const QJsonObject &object) const
 {
     ChargingPile pile;
@@ -287,6 +319,7 @@ ChargingPile ApiClient::parsePile(const QJsonObject &object) const
     return pile;
 }
 
+/// 把 JSON 订单及嵌套站点/电桩对象转换为客户端订单模型。
 ChargingOrder ApiClient::parseOrder(const QJsonObject &object) const
 {
     ChargingOrder order;
@@ -309,6 +342,7 @@ ChargingOrder ApiClient::parseOrder(const QJsonObject &object) const
     return order;
 }
 
+/// 把用户端业务错误码转换为中文提示。
 QString ApiClient::chineseMessage(int code, const QString &fallback) const
 {
     switch (code) {

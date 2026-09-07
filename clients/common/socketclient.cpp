@@ -1,3 +1,6 @@
+// 实现 SocketClient 的连接、请求排队、长度帧编码、响应解析和失败清理。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "socketclient.h"
 
 #include <QJsonDocument>
@@ -16,6 +19,7 @@ QByteArray frame(const QJsonObject &object)
 }
 }
 
+/// 创建客户端 Socket 并连接 Qt 的连接、读取、断开和错误信号。
 SocketClient::SocketClient(QObject *parent) : QObject(parent)
 {
     connect(&m_socket, &QTcpSocket::connected, this, &SocketClient::flushOutput);
@@ -31,6 +35,7 @@ SocketClient::SocketClient(QObject *parent) : QObject(parent)
     });
 }
 
+/// 解析并切换 Qt Socket 服务端的主机和端口。
 void SocketClient::setEndpoint(const QString &endpoint)
 {
     QString value = endpoint.trimmed();
@@ -48,11 +53,13 @@ void SocketClient::setEndpoint(const QString &endpoint)
     m_port = quint16(port);
 }
 
+/// 返回当前配置的服务端地址。
 QString SocketClient::endpoint() const
 {
     return QStringLiteral("%1:%2").arg(m_host).arg(m_port);
 }
 
+/// 为 action 生成 request_id，加入待处理上下文并排队发送请求。
 void SocketClient::send(const QString &context, const QString &action,
                         const QJsonObject &data, const QString &token)
 {
@@ -72,6 +79,7 @@ void SocketClient::send(const QString &context, const QString &action,
     else if (m_socket.state() == QAbstractSocket::UnconnectedState)
         m_socket.connectToHost(m_host, m_port);
 
+/// 实现 singleShot 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     QTimer::singleShot(15000, this, [this, requestId] {
         const auto it = m_pending.find(requestId);
         if (it == m_pending.end())
@@ -82,6 +90,7 @@ void SocketClient::send(const QString &context, const QString &action,
     });
 }
 
+/// 仅在 Socket 已连接时把待发送帧写入网络。
 void SocketClient::flushOutput()
 {
     if (m_socket.state() != QAbstractSocket::ConnectedState || m_output.isEmpty())
@@ -91,6 +100,7 @@ void SocketClient::flushOutput()
         m_output.remove(0, int(accepted));
 }
 
+/// 按长度前缀拆包 JSON 响应，并把成功或失败结果分发给调用方。
 void SocketClient::readResponses()
 {
     m_input += m_socket.readAll();
@@ -128,6 +138,7 @@ void SocketClient::readResponses()
     }
 }
 
+/// 清理连接期间尚未完成的请求并统一发送失败通知。
 void SocketClient::failAll(int code, const QString &message)
 {
     const auto contexts = m_pending.values();

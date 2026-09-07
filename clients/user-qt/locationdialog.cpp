@@ -1,3 +1,6 @@
+// 实现行政区域/示例位置选择，以及通过地图服务解析用户输入地址。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "locationdialog.h"
 #include "ui_locationdialog.h"
 
@@ -6,6 +9,7 @@
 #include <QPushButton>
 #include <QVariant>
 
+/// 创建位置选择对话框并加载区域快捷项。
 LocationDialog::LocationDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::LocationDialog)
@@ -32,6 +36,7 @@ LocationDialog::LocationDialog(QWidget *parent)
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &LocationDialog::reject);
 }
 
+/// 接收地图服务返回的地址坐标并更新对话框。
 void LocationDialog::applyGeocodedLocation(double lat, double lng, const QString &displayName)
 {
     m_searching = false;
@@ -40,6 +45,7 @@ void LocationDialog::applyGeocodedLocation(double lat, double lng, const QString
     applyLocation(lat, lng, displayName);
 }
 
+/// 显示地址搜索失败信息并恢复搜索按钮。
 void LocationDialog::showSearchError(const QString &message)
 {
     m_searching = false;
@@ -53,6 +59,7 @@ LocationDialog::~LocationDialog()
     delete ui;
 }
 
+/// 初始化位置选择对话框的当前坐标和名称。
 void LocationDialog::setCurrentLocation(double lat, double lng, const QString &displayName)
 {
     m_lat = lat;
@@ -61,6 +68,7 @@ void LocationDialog::setCurrentLocation(double lat, double lng, const QString &d
     ui->statusLabel->setText(QStringLiteral("当前：%1").arg(displayName));
 }
 
+/// 向区域下拉框加入北京市中心和常用区域快捷项。
 void LocationDialog::fillRegions()
 {
     struct Region {
@@ -91,6 +99,7 @@ void LocationDialog::fillRegions()
     }
 }
 
+/// 保存位置坐标和显示名称。
 void LocationDialog::applyLocation(double lat, double lng, const QString &name)
 {
     m_lat = lat;
@@ -99,6 +108,7 @@ void LocationDialog::applyLocation(double lat, double lng, const QString &name)
     ui->statusLabel->setText(QStringLiteral("已选择：%1").arg(name));
 }
 
+/// 应用当前下拉区域。
 void LocationDialog::onUseRegion()
 {
     const QVariantMap data = ui->regionCombo->currentData().toMap();
@@ -107,6 +117,7 @@ void LocationDialog::onUseRegion()
                   data.value(QStringLiteral("display")).toString());
 }
 
+/// 校验地址并发出地图搜索请求。
 void LocationDialog::onSearch()
 {
     const QString address = ui->addressEdit->text().trimmed();
@@ -122,6 +133,7 @@ void LocationDialog::onSearch()
     emit searchRequested(address);
 }
 
+/// 确认并关闭位置选择对话框。
 void LocationDialog::onAccepted()
 {
     accept();

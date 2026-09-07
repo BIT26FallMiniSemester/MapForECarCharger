@@ -1,3 +1,6 @@
+// 使用经纬度投影绘制地图标记，并响应站点选择和缩放操作。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "stationmapwidget.h"
 
 #include <QLabel>
@@ -12,6 +15,7 @@ QPointF worldPoint(double latitude,double longitude,int zoom)
 }
 }
 
+/// 创建地图背景、缩放按钮并准备绘制站点标记。
 StationMapWidget::StationMapWidget(QWidget *parent):QWidget(parent),m_background(new QLabel(this))
 {
     setFixedSize(340,170);setObjectName(QStringLiteral("stationMap"));m_background->setGeometry(rect());m_background->setAlignment(Qt::AlignCenter);m_background->setText(QStringLiteral("正在加载腾讯地图…"));m_background->setStyleSheet(QStringLiteral("background:#dcece8;color:#38635b;border-radius:16px;"));
@@ -22,11 +26,16 @@ StationMapWidget::StationMapWidget(QWidget *parent):QWidget(parent),m_background
     connect(m_zoomIn,&QToolButton::clicked,this,[this]{changeZoom(1);});connect(m_zoomOut,&QToolButton::clicked,this,[this]{changeZoom(-1);});
 }
 
+/// 更新地图中心坐标、缩放级别和站点标记。
 void StationMapWidget::setCenter(double latitude,double longitude,int zoom){m_userLatitude=latitude;m_userLongitude=longitude;m_centerLatitude=latitude;m_centerLongitude=longitude;m_zoom=zoom;rebuildPins();}
+/// 把静态地图 PNG 设置为地图背景并刷新标记。
 void StationMapWidget::setImage(const QByteArray &png){m_image.loadFromData(png,"PNG");m_background->setPixmap(m_image.scaled(size(),Qt::IgnoreAspectRatio,Qt::SmoothTransformation));rebuildPins();}
+/// 保存站点集合并按需初始化选中项。
 void StationMapWidget::setStations(const QVector<StationSummary> &stations){m_stations=stations;if(!stations.isEmpty()&&m_selectedStationId==0)m_selectedStationId=stations.first().id;rebuildPins();}
+/// 选中指定站点并重新绘制地图标记。
 void StationMapWidget::selectStation(qint64 stationId){m_selectedStationId=stationId;rebuildPins();}
 
+/// 调整缩放级别、以选中站点为中心并请求新地图。
 void StationMapWidget::changeZoom(int delta)
 {
     const int next=qBound(11,m_zoom+delta,17);if(next==m_zoom)return;m_zoom=next;
@@ -34,6 +43,7 @@ void StationMapWidget::changeZoom(int delta)
     m_image=QPixmap();m_background->clear();m_background->setText(QStringLiteral("正在加载 %1 级地图…").arg(m_zoom));rebuildPins();m_zoomIn->setEnabled(m_zoom<17);m_zoomOut->setEnabled(m_zoom>11);emit zoomChanged(m_centerLatitude,m_centerLongitude,m_zoom);
 }
 
+/// 把经纬度通过 Web Mercator 投影换算为控件像素坐标。
 QPoint StationMapWidget::pointFor(double latitude,double longitude) const
 {
     const QPointF center=worldPoint(m_centerLatitude,m_centerLongitude,m_zoom),point=worldPoint(latitude,longitude,m_zoom);
@@ -41,6 +51,7 @@ QPoint StationMapWidget::pointFor(double latitude,double longitude) const
     return QPoint(qRound(width()/2.0+(point.x()-center.x())*scaleX),qRound(height()/2.0+(point.y()-center.y())*scaleY));
 }
 
+/// 根据当前投影位置重建用户位置和前十个站点标记。
 void StationMapWidget::rebuildPins()
 {
     const auto old=findChildren<QToolButton*>(QString(),Qt::FindDirectChildrenOnly);for(auto *button:old)if(button->property("mapMarker").toBool())button->deleteLater();

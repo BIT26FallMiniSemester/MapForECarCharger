@@ -1,9 +1,13 @@
+// 实现公共校验、时间、令牌、密码摘要、分帧和协议 schema 加载。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "common.h"
 #include <QPasswordDigestor>
 #include <QtEndian>
 #include <cmath>
 #include <limits>
 
+/// 根据业务码抛出包含固定中文提示的统一失败异常。
 void fail(int code) {
     static const QMap<int, QString> messages{
         {40001, QStringLiteral("请求内容不正确")}, {40002, QStringLiteral("您已有未完成订单")},
@@ -17,17 +21,22 @@ void fail(int code) {
     };
     throw Failure{code, messages.value(code, QStringLiteral("处理失败"))};
 }
+/// 生成带毫秒的 UTC ISO-8601 时间字符串。
 QString utcNow() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs); }
+/// 生成用于会话或文件名的随机十六进制令牌。
 QString randomToken() {
     QByteArray bytes(32, Qt::Uninitialized);
     for (int i=0; i<32; i+=4) { quint32 n=QRandomGenerator::system()->generate(); memcpy(bytes.data()+i,&n,4); }
+/// 实现 fromLatin1 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     return QString::fromLatin1(bytes.toHex());
 }
+/// 使用随机盐和 PBKDF2-SHA256 生成可持久化的密码摘要。
 QString passwordHash(const QString &password) {
     const auto salt=QByteArray::fromHex(randomToken().left(32).toLatin1());
     const auto hash=QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha256,password.toUtf8(),salt,310000,32);
     return "pbkdf2_sha256$310000$"+QString::fromLatin1(salt.toHex())+"$"+QString::fromLatin1(hash.toHex());
 }
+/// 解析并校验 PBKDF2 密码摘要，使用常量时间比较避免泄露差异。
 bool passwordVerify(const QString &password,const QString &encoded) {
     const auto parts=encoded.split('$');
     if(parts.size()!=4 || parts[0]!="pbkdf2_sha256") return false;
@@ -41,17 +50,20 @@ bool passwordVerify(const QString &password,const QString &encoded) {
     for(int i=0;i<32;i++) difference |= static_cast<unsigned char>(actual[i]^expected[i]);
     return difference==0;
 }
+/// 把 JSON 数字安全转换为协议允许范围内的有符号整数。
 qint64 integer(const QJsonValue &v) {
     if(!v.isDouble() || !std::isfinite(v.toDouble()) || std::floor(v.toDouble())!=v.toDouble()
        || std::abs(v.toDouble())>9007199254740991.0) fail(40001);
     return v.toInteger();
 }
+/// 计算整数乘除结果并按协议规则四舍五入，同时检查溢出。
 qint64 roundedProduct(qint64 a,qint64 b,qint64 divisor) {
     if(a<0 || b<0 || divisor<=0 || (b && a>std::numeric_limits<qint64>::max()/b)) fail(40001);
     const qint64 n=a*b, result=n/divisor+(n%divisor >= (divisor+1)/2);
     if(result>9007199254740991LL) fail(40001);
     return result;
 }
+/// 从 Qt 资源加载并返回 Socket 协议的 JSON Schema 契约。
 QJsonObject contract() {
     static const QJsonObject spec=[] {
         QFile file(":/schemas/socket.json");
@@ -62,6 +74,7 @@ QJsonObject contract() {
     }();
     return spec;
 }
+/// 按 JSON Schema 对协议值执行类型、长度、范围、枚举和引用校验。
 bool validate(const QJsonValue &v,QJsonObject s) {
     if(s.contains("$ref")) s=contract()["$defs"].toObject()[s["$ref"].toString().section('/',-1)].toObject();
     if(s.contains("anyOf")) { for(auto option:s["anyOf"].toArray()) if(validate(v,option.toObject())) return true; return false; }
@@ -93,6 +106,7 @@ bool validate(const QJsonValue &v,QJsonObject s) {
     if(s.contains("const")&&v!=s["const"]) return false;
     return true;
 }
+/// 把 JSON 对象编码为带 4 字节大端长度的协议帧。
 QByteArray frame(const QJsonObject &o) {
     QByteArray body=QJsonDocument(o).toJson(QJsonDocument::Compact), out(4,Qt::Uninitialized);
     qToBigEndian<quint32>(body.size(),out.data()); return out+body;

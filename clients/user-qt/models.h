@@ -1,3 +1,6 @@
+// 定义客户端统一数据模型、金额转换函数和接口字段映射约定。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #ifndef MODELS_H
 #define MODELS_H
 
@@ -8,14 +11,17 @@
 
 inline QString centsToYuanText(qint64 cents)
 {
+// 实现 number 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     return QString::number(static_cast<double>(cents) / 100.0, 'f', 2);
 }
 
 inline qint64 yuanToCents(double yuan)
 {
+// 实现 qRound 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     return static_cast<qint64>(qRound(yuan * 100.0));
 }
 
+// 实现 User 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct User {
     qint64 id = 0;
     QString phone;
@@ -25,6 +31,7 @@ struct User {
     QString status;      // NORMAL / FROZEN
 };
 
+// 实现 StationSummary 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct StationSummary {
     qint64 id = 0;
     QString name;
@@ -43,6 +50,7 @@ struct StationSummary {
     double distanceKm = 0;      // 附近查询时由后端计算
 };
 
+// 实现 ChargingPile 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct ChargingPile {
     qint64 id = 0;
     qint64 stationId = 0;
@@ -52,6 +60,7 @@ struct ChargingPile {
     QString status;
 };
 
+// 实现 ChargingOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct ChargingOrder {
     qint64 id = 0;
     QString orderNo;
@@ -69,11 +78,13 @@ struct ChargingOrder {
     bool estimated = false;
 };
 
+// 实现 RouteInfo 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct RouteInfo {
     qint64 distanceMeters = 0;
     qint64 durationSeconds = 0;
 };
 
+// 实现 RechargeRecord 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 struct RechargeRecord {
     QString rechargeNo;
     qint64 amountCents = 0;

@@ -1,10 +1,18 @@
+// 提供不依赖服务端的站点、电桩、用户、趋势和电桩恢复演示数据。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "mockrepository.h"
 
+/// 返回进程级唯一的演示数据仓库单例。
 MockRepository &MockRepository::instance() { static MockRepository repo; return repo; }
+/// 返回内存中的电桩列表。
 QList<Pile> &MockRepository::piles() { return m_piles; }
+/// 返回内存中的站点列表。
 QList<Station> &MockRepository::stations() { return m_stations; }
+/// 返回内存中的用户列表。
 QList<User> &MockRepository::users() { return m_users; }
 
+/// 初始化管理端演示数据仓库。
 MockRepository::MockRepository()
 {
     m_stations = {
@@ -31,6 +39,7 @@ MockRepository::MockRepository()
     };
 }
 
+/// 生成指定天数的演示营收趋势。
 QList<TrendPoint> MockRepository::trend(int days) const
 {
     QList<TrendPoint> result;
@@ -42,6 +51,7 @@ QList<TrendPoint> MockRepository::trend(int days) const
     return result;
 }
 
+/// 在演示模式中把故障电桩恢复为空闲并同步站点统计。
 bool MockRepository::restartPile(int id, QString &message)
 {
     for (Pile &p : m_piles) {
@@ -54,5 +64,7 @@ bool MockRepository::restartPile(int id, QString &message)
     }
     message = "未找到电桩"; return false;
 }
+/// 向演示仓库追加站点。
 void MockRepository::addStation(const Station &s) { m_stations.append(s); }
+/// 为指定站点创建电桩。
 void MockRepository::addPile(const Pile &p) { m_piles.append(p); }

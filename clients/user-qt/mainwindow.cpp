@@ -1,3 +1,6 @@
+// 实现管理端首页、运营图表、电桩/站点/用户/订单管理和实时刷新。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -15,6 +18,7 @@
 #include <QSettings>
 #include <QTimer>
 
+/// 组装管理端导航、各业务页面、图表和 API 刷新状态。
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -109,6 +113,7 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+/// 校验手机号、设置后端地址并发起用户登录。
 void MainWindow::onLoginClicked()
 {
     const QString phone = ui->loginPage->phone();
@@ -121,6 +126,7 @@ void MainWindow::onLoginClicked()
     m_api->login(phone);
 }
 
+/// 保存用户资料、进入主界面并加载附近站点。
 void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool isNewUser)
 {
     Q_UNUSED(token);
@@ -129,6 +135,7 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
     const QString tip = isNewUser
                             ? QStringLiteral("已自动注册并登录")
                             : QStringLiteral("登录成功");
+/// 实现 information 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     QMessageBox::information(this, QStringLiteral("欢迎"),
                              tip + QStringLiteral("\n%1").arg(user.nickname));
     ui->homePage->useSimulatedGps();
@@ -137,6 +144,7 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
     m_chargingPage->restoreActiveOrder();
 }
 
+/// 按首页位置和范围请求附近充电站。
 void MainWindow::onQueryNearby()
 {
     ui->homePage->showHint(QStringLiteral("正在查询..."));
@@ -145,6 +153,7 @@ void MainWindow::onQueryNearby()
                                ui->homePage->radiusKm());
 }
 
+/// 打开位置选择对话框并在确认后重新查询站点。
 void MainWindow::onChangeLocation()
 {
     LocationDialog dialog(this);
@@ -164,6 +173,7 @@ void MainWindow::onChangeLocation()
     onQueryNearby();
 }
 
+/// 校验昵称长度并请求保存。
 void MainWindow::onSaveNickname()
 {
     const QString name = ui->profilePage->nickname();
@@ -174,6 +184,7 @@ void MainWindow::onSaveNickname()
     m_api->updateNickname(name);
 }
 
+/// 打开本地图片选择器并显示本地头像。
 void MainWindow::onChooseAvatar()
 {
     const QString path = QFileDialog::getOpenFileName(
@@ -187,11 +198,13 @@ void MainWindow::onChooseAvatar()
     ui->profilePage->setStatus(QStringLiteral("已使用本地头像（稍后对接上传接口）"));
 }
 
+/// 把个人中心输入金额转换为分后发起充值。
 void MainWindow::onRecharge()
 {
     m_api->recharge(ui->profilePage->rechargeYuan());
 }
 
+/// 清除会话和页面状态并返回登录页。
 void MainWindow::onLogout()
 {
     m_api->clearSession();
@@ -205,6 +218,7 @@ void MainWindow::onLogout()
     ui->loginPage->setStatus(QString());
 }
 
+/// 显示 API 错误，必要时处理会话过期并退出。
 void MainWindow::onApiFailed(int code, const QString &message)
 {
     if (ui->rootStack->currentIndex() == 0)
@@ -216,6 +230,7 @@ void MainWindow::onApiFailed(int code, const QString &message)
         onLogout();
 }
 
+/// 维护请求计数器并统一切换各页面的忙碌状态。
 void MainWindow::setBusy(bool busy)
 {
     m_inflight = busy ? m_inflight + 1 : qMax(0, m_inflight - 1);
@@ -226,6 +241,7 @@ void MainWindow::setBusy(bool busy)
     m_chargingPage->setBusy(on);
 }
 
+/// 切换到已登录应用内容。
 void MainWindow::showAppPage()
 {
     ui->rootStack->setCurrentIndex(1);
@@ -235,6 +251,7 @@ void MainWindow::showAppPage()
     ui->tabMine->setChecked(false);
 }
 
+/// 保存用户资料并刷新个人中心和本地头像。
 void MainWindow::applyUser(const User &user)
 {
     m_user = user;
@@ -244,11 +261,13 @@ void MainWindow::applyUser(const User &user)
         ui->profilePage->setAvatarPath(localAvatar);
 }
 
+/// 生成按手机号区分的本地头像设置键。
 QString MainWindow::avatarSettingKey() const
 {
     return QStringLiteral("avatar/") + m_user.phone;
 }
 
+/// 设置用户端整体 Qt 样式表和控件状态样式。
 void MainWindow::applyTheme()
 {
     setStyleSheet(QStringLiteral(R"(

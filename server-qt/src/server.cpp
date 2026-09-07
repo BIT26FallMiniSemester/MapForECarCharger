@@ -1,3 +1,6 @@
+// 实现客户端连接生命周期、带长度前缀的帧协议、请求路由和响应校验。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "server.h"
 #include <QtEndian>
 #include <QStringDecoder>
@@ -13,7 +16,9 @@ public:
     }
 private:
     QTcpSocket *socket;Server &server;QByteArray input,output;QSet<QString> pending;QTimer deadline;bool flushing=false;
+/// 实现 flush 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void flush(){if(flushing)return;flushing=true;while(!output.isEmpty()&&socket->state()==QAbstractSocket::ConnectedState){auto n=socket->write(output);if(n<0){socket->abort();break;}if(!n)break;output.remove(0,n);}flushing=false;}
+/// 实现 respond 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void respond(QJsonObject request,QJsonValue data,int code){
         if(socket->state()!=QAbstractSocket::ConnectedState)return;
         if(code==0) {
@@ -28,6 +33,7 @@ private:
         if(output.size()+socket->bytesToWrite()+bytes.size()>2*1048576){socket->abort();return;}
         output+=bytes;flush();
     }
+/// 实现 handle 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void handle(QJsonObject request){
         QString id=request["request_id"].toString();static const QRegularExpression validId("^[A-Za-z0-9_-]{1,64}$");
         if(!validId.match(id).hasMatch()||pending.contains(id)||pending.size()>=64){socket->abort();return;}
@@ -45,6 +51,7 @@ private:
             }else respond(request,server.business.dispatch(a,data,identity),0);
         }catch(const Failure &e){respond(request,{},e.code);}catch(...){respond(request,{},50000);}
     }
+/// 实现 read 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void read(){
         while(socket->bytesAvailable()>0){
             if(input.isEmpty())deadline.start(15000);
@@ -60,6 +67,7 @@ private:
         }
     }
 };
+/// 创建服务端并启动过期清理定时器及新连接处理。
 Server::Server(Database &db,QString key,QObject *parent):QTcpServer(parent),business(db),maps(key,this){
     business.expire();sweep.setInterval(30000);
     connect(&sweep,&QTimer::timeout,this,[this]{try{business.expire();}catch(const Failure&){qWarning("Reservation cleanup failed");}});sweep.start();

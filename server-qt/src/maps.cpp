@@ -1,14 +1,21 @@
+// 实现地图 HTTP 请求、超时校验、距离计算、批量附近站点查询和结果缓存。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "maps.h"
 #include <cmath>
 
 namespace {
+/// 实现 number 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 double number(QJsonValue v,double low=0,double high=9007199254740991.0){if(!v.isDouble()||!std::isfinite(v.toDouble())||v.toDouble()<low||v.toDouble()>high)fail(50301);return v.toDouble();}
+/// 实现 whole 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 qint64 whole(QJsonValue value) { const double n=number(value); if(std::floor(n)!=n) fail(50301); return qint64(n); }
 class MapJob:public QObject {
 public:
     MapJob(QNetworkAccessManager &manager,QString key,QUrl base,int timeout,int total,Result done,QObject *parent):QObject(parent),manager(manager),key(key),base(base),timeout(timeout),done(done){deadline.setSingleShot(true);connect(&deadline,&QTimer::timeout,this,[this]{finish({},50301);});deadline.start(total);}
     ~MapJob(){if(reply&&!reply->isFinished())reply->abort();}
+/// 实现 finish 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void finish(QJsonValue data,int code=0){if(finished)return;finished=true;deadline.stop();if(reply&&!reply->isFinished())reply->abort();done(data,code);deleteLater();}
+/// 发起 GET 风格请求。
     void get(const QString &path,QUrlQuery params,std::function<void(QJsonObject)> callback){
         if(finished) return;
         params.addQueryItem("key",key);auto url=base;url.setPath(path);url.setQuery(params);
@@ -28,6 +35,7 @@ public:
             try{callback(doc.object()["result"].toObject());}catch(const Failure&){finish({},50301);}
         });
     }
+/// 实现 getImage 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void getImage(const QString &path,QUrlQuery params){
         if(finished)return;
         params.addQueryItem("key",key);auto url=base;url.setPath(path);url.setQuery(params);
@@ -40,9 +48,11 @@ public:
             finish(QJsonObject{{"content_type","image/png"},{"content_base64",QString::fromLatin1(bytes.toBase64())},{"width",600},{"height",300}});
         });
     }
+/// 实现 batch 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void batch(){
         if(offset>=stations.size()){
             if(items.isEmpty()&&!stations.isEmpty()){finish({},50301);return;}
+/// 实现 sort 的本地处理逻辑，保持与项目其他模块的接口约定一致。
             std::sort(items.begin(),items.end(),[](const auto &a,const auto &b){return a["route_distance_meters"].toDouble()<b["route_distance_meters"].toDouble();});
             QJsonArray selected;auto start=(data["page"].toInteger(1)-1)*data["page_size"].toInteger(20);auto end=qMin<qint64>(items.size(),start+data["page_size"].toInteger(20));
             for(auto i=start;i<end;++i)selected.append(items[i]);
@@ -57,13 +67,16 @@ public:
             }offset+=count;batch();
         });
     }
+/// 实现 point 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     static QString point(QJsonObject d,QString lat,QString lng){return QString::number(d[lat].toDouble(),'f',7)+","+QString::number(d[lng].toDouble(),'f',7);}
     QJsonObject data;QJsonArray stations;QList<QJsonObject> items;int offset=0;
 private:
     QNetworkAccessManager &manager;QString key;QUrl base;int timeout;Result done;QTimer deadline;QPointer<QNetworkReply> reply;bool finished=false;
 };
 }
+/// 持有地图 API 配置、网络管理器和短期响应缓存。
 Maps::Maps(QString key,QObject *parent,QUrl base,int requestTimeout,int totalTimeout):QObject(parent),key(key),base(base),requestTimeout(requestTimeout),totalTimeout(totalTimeout){}
+/// 根据 action 调用地图服务，完成参数处理、结果转换和缓存命中/写入。
 void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,Result done) {
     if(a=="stations.nearby"&&stations.isEmpty()){done(QJsonObject{{"items",QJsonArray{}},{"page",d["page"].toInteger(1)},{"page_size",d["page_size"].toInteger(20)},{"total",0}},0);return;}
     if(key.trimmed().isEmpty()){done({},50301);return;}
@@ -71,6 +84,7 @@ void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,
     if(a=="stations.nearby"){
         QList<QPair<double,QJsonObject>> candidates;const double lat=d["latitude"].toDouble(),lng=d["longitude"].toDouble(),lngScale=std::cos(lat*0.017453292519943295);
         for(const auto &value:stations){const auto station=value.toObject();const double dy=station["latitude"].toDouble()-lat,dx=(station["longitude"].toDouble()-lng)*lngScale;candidates.append({dx*dx+dy*dy,station});}
+/// 实现 sort 的本地处理逻辑，保持与项目其他模块的接口约定一致。
         std::sort(candidates.begin(),candidates.end(),[](const auto &left,const auto &right){return left.first<right.first;});selectedStations={};
         for(int i=0;i<qMin(5,candidates.size());++i)selectedStations.append(candidates[i].second);
     }

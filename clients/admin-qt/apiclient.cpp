@@ -1,3 +1,6 @@
+// 把界面路径映射为服务端 action，并把协议响应转换为界面使用的 JSON 结构。
+// 本文件中的注释仅用于说明逻辑，不改变可执行代码。
+
 #include "apiclient.h"
 
 #include "socketclient.h"
@@ -36,6 +39,7 @@ QJsonObject adaptPile(QJsonObject pile)
 }
 }
 
+/// 创建用户端 API 客户端并连接 SocketClient 的成功/失败信号。
 ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClient(this))
 {
     connect(m_socket, &SocketClient::succeeded, this,
@@ -48,14 +52,22 @@ ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClie
     });
 }
 
+/// 设置 API 后端 Socket 地址。
 void ApiClient::setBaseUrl(const QString &endpoint) { m_socket->setEndpoint(endpoint); }
+/// 设置后续需要认证的请求令牌。
 void ApiClient::setToken(const QString &token) { m_token = token; }
+/// 发起 GET 风格请求。
 void ApiClient::get(const QString &path) { send(QStringLiteral("GET"), path, {}); }
+/// 发起 POST 风格请求。
 void ApiClient::post(const QString &path, const QJsonObject &body) { send(QStringLiteral("POST"), path, body); }
+/// 发起 PUT 风格请求。
 void ApiClient::put(const QString &path, const QJsonObject &body) { send(QStringLiteral("PUT"), path, body); }
+/// 发起 PATCH 风格请求。
 void ApiClient::patch(const QString &path, const QJsonObject &body) { send(QStringLiteral("PATCH"), path, body); }
+/// 实现 baseUrl 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 QString ApiClient::baseUrl() const { return m_socket->endpoint(); }
 
+/// 为 action 生成 request_id，加入待处理上下文并排队发送请求。
 void ApiClient::send(const QString &method, const QString &path, QJsonObject body)
 {
     const QUrl url(QStringLiteral("tcp://local") + path);
@@ -68,11 +80,13 @@ void ApiClient::send(const QString &method, const QString &path, QJsonObject bod
         action = QStringLiteral("auth.admin.login");
     else if (route == QStringLiteral("/admin/overview"))
         action = QStringLiteral("admin.overview");
+/// 实现 if 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     else if (route == QStringLiteral("/admin/revenue-trend")) {
         action = QStringLiteral("admin.revenue_trend");
         addQuery(body, query, QStringLiteral("days"), QStringLiteral("days"), true);
     } else if (route == QStringLiteral("/dashboard/pile-status"))
         action = QStringLiteral("admin.pile_status");
+/// 实现 if 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     else if (route == QStringLiteral("/admin/piles")) {
         action = QStringLiteral("admin.piles.list");
         for (const QString &field : {QStringLiteral("page"), QStringLiteral("page_size"), QStringLiteral("station_id")})
@@ -123,6 +137,7 @@ void ApiClient::send(const QString &method, const QString &path, QJsonObject bod
     m_socket->send(path, action, body, action.startsWith(QStringLiteral("auth.")) ? QString() : m_token);
 }
 
+/// 按 action 对服务端响应做列表、分页和展示字段适配。
 QJsonValue ApiClient::adapt(const QString &action, const QJsonValue &data) const
 {
     if (action == QStringLiteral("admin.pile_status")) {
@@ -148,6 +163,7 @@ QJsonValue ApiClient::adapt(const QString &action, const QJsonValue &data) const
             QJsonObject item = items[i].toObject();
             if (action == QStringLiteral("admin.piles.list"))
                 item = adaptPile(item);
+/// 实现 if 的本地处理逻辑，保持与项目其他模块的接口约定一致。
             else if (action == QStringLiteral("admin.stations.list")) {
                 const int total = item.value(QStringLiteral("total_piles")).toInt();
                 const int online = item.value(QStringLiteral("online_piles")).toInt();
@@ -163,6 +179,7 @@ QJsonValue ApiClient::adapt(const QString &action, const QJsonValue &data) const
     return data;
 }
 
+/// 把服务端业务错误码转换为管理端可读的中文提示。
 QString ApiClient::userMessage(int businessCode, const QString &serverMessage)
 {
     switch (businessCode) {
