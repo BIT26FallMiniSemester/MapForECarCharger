@@ -14,7 +14,7 @@ QPointF worldPoint(double latitude,double longitude,int zoom)
 
 StationMapWidget::StationMapWidget(QWidget *parent):QWidget(parent),m_background(new QLabel(this))
 {
-    setFixedSize(480,240);setObjectName(QStringLiteral("stationMap"));m_background->setGeometry(rect());m_background->setAlignment(Qt::AlignCenter);m_background->setText(QStringLiteral("正在加载腾讯地图…"));m_background->setStyleSheet(QStringLiteral("background:#dcece8;color:#38635b;border-radius:16px;"));
+    setFixedSize(340,170);setObjectName(QStringLiteral("stationMap"));m_background->setGeometry(rect());m_background->setAlignment(Qt::AlignCenter);m_background->setText(QStringLiteral("正在加载腾讯地图…"));m_background->setStyleSheet(QStringLiteral("background:#dcece8;color:#38635b;border-radius:16px;"));
     m_zoomIn=new QToolButton(this);m_zoomOut=new QToolButton(this);
     for(auto *button:{m_zoomIn,m_zoomOut}){button->setObjectName(QStringLiteral("mapZoomButton"));button->setFixedSize(34,34);button->setCursor(Qt::PointingHandCursor);button->raise();}
     m_zoomIn->setText(QStringLiteral("+"));m_zoomOut->setText(QStringLiteral("−"));m_zoomIn->move(width()-46,12);m_zoomOut->move(width()-46,50);

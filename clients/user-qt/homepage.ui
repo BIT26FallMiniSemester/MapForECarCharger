@@ -12,13 +12,13 @@
   </property>
   <layout class="QVBoxLayout" name="homeLayout">
    <property name="spacing">
-    <number>10</number>
+    <number>8</number>
    </property>
    <property name="leftMargin">
     <number>16</number>
    </property>
    <property name="topMargin">
-    <number>20</number>
+    <number>14</number>
    </property>
    <property name="rightMargin">
     <number>16</number>

@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -36,7 +37,7 @@ HomePage::HomePage(QWidget *parent)
     auto *selection=new QFrame(this);selection->setObjectName(QStringLiteral("mapSelection"));auto *selectionLayout=new QHBoxLayout(selection);selectionLayout->setContentsMargins(12,8,10,8);
     m_mapDetail = new QLabel(QStringLiteral("点击地图标记或下方站点卡查看详情"),selection);m_mapDetail->setObjectName(QStringLiteral("mapDetail"));m_mapDetail->setWordWrap(true);
     m_mapCharge=new QPushButton(QStringLiteral("去充电"),selection);m_mapCharge->setMinimumWidth(88);m_mapCharge->setCursor(Qt::PointingHandCursor);m_mapCharge->setEnabled(false);selectionLayout->addWidget(m_mapDetail,1);selectionLayout->addWidget(m_mapCharge);ui->homeLayout->insertWidget(3,selection);
-    auto *controls=new QHBoxLayout;controls->setSpacing(8);ui->homeLayout->removeWidget(ui->locationButton);ui->homeLayout->removeWidget(ui->radiusBox);ui->homeLayout->removeWidget(ui->queryButton);ui->radiusHint->setText(QStringLiteral("搜索范围"));ui->radiusUp->hide();ui->radiusDown->hide();ui->queryButton->setMinimumWidth(140);controls->addWidget(ui->locationButton,2);controls->addWidget(ui->radiusBox,1);controls->addWidget(ui->queryButton);ui->homeLayout->insertLayout(4,controls);
+    auto *controls=new QGridLayout;controls->setSpacing(8);ui->homeLayout->removeWidget(ui->locationButton);ui->homeLayout->removeWidget(ui->radiusBox);ui->homeLayout->removeWidget(ui->queryButton);ui->radiusHint->setText(QStringLiteral("搜索范围"));ui->radiusUp->hide();ui->radiusDown->hide();controls->addWidget(ui->locationButton,0,0,1,2);controls->addWidget(ui->radiusBox,1,0);controls->addWidget(ui->queryButton,1,1,Qt::AlignBottom);controls->setColumnStretch(0,1);controls->setColumnStretch(1,1);ui->homeLayout->insertLayout(4,controls);
     connect(m_map,&StationMapWidget::stationFocused,this,&HomePage::focusStation);
     connect(m_map,&StationMapWidget::zoomChanged,this,&HomePage::mapZoomRequested);
     connect(m_mapCharge,&QPushButton::clicked,this,[this]{if(m_focusedStation.id>0)emit stationSelected(m_focusedStation);});
@@ -128,7 +129,8 @@ void HomePage::focusStation(const StationSummary &station)
 {
     m_focusedStation=station;m_map->selectStation(station.id);
     const QString price=station.priceCentsPerKwh>0?QStringLiteral("测试计费 ¥%1/度").arg(centsToYuanText(station.priceCentsPerKwh)):QStringLiteral("电价未公开");
-    m_mapDetail->setText(QStringLiteral("%1\n%2 · %3 · 快充 %4 / 慢充 %5 · %6 km · %7\n坐标 %8, %9").arg(station.name,station.district,station.operatorName).arg(station.fastConnectorCount).arg(station.slowConnectorCount).arg(station.distanceKm,0,'f',2).arg(price).arg(station.latitude,0,'f',6).arg(station.longitude,0,'f',6));
+    m_mapDetail->setText(QStringLiteral("%1\n%2 · %3 km · 快充 %4 / 慢充 %5 · %6").arg(station.name,station.district).arg(station.distanceKm,0,'f',2).arg(station.fastConnectorCount).arg(station.slowConnectorCount).arg(price));
+    m_mapDetail->setToolTip(QStringLiteral("%1\n坐标 %2, %3").arg(station.operatorName).arg(station.latitude,0,'f',6).arg(station.longitude,0,'f',6));
     m_mapCharge->setEnabled(station.availablePiles>0);m_mapCharge->setToolTip(station.availablePiles>0?QStringLiteral("进入充电界面"):QStringLiteral("该公共站点没有接入可控制电桩"));
     for(auto it=m_cards.begin();it!=m_cards.end();++it){it.value()->setProperty("selected",it.key()==station.id);it.value()->style()->unpolish(it.value());it.value()->style()->polish(it.value());}
     const qint64 stationId=station.id;QTimer::singleShot(0,this,[this,stationId]{if(auto *card=m_cards.value(stationId))ui->stationScroll->ensureWidgetVisible(card,0,12);});
@@ -142,7 +144,7 @@ bool HomePage::eventFilter(QObject *watched,QEvent *event)
 
 void HomePage::refreshLocationButton()
 {
-    ui->locationButton->setText(QStringLiteral("我的位置  ›\n%1").arg(m_displayName));
+    ui->locationButton->setText(QStringLiteral("我的位置 · %1  ›").arg(m_displayName));
 }
 
 void HomePage::showHint(const QString &text)
@@ -180,7 +182,7 @@ void HomePage::showStations(const QVector<StationSummary> &stations)
         box->setContentsMargins(14, 12, 14, 12);
 
         auto *header=new QHBoxLayout;auto *name = new QLabel(QStringLiteral("%1  %2").arg(rank+1).arg(s.name));
-        name->setObjectName(QStringLiteral("cardTitle"));name->setProperty("stationId",s.id);name->setCursor(Qt::PointingHandCursor);name->installEventFilter(this);
+        name->setObjectName(QStringLiteral("cardTitle"));name->setWordWrap(true);name->setProperty("stationId",s.id);name->setCursor(Qt::PointingHandCursor);name->installEventFilter(this);
 
         const QString price = s.priceCentsPerKwh>0?centsToYuanText(s.priceCentsPerKwh)+QStringLiteral(" 元/度（测试）"):QStringLiteral("电价未公开");
         const QString availability=s.totalPiles>0?QStringLiteral("测试桩空闲 %1 / %2").arg(s.availablePiles).arg(s.totalPiles):QStringLiteral("实时空闲状态未公开");
