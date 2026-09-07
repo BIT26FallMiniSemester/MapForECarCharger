@@ -16,7 +16,7 @@ Response envelope:
 
 Clients correlate responses by `request_id`. A timeout or disconnect does not prove a write failed: reconnect, authenticate if the server restarted, then query current state. Reuse `client_request_id` when retrying a recharge. Stop and settle are idempotent by order state.
 
-The authoritative field, role, enum, request, and response definitions for all 41 actions are in [schemas/socket.json](schemas/socket.json). The full charging sequence is in [examples/socket-charging-flow.json](examples/socket-charging-flow.json). HTTP paths, status codes, Authorization headers, and `openapi.yaml` describe only the retired Python transport.
+The authoritative field, role, enum, request, and response definitions for all 41 actions are in [schemas/socket.json](schemas/socket.json). The full charging sequence is in [examples/socket-charging-flow.json](examples/socket-charging-flow.json).
 
 The initial actions are grouped as follows:
 

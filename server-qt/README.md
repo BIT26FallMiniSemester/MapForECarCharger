@@ -28,7 +28,7 @@ For the course showcase, prefer the real Beijing catalog instead of `--seed-demo
 ```bash
 server-qt/build/charger-server --database runtime/showcase.db --migrate-only
 server-qt/build/charger-server --database runtime/showcase.db \
-  --import-catalog backend/data/processed/beijing_public_charging_stations.json
+  --import-catalog server-qt/data/processed/beijing_public_charging_stations.json
 server-qt/build/charger-server --database runtime/showcase.db \
   --seed-showcase --migrate-only
 ```
@@ -45,22 +45,14 @@ Create a new target database:
 server-qt/build/charger-server --database /absolute/path/charger.db --migrate-only
 ```
 
-Import a supported Python database into an empty migrated target. The source is opened read-only and must remain separate from the running Python service:
-
-```bash
-server-qt/build/charger-server --database /absolute/path/charger-qt.db \
-  --import-legacy /absolute/path/map_for_ecar_charger.db
-```
-
 Import or refresh the cleaned public station catalog:
 
 ```bash
 server-qt/build/charger-server --database /absolute/path/charger-qt.db \
-  --import-catalog backend/data/processed/beijing_public_charging_stations.json \
-  --catalog-id-source /absolute/path/map_for_ecar_charger.db
+  --import-catalog server-qt/data/processed/beijing_public_charging_stations.json
 ```
 
-`--catalog-id-source` opens the legacy database read-only and preserves every existing `(data_source, external_id) → stations.id` mapping while excluding unrelated demo stations. Omit it only for a database that has never assigned station IDs.
+When replacing an existing Qt catalog database, `--catalog-id-source /absolute/path/existing.db` can preserve every `(data_source, external_id) → stations.id` mapping. Omit it for a newly initialized database.
 
 Create the first administrator without putting its password in command history:
 

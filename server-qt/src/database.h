@@ -15,7 +15,6 @@ public:
     qint64 execute(const QString &sql,const QVariantList &args={});
     qint64 insert(const QString &sql,const QVariantList &args={});
     void migrate();
-    void importLegacy(const QString &path);
     void importCatalog(const QString &path,const QString &idSource={});
     void createAdmin(const QString &name,const QString &password);
     void seedDemo();

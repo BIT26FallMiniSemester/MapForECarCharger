@@ -6,7 +6,7 @@
 
 核心演示流程为：登录或注册、模拟充值、查找站点、创建订单、预约、开始充电、动态查看电量和金额、结束充电、余额付款，以及管理端统计核对。
 
-`backend/` 保存原 Python/FastAPI 实现，供迁移核对和旧数据转换使用；它不是新版客户端的运行依赖。`contracts/openapi.yaml` 也只描述旧 HTTP 服务。
+项目只保留 `server-qt/` 后端服务；北京充电站源数据位于 `server-qt/data/`，运行时不依赖 Python、HTTP 服务或 FastAPI。
 
 ## Qt 后端构建
 
@@ -16,7 +16,7 @@ cmake --build server-qt/build -j
 ctest --test-dir server-qt/build --output-on-failure
 ```
 
-运行、数据库迁移和旧库导入说明见 `server-qt/README.md`。密钥、数据库、头像、日志和构建产物不得进入 Git。
+运行和数据库初始化说明见 `server-qt/README.md`。密钥、数据库、头像、日志和构建产物不得进入 Git。
 
 ## 当前演示环境
 
