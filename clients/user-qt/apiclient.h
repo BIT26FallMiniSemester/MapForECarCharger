@@ -30,7 +30,7 @@ public:
     void recharge(double amountYuan);
     void fetchRechargeRecords();
     void fetchNearbyStations(double latitude, double longitude, double radiusKm);
-    void fetchMapSnapshot(double latitude, double longitude);
+    void fetchMapSnapshot(double latitude, double longitude, int zoom = 14);
     void geocode(const QString &address);
     void fetchStationPiles(qint64 stationId);
     void fetchActiveOrder();

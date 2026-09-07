@@ -4,6 +4,7 @@
 #include "models.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QVector>
 #include <QWidget>
 
@@ -12,6 +13,11 @@ namespace Ui {
 class HomePage;
 }
 QT_END_NAMESPACE
+
+class QEvent;
+class QFrame;
+class QLabel;
+class QPushButton;
 
 class HomePage : public QWidget
 {
@@ -38,7 +44,10 @@ signals:
     void queryClicked();
     void changeLocationClicked();
     void stationSelected(const StationSummary &station);
+    void mapZoomRequested(double centerLatitude, double centerLongitude, int zoom);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 private:
     void refreshLocationButton();
     void setupRadiusControl();
@@ -52,7 +61,11 @@ private:
     int m_radiusKm = 10;
     QString m_displayName = QStringLiteral("北京市中心（可修改）");
     class StationMapWidget *m_map = nullptr;
-    class QLabel *m_mapDetail = nullptr;
+    QLabel *m_mapDetail = nullptr;
+    QPushButton *m_mapCharge = nullptr;
+    QVector<StationSummary> m_stations;
+    QHash<qint64,QFrame*> m_cards;
+    StationSummary m_focusedStation;
 };
 
 #endif

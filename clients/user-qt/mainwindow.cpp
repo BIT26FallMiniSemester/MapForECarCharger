@@ -37,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->loginPage, &LoginPage::loginClicked, this, &MainWindow::onLoginClicked);
     connect(ui->homePage, &HomePage::queryClicked, this, &MainWindow::onQueryNearby);
     connect(ui->homePage, &HomePage::changeLocationClicked, this, &MainWindow::onChangeLocation);
+    connect(ui->homePage,&HomePage::mapZoomRequested,this,[this](double latitude,double longitude,int zoom){m_api->fetchMapSnapshot(latitude,longitude,zoom);});
     connect(ui->homePage, &HomePage::stationSelected, this, [this](const StationSummary &station) {
         m_chargingPage->selectStation(station, ui->homePage->latitude(), ui->homePage->longitude());
         ui->contentStack->setCurrentWidget(m_chargingPage);
@@ -76,7 +77,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_api, &ApiClient::requestFinished, this, [this]() { setBusy(false); });
     connect(m_api, &ApiClient::loginSucceeded, this, &MainWindow::onLoginSucceeded);
     connect(m_api, &ApiClient::apiFailed, this, &MainWindow::onApiFailed);
-    connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations){ui->homePage->showStations(stations);QTimer::singleShot(3000,this,[this]{m_api->fetchMapSnapshot(ui->homePage->latitude(),ui->homePage->longitude());});});
+    connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations){ui->homePage->showStations(stations);QTimer::singleShot(3000,this,[this]{m_api->fetchMapSnapshot(ui->homePage->latitude(),ui->homePage->longitude(),14);});});
     connect(m_api, &ApiClient::mapSnapshotReady, ui->homePage, &HomePage::showMap);
     connect(m_api, &ApiClient::profileReady, this, &MainWindow::applyUser);
     connect(m_api, &ApiClient::nicknameUpdated, this, [this](const User &user) {
@@ -269,6 +270,14 @@ void MainWindow::applyTheme()
             border-left: 5px solid #14b8a6;
             border-radius: 14px;
         }
+        QFrame#stationCard {
+            background: #ffffff;
+            border: 1px solid #d7ebe4;
+            border-left: 5px solid #a7d9ce;
+            border-radius: 12px;
+        }
+        QFrame#stationCard:hover { background: #f0fdfa; border-color: #5eead4; }
+        QFrame#stationCard[selected="true"] { background: #ecfdf5; border: 2px solid #0d9488; border-left: 7px solid #e11d48; }
         #bottomBar { background: #134e4a; }
         #radiusBox { background: transparent; }
         QLineEdit, QDoubleSpinBox, QComboBox, QComboBox QAbstractItemView {
@@ -328,6 +337,7 @@ void MainWindow::applyTheme()
             font-weight: 600;
         }
         QPushButton:hover { background: #0f766e; }
+        QPushButton:disabled { background: #e2e8f0; color: #94a3b8; }
         QPushButton#locationButton {
             background: #fff7ed;
             color: #9a3412;
@@ -361,7 +371,10 @@ void MainWindow::applyTheme()
         #chargeCard #cardTitle, #chargeStatus, #chargeMetrics { color: white; }
         #chargeMetrics { font-size: 18px; font-weight: 700; line-height: 1.5; }
         #routeInfo { color: #b45309; font-weight: 600; }
-        #mapDetail { background:#ffffff; color:#315b54; border:1px solid #c9e4dc; border-radius:12px; padding:10px 14px; }
+        #mapSelection { background:#ffffff; border:1px solid #c9e4dc; border-radius:12px; }
+        #mapDetail { color:#315b54; font-size:12px; }
+        QToolButton#mapZoomButton { background:#ffffff;color:#134e4a;border:1px solid #a7d9ce;border-radius:8px;font-size:20px;font-weight:700; }
+        QToolButton#mapZoomButton:hover { background:#ccfbf1; }
         QCheckBox { color: #3f5c55; spacing: 8px; }
         QScrollArea { background: transparent; border: none; }
         QDialog { background: #f4f7f2; }

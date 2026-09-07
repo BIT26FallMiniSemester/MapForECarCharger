@@ -67,9 +67,9 @@ void ApiClient::fetchNearbyStations(double latitude, double longitude, double ra
                      {QStringLiteral("page_size"), 100}});
 }
 
-void ApiClient::fetchMapSnapshot(double latitude, double longitude)
+void ApiClient::fetchMapSnapshot(double latitude, double longitude, int zoom)
 {
-    send(QStringLiteral("map"),QStringLiteral("map.snapshot"),QJsonObject{{QStringLiteral("latitude"),latitude},{QStringLiteral("longitude"),longitude},{QStringLiteral("zoom"),12}});
+    send(QStringLiteral("map"),QStringLiteral("map.snapshot"),QJsonObject{{QStringLiteral("latitude"),latitude},{QStringLiteral("longitude"),longitude},{QStringLiteral("zoom"),zoom}});
 }
 
 void ApiClient::geocode(const QString &address)

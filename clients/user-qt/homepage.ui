@@ -36,7 +36,7 @@
    <item>
     <widget class="QLabel" name="descLabel">
      <property name="text">
-      <string>地图展示当前位置和北京真实公共充电站；编号与下方驾车距离推荐一致。</string>
+      <string>地图标记与下方站点一一对应，点击任意一处即可联动查看。</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

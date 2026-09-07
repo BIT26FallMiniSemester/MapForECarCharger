@@ -42,7 +42,7 @@ private:
     Ui::LocationDialog *ui;
     double m_lat = 39.9042;
     double m_lng = 116.4074;
-    QString m_displayName = QStringLiteral("北京市东城区（模拟定位）");
+    QString m_displayName = QStringLiteral("北京市中心");
     bool m_searching = false;
 };
 
