@@ -17,6 +17,7 @@ class SocketClient : public QObject
 public:
 // 创建客户端 Socket 并连接 Qt 的连接、读取、断开和错误信号。
     explicit SocketClient(QObject *parent = nullptr);
+    ~SocketClient() override;
 
 // 解析并切换 Qt Socket 服务端的主机和端口。
     void setEndpoint(const QString &endpoint);

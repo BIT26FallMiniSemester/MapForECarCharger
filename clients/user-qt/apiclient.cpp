@@ -253,8 +253,8 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
     }
     if (context.startsWith(QStringLiteral("piles:"))) {
         const QJsonObject object = data.toObject();
-        const qint64 stationId = context.section(QLatin1Char(':'), 1).toLongLong();
-        const int page = context.section(QLatin1Char(':'), 2).toInt();
+        const qint64 stationId = context.section(QLatin1Char(':'), 1, 1).toLongLong();
+        const int page = context.section(QLatin1Char(':'), 2, 2).toInt();
         QVector<ChargingPile> &piles = m_pileBatches[stationId];
         for (const QJsonValue &value : object.value(QStringLiteral("items")).toArray()) {
             ChargingPile pile = parsePile(value.toObject());

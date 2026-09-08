@@ -5,12 +5,14 @@
 
 #include "apiclient.h"
 
+#include <QComboBox>
 #include <QFrame>
-#include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStandardItemModel>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -65,6 +67,19 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     m_pileHost = new QFrame;
     m_pileHost->setObjectName(QStringLiteral("card"));
     m_pileLayout = new QVBoxLayout(m_pileHost);
+    auto *pileHeading = new QLabel(QStringLiteral("选择电桩"));
+    pileHeading->setObjectName(QStringLiteral("cardTitle"));
+    m_pileSummary = new QLabel(QStringLiteral("请先从首页选择充电站"));
+    m_pileSummary->setObjectName(QStringLiteral("cardInfo"));
+    m_pileSelector = new QComboBox;
+    m_pileSelector->setMaxVisibleItems(10);
+    m_pileSelector->setAccessibleName(QStringLiteral("电桩选择"));
+    m_reservePile = new QPushButton(QStringLiteral("预约所选电桩"));
+    m_reservePile->setEnabled(false);
+    m_pileLayout->addWidget(pileHeading);
+    m_pileLayout->addWidget(m_pileSummary);
+    m_pileLayout->addWidget(m_pileSelector);
+    m_pileLayout->addWidget(m_reservePile);
     contentLayout->addWidget(m_pileHost);
 
     auto *orderCard = new QFrame;
@@ -76,7 +91,9 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     m_orderStatus->setObjectName(QStringLiteral("chargeStatus"));
     m_metrics = new QLabel(QStringLiteral("时长 00:00:00\n电量 0.000 kWh\n金额 ¥0.00"));
     m_metrics->setObjectName(QStringLiteral("chargeMetrics"));
-    auto *actions = new QHBoxLayout;
+    auto *actions = new QGridLayout;
+    actions->setHorizontalSpacing(8);
+    actions->setVerticalSpacing(8);
     m_start = new QPushButton(QStringLiteral("开始充电"));
     m_stop = new QPushButton(QStringLiteral("结束充电"));
     m_stop->setObjectName(QStringLiteral("dangerButton"));
@@ -85,8 +102,13 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     m_cancel->setObjectName(QStringLiteral("secondaryButton"));
     m_refresh = new QPushButton(QStringLiteral("刷新状态"));
     m_refresh->setObjectName(QStringLiteral("secondaryButton"));
-    for (QPushButton *button : {m_start, m_stop, m_settle, m_cancel, m_refresh})
-        actions->addWidget(button);
+    actions->addWidget(m_start, 0, 0, 1, 2);
+    actions->addWidget(m_stop, 0, 0, 1, 2);
+    actions->addWidget(m_settle, 0, 0, 1, 2);
+    actions->addWidget(m_cancel, 1, 0);
+    actions->addWidget(m_refresh, 1, 1);
+    actions->setColumnStretch(0, 1);
+    actions->setColumnStretch(1, 1);
     orderLayout->addWidget(m_orderTitle);
     orderLayout->addWidget(m_orderStatus);
     orderLayout->addWidget(m_metrics);
@@ -125,38 +147,55 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         else
             m_api->fetchActiveOrder();
     });
+    connect(m_pileSelector, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            [this](int index) {
+        m_reservePile->setEnabled(index >= 0 && index < m_piles.size() &&
+                                  m_piles[index].status == QStringLiteral("IDLE"));
+    });
+    connect(m_reservePile, &QPushButton::clicked, this, [this] {
+        const int index = m_pileSelector->currentIndex();
+        if (index < 0 || index >= m_piles.size() ||
+            m_piles[index].status != QStringLiteral("IDLE"))
+            return;
+        const ChargingPile pile = m_piles[index];
+        if (QMessageBox::question(this, QStringLiteral("预约电桩"),
+                QStringLiteral("确定预约 %1 吗？创建后将自动锁定该电桩 15 分钟。")
+                    .arg(pile.pileNo)) == QMessageBox::Yes) {
+            m_reservePile->setEnabled(false);
+            setHint(QStringLiteral("正在创建订单并预约电桩…"));
+            m_api->createOrder(m_station.id, pile.id);
+        }
+    });
 
     connect(m_api, &ApiClient::stationPilesReady, this,
             [this](qint64 stationId, const QVector<ChargingPile> &piles) {
         if (stationId != m_station.id)
             return;
         clearPiles();
-        auto *heading = new QLabel(QStringLiteral("选择电桩"));
-        heading->setObjectName(QStringLiteral("cardTitle"));
-        m_pileLayout->addWidget(heading);
+        m_piles = piles;
         int available = 0;
-        for (const ChargingPile &pile : piles) {
+        int firstAvailable = -1;
+        for (int i = 0; i < piles.size(); ++i) {
+            const ChargingPile &pile = piles[i];
             const QString type = pile.chargeType == QStringLiteral("FAST")
                                      ? QStringLiteral("快充") : QStringLiteral("慢充");
-            auto *button = new QPushButton(QStringLiteral("%1 · %2 · %3 kW · %4")
+            m_pileSelector->addItem(QStringLiteral("%1 · %2 · %3 kW · %4")
                 .arg(pile.pileNo, type)
                 .arg(pile.ratedPowerW / 1000.0, 0, 'f', 1)
                 .arg(statusText(pile.status)));
-            button->setObjectName(QStringLiteral("pileButton"));
-            button->setEnabled(pile.status == QStringLiteral("IDLE"));
-            if (button->isEnabled()) {
+            if (pile.status == QStringLiteral("IDLE")) {
+                if (firstAvailable < 0)
+                    firstAvailable = i;
                 ++available;
-                connect(button, &QPushButton::clicked, this, [this, pile] {
-                    if (QMessageBox::question(this, QStringLiteral("预约电桩"),
-                            QStringLiteral("确定预约 %1 吗？创建后将自动锁定该电桩 15 分钟。")
-                                .arg(pile.pileNo)) == QMessageBox::Yes) {
-                        setHint(QStringLiteral("正在创建订单并预约电桩…"));
-                        m_api->createOrder(m_station.id, pile.id);
-                    }
-                });
+            } else if (auto *model = qobject_cast<QStandardItemModel *>(m_pileSelector->model())) {
+                if (QStandardItem *item = model->item(i))
+                    item->setEnabled(false);
             }
-            m_pileLayout->addWidget(button);
         }
+        m_pileSummary->setText(QStringLiteral("共 %1 个电桩，当前空闲 %2 个").arg(piles.size()).arg(available));
+        if (firstAvailable >= 0)
+            m_pileSelector->setCurrentIndex(firstAvailable);
+        m_reservePile->setEnabled(firstAvailable >= 0);
         if (piles.isEmpty() || available == 0)
             setHint(QStringLiteral("该站点当前没有空闲电桩，请返回首页选择其他站点。"), true);
     });
@@ -231,9 +270,6 @@ void ChargingPage::selectStation(const StationSummary &station, double fromLatit
         .arg(station.availablePiles).arg(station.totalPiles));
     m_routeInfo->setText(QStringLiteral("正在获取腾讯地图驾车路线…"));
     clearPiles();
-    auto *loading = new QLabel(QStringLiteral("正在读取电桩…"));
-    loading->setObjectName(QStringLiteral("subtitleLabel"));
-    m_pileLayout->addWidget(loading);
     renderOrder();
     m_api->fetchStationPiles(station.id);
     m_api->planRoute(fromLatitude, fromLongitude, station.latitude, station.longitude);
@@ -264,16 +300,18 @@ void ChargingPage::setBusy(bool busy)
     m_cancel->setEnabled(!busy && (m_order.status == QStringLiteral("PENDING") ||
                                    m_order.status == QStringLiteral("RESERVED")));
     m_refresh->setEnabled(!busy);
+    const int index = m_pileSelector->currentIndex();
+    m_reservePile->setEnabled(!busy && index >= 0 && index < m_piles.size() &&
+                              m_piles[index].status == QStringLiteral("IDLE"));
 }
 
 /// 实现 clearPiles 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ChargingPage::clearPiles()
 {
-    while (QLayoutItem *item = m_pileLayout->takeAt(0)) {
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    m_piles.clear();
+    m_pileSelector->clear();
+    m_pileSummary->setText(QStringLiteral("正在读取电桩状态…"));
+    m_reservePile->setEnabled(false);
     m_pileHost->setVisible(m_station.id > 0 && m_order.id == 0);
 }
 
@@ -290,6 +328,7 @@ void ChargingPage::renderOrder()
         .arg(durationText(m_order.durationSeconds))
         .arg(m_order.energyWh / 1000.0, 0, 'f', 3)
         .arg(centsToYuanText(m_order.amountCents)));
+    m_metrics->setVisible(exists);
     m_start->setVisible(m_order.status == QStringLiteral("RESERVED"));
     m_stop->setVisible(m_order.status == QStringLiteral("CHARGING"));
     m_settle->setVisible(m_order.status == QStringLiteral("UNPAID"));

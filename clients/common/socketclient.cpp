@@ -35,6 +35,12 @@ SocketClient::SocketClient(QObject *parent) : QObject(parent)
     });
 }
 
+SocketClient::~SocketClient()
+{
+    disconnect(&m_socket, nullptr, this, nullptr);
+    m_socket.abort();
+}
+
 /// 解析并切换 Qt Socket 服务端的主机和端口。
 void SocketClient::setEndpoint(const QString &endpoint)
 {

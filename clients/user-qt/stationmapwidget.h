@@ -14,6 +14,7 @@
 class QLabel;
 // 实现 QToolButton 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 class QToolButton;
+class QResizeEvent;
 
 // 创建地图背景、缩放按钮并准备绘制站点标记。
 class StationMapWidget : public QWidget
@@ -30,11 +31,16 @@ public:
     void setStations(const QVector<StationSummary> &stations);
 // 选中指定站点并重新绘制地图标记。
     void selectStation(qint64 stationId);
+    double centerLatitude() const { return m_centerLatitude; }
+    double centerLongitude() const { return m_centerLongitude; }
+    int zoom() const { return m_zoom; }
 signals:
 // 实现 stationFocused 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void stationFocused(const StationSummary &station);
 // 实现 zoomChanged 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void zoomChanged(double centerLatitude, double centerLongitude, int zoom);
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 private:
 // 根据当前投影位置重建用户位置和前十个站点标记。
     void rebuildPins();

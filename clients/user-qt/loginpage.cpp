@@ -5,6 +5,7 @@
 #include "ui_loginpage.h"
 
 #include <QLineEdit>
+#include <QLabel>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -22,6 +23,14 @@ LoginPage::LoginPage(QWidget *parent)
     ui->statusLabel->setObjectName(QStringLiteral("statusLabel"));
     ui->apiHintLabel->setObjectName(QStringLiteral("subtitleLabel"));
     ui->hintLabel->setObjectName(QStringLiteral("hintLabel"));
+    ui->loginLayout->setContentsMargins(24, 40, 24, 28);
+
+    auto *phoneLabel = new QLabel(QStringLiteral("手机号"), this);
+    phoneLabel->setObjectName(QStringLiteral("cardTitle"));
+    ui->loginLayout->insertWidget(3, phoneLabel);
+    ui->phoneEdit->setAccessibleName(QStringLiteral("手机号"));
+    ui->phoneEdit->setInputMethodHints(Qt::ImhDigitsOnly);
+    ui->apiEdit->setAccessibleName(QStringLiteral("Qt 后端地址"));
 
     ui->phoneEdit->setValidator(new QRegularExpressionValidator(
         QRegularExpression(QStringLiteral(R"(1[3-9]\d{9})")), ui->phoneEdit));

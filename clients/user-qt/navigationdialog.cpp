@@ -20,9 +20,14 @@ NavigationDialog::NavigationDialog(double fromLatitude, double fromLongitude,
       m_station(station)
 {
     setWindowTitle(QStringLiteral("导航到 %1").arg(station.name));
-    resize(390, 680);
+    setModal(true);
+    resize(parent ? qMin(386, parent->width() - 24) : 386,
+           parent ? qMin(700, parent->height() - 48) : 700);
     auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(8);
     auto *destination = new QLabel(QStringLiteral("目的地：%1\n%2").arg(station.name, station.address));
+    destination->setObjectName(QStringLiteral("cardTitle"));
     destination->setWordWrap(true);
     layout->addWidget(destination);
 
@@ -37,6 +42,7 @@ NavigationDialog::NavigationDialog(double fromLatitude, double fromLongitude,
     layout->addLayout(m_viewLayout, 1);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    buttons->button(QDialogButtonBox::Close)->setText(QStringLiteral("关闭"));
     auto *navigate = buttons->addButton(QStringLiteral("在腾讯地图中导航"), QDialogButtonBox::ActionRole);
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -70,6 +76,9 @@ void NavigationDialog::loadRoute()
     }
 #ifdef HAVE_QT_WEBENGINE
     auto *view = new QWebEngineView(this);
+    view->setMinimumHeight(360);
+    view->setAccessibleName(QStringLiteral("腾讯地图导航路线"));
+    view->setZoomFactor(0.85);
     view->setUrl(routeUrl());
     m_viewLayout->addWidget(view);
 #else

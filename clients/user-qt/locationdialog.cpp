@@ -26,6 +26,10 @@ LocationDialog::LocationDialog(QWidget *parent)
     ui->keyEdit->hide();
     ui->locateMeButton->hide();
     ui->addressHint->setText(QStringLiteral("或输入详细地址（由后端调用腾讯地图）"));
+    ui->descLabel->setText(QStringLiteral("选择北京市区域，或输入详细地址定位附近充电站。"));
+    ui->verticalLayout->setContentsMargins(16, 16, 16, 16);
+    if (parent)
+        resize(qMin(370, parent->width() - 24), qMin(520, parent->height() - 48));
 
     fillRegions();
 

@@ -15,10 +15,10 @@
 #include <QDialog>
 #include <QFileDialog>
 #include <QBuffer>
+#include <QGuiApplication>
 #include <QImage>
-#include <QMessageBox>
 #include <QPushButton>
-#include <QTimer>
+#include <QScreen>
 
 /// 组装管理端导航、各业务页面、图表和 API 刷新状态。
 MainWindow::MainWindow(QWidget *parent)
@@ -27,6 +27,11 @@ MainWindow::MainWindow(QWidget *parent)
     , m_api(new ApiClient(this))
 {
     ui->setupUi(this);
+    if (QScreen *screen = QGuiApplication::primaryScreen()) {
+        const QRect area = screen->availableGeometry();
+        resize(qBound(360, area.width() - 32, 410),
+               qBound(640, area.height() - 48, 820));
+    }
     applyTheme();
 
     m_chargingPage = new ChargingPage(m_api, ui->contentStack);
@@ -87,7 +92,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_api, &ApiClient::requestFinished, this, [this]() { setBusy(false); });
     connect(m_api, &ApiClient::loginSucceeded, this, &MainWindow::onLoginSucceeded);
     connect(m_api, &ApiClient::apiFailed, this, &MainWindow::onApiFailed);
-    connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations){ui->homePage->showStations(stations);QTimer::singleShot(3000,this,[this]{m_api->fetchMapSnapshot(ui->homePage->latitude(),ui->homePage->longitude(),14);});});
+    connect(m_api, &ApiClient::nearbyStationsReady, this, [this](const QVector<StationSummary> &stations) {
+        ui->homePage->showStations(stations);
+        m_api->fetchMapSnapshot(ui->homePage->mapCenterLatitude(),
+                                ui->homePage->mapCenterLongitude(),
+                                ui->homePage->mapZoom());
+    });
     connect(m_api, &ApiClient::mapSnapshotReady, ui->homePage, &HomePage::showMap);
     connect(m_api, &ApiClient::profileReady, this, &MainWindow::applyUser);
     connect(m_api, &ApiClient::avatarUploaded, this, [this](const QString &avatarId) {
@@ -97,15 +107,11 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(m_api, &ApiClient::avatarReady, ui->profilePage, &ProfilePage::setAvatarData);
     connect(m_chargingPage, &ChargingPage::activeOrderRestored, this,
-            [this](const ChargingOrder &order) {
+            [this](const ChargingOrder &) {
         ui->contentStack->setCurrentWidget(m_chargingPage);
         ui->tabHome->setChecked(false);
         m_tabCharging->setChecked(true);
         ui->tabMine->setChecked(false);
-        QMessageBox::information(this, QStringLiteral("发现未完成订单"),
-            order.status == QStringLiteral("UNPAID")
-                ? QStringLiteral("上次充电订单尚未支付，已进入结算页面。")
-                : QStringLiteral("发现进行中的充电订单，已进入充电页面。"));
     });
     connect(m_api, &ApiClient::nicknameUpdated, this, [this](const User &user) {
         applyUser(user);
@@ -158,11 +164,8 @@ void MainWindow::onLoginSucceeded(const QString &token, const User &user, bool i
     const QString tip = isNewUser
                             ? QStringLiteral("已自动注册并登录")
                             : QStringLiteral("登录成功");
-/// 实现 information 的本地处理逻辑，保持与项目其他模块的接口约定一致。
-    QMessageBox::information(this, QStringLiteral("欢迎"),
-                             tip + QStringLiteral("\n%1").arg(user.nickname));
     ui->homePage->useSimulatedGps();
-    ui->homePage->showHint(QStringLiteral("Qt 后端已连接，正在加载北京真实站点"));
+    ui->homePage->showHint(QStringLiteral("%1，正在加载北京真实站点").arg(tip));
     onQueryNearby();
     m_chargingPage->restoreActiveOrder();
 }
@@ -276,10 +279,7 @@ void MainWindow::setBusy(bool busy)
 {
     m_inflight = busy ? m_inflight + 1 : qMax(0, m_inflight - 1);
     const bool on = m_inflight > 0;
-    ui->loginPage->setBusy(on);
-    ui->homePage->setBusy(on);
-    ui->profilePage->setBusy(on);
-    m_chargingPage->setBusy(on);
+    ui->loginPage->setBusy(on && ui->rootStack->currentIndex() == 0);
 }
 
 /// 切换到已登录应用内容。
@@ -306,32 +306,32 @@ void MainWindow::applyTheme()
 {
     setStyleSheet(QStringLiteral(R"(
         QMainWindow, QWidget {
-            background: #f4f7f2;
-            color: #1f3d36;
+            background: #f6f8f7;
+            color: #172b26;
             font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-            font-size: 14px;
+            font-size: 15px;
         }
         QLabel { background: transparent; }
         #brandLabel { color: #0f766e; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
-        #titleLabel { color: #134e4a; font-size: 24px; font-weight: 700; }
-        #subtitleLabel, #hintLabel, #cardInfo { color: #5b6f69; font-size: 13px; }
-        #statusLabel { color: #dc2626; font-size: 13px; }
+        #titleLabel { color: #123f38; font-size: 22px; font-weight: 700; }
+        #subtitleLabel, #hintLabel, #cardInfo { color: #4b625c; font-size: 14px; }
+        #statusLabel { color: #b42318; font-size: 14px; }
         #cardTitle { color: #134e4a; font-size: 16px; font-weight: 600; }
         #card {
             background: #ffffff;
             border: 1px solid #d7ebe4;
-            border-left: 5px solid #14b8a6;
-            border-radius: 14px;
+            border-left: 4px solid #0d9488;
+            border-radius: 12px;
         }
         QFrame#stationCard {
             background: #ffffff;
             border: 1px solid #d7ebe4;
-            border-left: 5px solid #a7d9ce;
+            border-left: 4px solid #a7d9ce;
             border-radius: 12px;
         }
         QFrame#stationCard:hover { background: #f0fdfa; border-color: #5eead4; }
-        QFrame#stationCard[selected="true"] { background: #ecfdf5; border: 2px solid #0d9488; border-left: 7px solid #e11d48; }
-        #bottomBar { background: #134e4a; }
+        QFrame#stationCard[selected="true"] { background: #ecfdf5; border: 2px solid #0d9488; border-left: 6px solid #f59e0b; }
+        #bottomBar { background: #123f38; min-height: 64px; max-height: 64px; }
         #radiusBox { background: transparent; }
         QLineEdit, QDoubleSpinBox, QComboBox, QComboBox QAbstractItemView {
             background: #ffffff;
@@ -339,29 +339,12 @@ void MainWindow::applyTheme()
             border-radius: 12px;
             padding: 8px 12px;
             color: #134e4a;
-            min-height: 22px;
+            min-height: 24px;
             selection-background-color: #99f6e4;
         }
         QComboBox {
-            padding: 10px 44px 10px 12px;
-            min-height: 40px;
-        }
-        QComboBox::drop-down {
-            subcontrol-origin: padding;
-            subcontrol-position: center right;
-            width: 40px;
-            border: none;
-            border-left: 1px solid #0f766e;
-            border-top-right-radius: 12px;
-            border-bottom-right-radius: 12px;
-            background: #0d9488;
-        }
-        QComboBox::down-arrow {
-            width: 0;
-            height: 0;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
-            border-top: 8px solid #ffffff;
+            padding: 8px 44px 8px 12px;
+            min-height: 24px;
         }
         QComboBox QAbstractItemView {
             background: #ffffff;
@@ -387,9 +370,12 @@ void MainWindow::applyTheme()
             border: none;
             border-radius: 12px;
             padding: 10px;
+            min-height: 24px;
             font-weight: 600;
         }
         QPushButton:hover { background: #0f766e; }
+        QPushButton:pressed { background: #115e59; }
+        QPushButton:focus, QLineEdit:focus, QDoubleSpinBox:focus, QComboBox:focus { border: 2px solid #f59e0b; }
         QPushButton:disabled { background: #e2e8f0; color: #94a3b8; }
         QPushButton#locationButton {
             background: #fff7ed;
@@ -403,9 +389,11 @@ void MainWindow::applyTheme()
         QPushButton#tabButton {
             background: transparent;
             color: #99f6e4;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 8px 12px;
+            min-height: 28px;
         }
-        QPushButton#tabButton:checked { color: #fde68a; }
+        QPushButton#tabButton:checked { color: #fff7d6; background: #0f766e; }
         QPushButton#pileButton {
             background: #ecfdf5;
             color: #115e59;
@@ -425,11 +413,15 @@ void MainWindow::applyTheme()
         #chargeMetrics { font-size: 18px; font-weight: 700; line-height: 1.5; }
         #routeInfo { color: #b45309; font-weight: 600; }
         #mapSelection { background:#ffffff; border:1px solid #c9e4dc; border-radius:12px; }
-        #mapDetail { color:#315b54; font-size:12px; }
-        QToolButton#mapZoomButton { background:#ffffff;color:#134e4a;border:1px solid #a7d9ce;border-radius:8px;font-size:20px;font-weight:700; }
+        #mapDetail { color:#315b54; font-size:13px; }
+        QToolButton#mapZoomButton { background:#ffffff;color:#134e4a;border:1px solid #7bb8a9;border-radius:10px;font-size:22px;font-weight:700; }
         QToolButton#mapZoomButton:hover { background:#ccfbf1; }
         QCheckBox { color: #3f5c55; spacing: 8px; }
         QScrollArea { background: transparent; border: none; }
-        QDialog { background: #f4f7f2; }
+        QScrollArea > QWidget > QWidget { background: transparent; }
+        QScrollBar:vertical { background: transparent; width: 7px; margin: 0; }
+        QScrollBar::handle:vertical { background: #a7c7be; border-radius: 3px; min-height: 28px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QDialog { background: #f6f8f7; }
     )"));
 }

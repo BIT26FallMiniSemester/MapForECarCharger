@@ -12,6 +12,7 @@
 class ApiClient;
 // 实现 QLabel 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 class QLabel;
+class QComboBox;
 // 实现 QPushButton 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 class QPushButton;
 // 实现 QTimer 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -62,14 +63,18 @@ private:
     QLabel *m_orderStatus = nullptr;
     QLabel *m_metrics = nullptr;
     QLabel *m_hint = nullptr;
+    QLabel *m_pileSummary = nullptr;
     QWidget *m_pileHost = nullptr;
     QVBoxLayout *m_pileLayout = nullptr;
+    QComboBox *m_pileSelector = nullptr;
+    QPushButton *m_reservePile = nullptr;
     QPushButton *m_start = nullptr;
     QPushButton *m_stop = nullptr;
     QPushButton *m_settle = nullptr;
     QPushButton *m_cancel = nullptr;
     QPushButton *m_refresh = nullptr;
     QTimer *m_timer = nullptr;
+    QVector<ChargingPile> m_piles;
 };
 
 #endif

@@ -4,9 +4,30 @@
 #include "profilepage.h"
 #include "ui_profilepage.h"
 
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
+
+namespace {
+QPixmap roundAvatar(const QPixmap &source)
+{
+    QPixmap result(72, 72);
+    result.fill(Qt::transparent);
+    QPainter painter(&result);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPainterPath path;
+    path.addEllipse(result.rect());
+    painter.setClipPath(path);
+    const QPixmap scaled = source.scaled(72, 72, Qt::KeepAspectRatioByExpanding,
+                                         Qt::SmoothTransformation);
+    painter.drawPixmap(0, 0, scaled.copy((scaled.width() - 72) / 2,
+                                         (scaled.height() - 72) / 2, 72, 72));
+    return result;
+}
+}
 
 /// 创建个人中心表单、余额、头像、充值记录和操作按钮。
 ProfilePage::ProfilePage(QWidget *parent)
@@ -23,6 +44,37 @@ ProfilePage::ProfilePage(QWidget *parent)
     ui->pickAvatarButton->setObjectName(QStringLiteral("secondaryButton"));
     ui->logoutButton->setObjectName(QStringLiteral("dangerButton"));
     ui->avatarLabel->setObjectName(QStringLiteral("avatar"));
+
+    ui->profileLayout->setContentsMargins(16, 16, 16, 12);
+    ui->profileLayout->setSpacing(8);
+    ui->profileLayout->removeWidget(ui->avatarLabel);
+    ui->profileLayout->removeWidget(ui->pickAvatarButton);
+    ui->profileLayout->removeWidget(ui->nicknameEdit);
+    ui->profileLayout->removeWidget(ui->saveNicknameButton);
+    ui->profileLayout->removeWidget(ui->rechargeSpin);
+    ui->profileLayout->removeWidget(ui->rechargeButton);
+
+    auto *avatarRow = new QHBoxLayout;
+    avatarRow->setSpacing(12);
+    avatarRow->addWidget(ui->avatarLabel);
+    avatarRow->addWidget(ui->pickAvatarButton, 1);
+    ui->profileLayout->insertLayout(1, avatarRow);
+
+    auto *nicknameTitle = new QLabel(QStringLiteral("昵称"));
+    nicknameTitle->setObjectName(QStringLiteral("cardTitle"));
+    auto *nicknameRow = new QHBoxLayout;
+    nicknameRow->setSpacing(8);
+    nicknameRow->addWidget(ui->nicknameEdit, 1);
+    nicknameRow->addWidget(ui->saveNicknameButton);
+    ui->profileLayout->insertWidget(4, nicknameTitle);
+    ui->profileLayout->insertLayout(5, nicknameRow);
+
+    auto *rechargeRow = new QHBoxLayout;
+    rechargeRow->setSpacing(8);
+    rechargeRow->addWidget(ui->rechargeSpin, 1);
+    rechargeRow->addWidget(ui->rechargeButton);
+    ui->profileLayout->insertLayout(7, rechargeRow);
+    ui->recordScroll->setMinimumHeight(96);
 
     connect(ui->saveNicknameButton, &QPushButton::clicked, this, &ProfilePage::saveNicknameClicked);
     connect(ui->pickAvatarButton, &QPushButton::clicked, this, &ProfilePage::chooseAvatarClicked);
@@ -67,8 +119,8 @@ void ProfilePage::setAvatarPath(const QString &path)
     if (pix.isNull())
         return;
     ui->avatarLabel->setText(QString());
-    ui->avatarLabel->setPixmap(pix.scaled(72, 72, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
-    ui->avatarLabel->setStyleSheet(QStringLiteral("border-radius:36px;"));
+    ui->avatarLabel->setPixmap(roundAvatar(pix));
+    ui->avatarLabel->setStyleSheet(QStringLiteral("background:transparent;"));
 }
 
 void ProfilePage::setAvatarData(const QByteArray &content)
@@ -77,9 +129,8 @@ void ProfilePage::setAvatarData(const QByteArray &content)
     if (!pix.loadFromData(content))
         return;
     ui->avatarLabel->setText(QString());
-    ui->avatarLabel->setPixmap(pix.scaled(72, 72, Qt::KeepAspectRatioByExpanding,
-                                          Qt::SmoothTransformation));
-    ui->avatarLabel->setStyleSheet(QStringLiteral("border-radius:36px;"));
+    ui->avatarLabel->setPixmap(roundAvatar(pix));
+    ui->avatarLabel->setStyleSheet(QStringLiteral("background:transparent;"));
 }
 
 /// 维护请求计数器并统一切换各页面的忙碌状态。

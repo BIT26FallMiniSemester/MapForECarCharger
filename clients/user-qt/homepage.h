@@ -43,6 +43,9 @@ public:
 // 返回当前站点搜索半径。
     double radiusKm() const;
     QString displayName() const { return m_displayName; }
+    double mapCenterLatitude() const;
+    double mapCenterLongitude() const;
+    int mapZoom() const;
 
 // 维护请求计数器并统一切换各页面的忙碌状态。
     void setBusy(bool busy);
