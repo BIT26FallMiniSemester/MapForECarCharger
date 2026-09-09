@@ -136,7 +136,7 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         if (m_order.id > 0 && m_order.status == QStringLiteral("CHARGING"))
             m_api->fetchOrder(m_order.id);
     });
-    m_timer->setInterval(2000);
+    m_timer->setInterval(1000);
 
     connect(m_start, &QPushButton::clicked, this, [this] { m_api->startOrder(m_order.id); });
     connect(m_stop, &QPushButton::clicked, this, [this] {

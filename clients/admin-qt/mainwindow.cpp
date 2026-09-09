@@ -65,7 +65,7 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
         refreshUsers();
         refreshOrders();
         m_refreshTimer = new QTimer(this);
-        m_refreshTimer->setInterval(2000);
+        m_refreshTimer->setInterval(1000);
         connect(m_refreshTimer, &QTimer::timeout, this, &MainWindow::refreshLiveData);
         m_refreshTimer->start();
     }
