@@ -5,14 +5,13 @@
 
 #include "apiclient.h"
 
-#include <QComboBox>
+#include <QButtonGroup>
 #include <QFrame>
 #include <QGridLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QStandardItemModel>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -28,8 +27,10 @@ QString durationText(qint64 seconds)
 
 /// 创建充电页布局、订单操作按钮、站点电桩容器和状态刷新定时器。
 ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
-    : QWidget(parent), m_api(api), m_timer(new QTimer(this))
+    : QWidget(parent), m_api(api), m_pileButtons(new QButtonGroup(this)), m_timer(new QTimer(this))
 {
+    m_pileButtons->setExclusive(true);
+
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(16, 20, 16, 12);
     root->setSpacing(10);
@@ -71,14 +72,19 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     pileHeading->setObjectName(QStringLiteral("cardTitle"));
     m_pileSummary = new QLabel(QStringLiteral("请先从首页选择充电站"));
     m_pileSummary->setObjectName(QStringLiteral("cardInfo"));
-    m_pileSelector = new QComboBox;
-    m_pileSelector->setMaxVisibleItems(10);
-    m_pileSelector->setAccessibleName(QStringLiteral("电桩选择"));
+    m_pileSummary->setWordWrap(true);
+    auto *pileGridHost = new QWidget;
+    m_pileGrid = new QGridLayout(pileGridHost);
+    m_pileGrid->setContentsMargins(0, 0, 0, 0);
+    m_pileGrid->setHorizontalSpacing(8);
+    m_pileGrid->setVerticalSpacing(8);
+    m_pileGrid->setColumnStretch(0, 1);
+    m_pileGrid->setColumnStretch(1, 1);
     m_reservePile = new QPushButton(QStringLiteral("预约所选电桩"));
     m_reservePile->setEnabled(false);
     m_pileLayout->addWidget(pileHeading);
     m_pileLayout->addWidget(m_pileSummary);
-    m_pileLayout->addWidget(m_pileSelector);
+    m_pileLayout->addWidget(pileGridHost);
     m_pileLayout->addWidget(m_reservePile);
     contentLayout->addWidget(m_pileHost);
 
@@ -147,13 +153,8 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         else
             m_api->fetchActiveOrder();
     });
-    connect(m_pileSelector, qOverload<int>(&QComboBox::currentIndexChanged), this,
-            [this](int index) {
-        m_reservePile->setEnabled(index >= 0 && index < m_piles.size() &&
-                                  m_piles[index].status == QStringLiteral("IDLE"));
-    });
     connect(m_reservePile, &QPushButton::clicked, this, [this] {
-        const int index = m_pileSelector->currentIndex();
+        const int index = m_selectedPileIndex;
         if (index < 0 || index >= m_piles.size() ||
             m_piles[index].status != QStringLiteral("IDLE"))
             return;
@@ -175,26 +176,49 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         m_piles = piles;
         int available = 0;
         int firstAvailable = -1;
+        QPushButton *firstAvailableButton = nullptr;
         for (int i = 0; i < piles.size(); ++i) {
             const ChargingPile &pile = piles[i];
             const QString type = pile.chargeType == QStringLiteral("FAST")
                                      ? QStringLiteral("快充") : QStringLiteral("慢充");
-            m_pileSelector->addItem(QStringLiteral("%1 · %2 · %3 kW · %4")
+            const bool idle = pile.status == QStringLiteral("IDLE");
+            auto *button = new QPushButton(QStringLiteral("%1\n%2 · %3 kW\n%4")
+                .arg(pile.pileNo, type)
+                .arg(pile.ratedPowerW / 1000.0, 0, 'f', 1)
+                .arg(idle ? QStringLiteral("● 空闲") : statusText(pile.status)));
+            button->setObjectName(QStringLiteral("pileButton"));
+            button->setMinimumHeight(76);
+            button->setCheckable(idle);
+            button->setEnabled(idle);
+            button->setCursor(idle ? Qt::PointingHandCursor : Qt::ArrowCursor);
+            button->setAccessibleName(QStringLiteral("电桩 %1，%2，%3 千瓦，%4")
                 .arg(pile.pileNo, type)
                 .arg(pile.ratedPowerW / 1000.0, 0, 'f', 1)
                 .arg(statusText(pile.status)));
-            if (pile.status == QStringLiteral("IDLE")) {
-                if (firstAvailable < 0)
+            button->setStyleSheet(QStringLiteral(
+                "QPushButton#pileButton:checked {"
+                "background:#0f766e;color:white;border:2px solid #f59e0b;}"
+                "QPushButton#pileButton:checked:hover {background:#115e59;}"));
+            m_pileButtons->addButton(button);
+            m_pileGrid->addWidget(button, i / 2, i % 2);
+            connect(button, &QPushButton::clicked, this, [this, i] {
+                m_selectedPileIndex = i;
+                m_reservePile->setEnabled(true);
+            });
+            if (idle) {
+                if (firstAvailable < 0) {
                     firstAvailable = i;
+                    firstAvailableButton = button;
+                }
                 ++available;
-            } else if (auto *model = qobject_cast<QStandardItemModel *>(m_pileSelector->model())) {
-                if (QStandardItem *item = model->item(i))
-                    item->setEnabled(false);
             }
         }
-        m_pileSummary->setText(QStringLiteral("共 %1 个电桩，当前空闲 %2 个").arg(piles.size()).arg(available));
-        if (firstAvailable >= 0)
-            m_pileSelector->setCurrentIndex(firstAvailable);
+        m_pileSummary->setText(QStringLiteral("共 %1 个电桩，当前空闲 %2 个。点选下方卡片即可切换。")
+            .arg(piles.size()).arg(available));
+        if (firstAvailable >= 0) {
+            m_selectedPileIndex = firstAvailable;
+            firstAvailableButton->setChecked(true);
+        }
         m_reservePile->setEnabled(firstAvailable >= 0);
         if (piles.isEmpty() || available == 0)
             setHint(QStringLiteral("该站点当前没有空闲电桩，请返回首页选择其他站点。"), true);
@@ -300,7 +324,7 @@ void ChargingPage::setBusy(bool busy)
     m_cancel->setEnabled(!busy && (m_order.status == QStringLiteral("PENDING") ||
                                    m_order.status == QStringLiteral("RESERVED")));
     m_refresh->setEnabled(!busy);
-    const int index = m_pileSelector->currentIndex();
+    const int index = m_selectedPileIndex;
     m_reservePile->setEnabled(!busy && index >= 0 && index < m_piles.size() &&
                               m_piles[index].status == QStringLiteral("IDLE"));
 }
@@ -309,7 +333,11 @@ void ChargingPage::setBusy(bool busy)
 void ChargingPage::clearPiles()
 {
     m_piles.clear();
-    m_pileSelector->clear();
+    m_selectedPileIndex = -1;
+    while (QLayoutItem *item = m_pileGrid->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
     m_pileSummary->setText(QStringLiteral("正在读取电桩状态…"));
     m_reservePile->setEnabled(false);
     m_pileHost->setVisible(m_station.id > 0 && m_order.id == 0);
