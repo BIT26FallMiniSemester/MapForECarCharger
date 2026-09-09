@@ -91,7 +91,7 @@ void ApiClient::fetchNearbyStations(double latitude, double longitude, double ra
                      {QStringLiteral("longitude"), longitude},
                      {QStringLiteral("radius_km"), radiusKm},
                      {QStringLiteral("page"), 1},
-                     {QStringLiteral("page_size"), 100}});
+                     {QStringLiteral("page_size"), 20}});
 }
 
 /// 实现 fetchMapSnapshot 的本地处理逻辑，保持与项目其他模块的接口约定一致。

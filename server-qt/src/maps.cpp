@@ -58,13 +58,14 @@ public:
             for(auto i=start;i<end;++i)selected.append(items[i]);
             finish(QJsonObject{{"items",selected},{"page",data["page"].toInteger(1)},{"page_size",data["page_size"].toInteger(20)},{"total",items.size()}});return;
         }
-        int count=qMin(200,int(stations.size())-offset);QStringList destinations;
+        int count=qMin(5,int(stations.size())-offset);QStringList destinations;
         for(int i=0;i<count;++i){auto s=stations[offset+i].toObject();destinations<<QString::number(s["latitude"].toDouble(),'f',7)+","+QString::number(s["longitude"].toDouble(),'f',7);}
         get("/ws/distance/v1/matrix",QUrlQuery{{"mode","driving"},{"from",point(data,"latitude","longitude")},{"to",destinations.join(';')}},[this,count](auto result){
             auto rows=result["rows"].toArray();if(rows.size()!=1)fail(50301);auto elements=rows[0].toObject()["elements"].toArray();if(elements.size()!=count)fail(50301);
             for(int i=0;i<count;++i){if(!elements[i].isObject())fail(50301);auto e=elements[i].toObject();if((e.contains("status")&&e["status"]!=0)||!e.contains("duration"))continue;
                 auto s=stations[offset+i].toObject();const auto distance=whole(e["distance"]);if(distance>data["radius_km"].toDouble(100.0)*1000.0)continue;s["route_distance_meters"]=distance;s["route_duration_seconds"]=whole(e["duration"]);items<<s;
-            }offset+=count;batch();
+            }offset+=count;
+            if(offset<stations.size())QTimer::singleShot(1100,this,[this]{batch();});else batch();
         });
     }
 /// 实现 point 的本地处理逻辑，保持与项目其他模块的接口约定一致。
