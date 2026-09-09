@@ -86,7 +86,8 @@ void Maps::run(const QString &a,const QJsonObject &d,const QJsonArray &stations,
         for(const auto &value:stations){const auto station=value.toObject();const double dy=station["latitude"].toDouble()-lat,dx=(station["longitude"].toDouble()-lng)*lngScale;candidates.append({dx*dx+dy*dy,station});}
 /// 实现 sort 的本地处理逻辑，保持与项目其他模块的接口约定一致。
         std::sort(candidates.begin(),candidates.end(),[](const auto &left,const auto &right){return left.first<right.first;});selectedStations={};
-        for(int i=0;i<qMin(5,candidates.size());++i)selectedStations.append(candidates[i].second);
+        const qint64 candidateLimit=d["page"].toInteger(1)*d["page_size"].toInteger(20);
+        for(qint64 i=0;i<qMin<qint64>(candidateLimit,candidates.size());++i)selectedStations.append(candidates[i].second);
     }
     const QByteArray cacheBytes=QJsonDocument(QJsonObject{{"action",a},{"data",d},{"stations",selectedStations}}).toJson(QJsonDocument::Compact);
     const QString cacheKey=QString::fromLatin1(QCryptographicHash::hash(cacheBytes,QCryptographicHash::Sha256).toHex());
