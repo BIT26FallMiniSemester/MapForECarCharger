@@ -65,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->profilePage, &ProfilePage::saveNicknameClicked, this, &MainWindow::onSaveNickname);
     connect(ui->profilePage, &ProfilePage::chooseAvatarClicked, this, &MainWindow::onChooseAvatar);
     connect(ui->profilePage, &ProfilePage::rechargeClicked, this, &MainWindow::onRecharge);
+    connect(ui->profilePage, &ProfilePage::orderHistoryClicked, m_api, &ApiClient::fetchOrderHistory);
     connect(ui->profilePage, &ProfilePage::logoutClicked, this, &MainWindow::onLogout);
 
     connect(ui->tabHome, &QPushButton::clicked, this, [this]() {
@@ -126,6 +127,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_api->fetchRechargeRecords();
     });
     connect(m_api, &ApiClient::rechargeRecordsReady, ui->profilePage, &ProfilePage::showRechargeRecords);
+    connect(m_api, &ApiClient::orderHistoryReady, ui->profilePage, &ProfilePage::showOrderHistory);
     connect(m_api, &ApiClient::balanceChanged, this, [this](qint64 balance) {
         m_user.balanceCents = balance;
         applyUser(m_user);
@@ -136,6 +138,8 @@ MainWindow::MainWindow(QWidget *parent)
             ui->homePage->showHint(message);
         else if(context==QStringLiteral("map"))
             ui->homePage->showMapError(message);
+        else if(context.startsWith(QStringLiteral("orderHistory:")))
+            ui->profilePage->showOrderHistoryError(message);
     });
 }
 
@@ -430,6 +434,17 @@ void MainWindow::applyTheme()
         QPushButton#pileButton:disabled { background: #f4f6f5; color: #9aaba6; border-color: #dde7e4; border-left: 3px solid #c9d5d2; }
         QPushButton#secondaryButton { background: #f3f8fc; color: #245f7a; border-color: #bcd5e1; }
         QPushButton#secondaryButton:hover { background: #e7f2f7; border-color: #2c88b0; }
+        QFrame#orderCard { background:#ffffff; border:1px solid #d6e4e0; border-left:4px solid #aac3bc; border-radius:2px; }
+        QFrame#orderCard[orderState="COMPLETED"] { border-left-color:#00a878; }
+        QFrame#orderCard[orderState="CHARGING"], QFrame#orderCard[orderState="RESERVED"] { border-left-color:#2c88b0; }
+        QFrame#orderCard[orderState="UNPAID"] { border-left-color:#f2b134; }
+        QFrame#orderCard[orderState="CANCELLED"] { border-left-color:#e1544b; }
+        #orderNumber { color:#29453f; font-family:"DejaVu Sans Mono", monospace; font-size:12px; font-weight:700; }
+        #orderStatus { color:#5e756f; font-family:"DejaVu Sans Mono", "Noto Sans CJK SC", monospace; font-size:12px; font-weight:700; }
+        #orderStatus[orderState="COMPLETED"] { color:#008c68; }
+        #orderStatus[orderState="CHARGING"], #orderStatus[orderState="RESERVED"] { color:#245f7a; }
+        #orderStatus[orderState="UNPAID"] { color:#9a6500; }
+        #orderStatus[orderState="CANCELLED"] { color:#c23b33; }
         #chargeCard {
             background: #f2fbf7;
             color: #17302b;

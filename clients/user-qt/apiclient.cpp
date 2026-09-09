@@ -18,6 +18,8 @@ ApiClient::ApiClient(QObject *parent) : QObject(parent), m_socket(new SocketClie
     });
     connect(m_socket, &SocketClient::failed, this,
             [this](const QString &context, int code, const QString &message) {
+        if (context.startsWith(QStringLiteral("orderHistory:")))
+            m_orderHistory.clear();
         emit requestFinished();
         const QString translated = chineseMessage(code, message);
         emit requestFailed(context, code, translated);
@@ -32,7 +34,7 @@ void ApiClient::setDemoMode(bool enabled) { Q_UNUSED(enabled); }
 /// 设置后续需要认证的请求令牌。
 void ApiClient::setToken(const QString &token) { m_token = token; }
 /// 清除本地充电站、订单和电桩显示状态。
-void ApiClient::clearSession() { m_token.clear(); }
+void ApiClient::clearSession() { m_token.clear(); m_orderHistory.clear(); }
 
 /// 实现 login 的本地处理逻辑，保持与项目其他模块的接口约定一致。
 void ApiClient::login(const QString &phone)
@@ -127,6 +129,13 @@ void ApiClient::fetchOrder(qint64 orderId)
 {
     send(QStringLiteral("order:detail"), QStringLiteral("orders.detail"),
          QJsonObject{{QStringLiteral("order_id"), orderId}});
+}
+
+void ApiClient::fetchOrderHistory()
+{
+    m_orderHistory.clear();
+    send(QStringLiteral("orderHistory:1"), QStringLiteral("orders.list"),
+         QJsonObject{{QStringLiteral("page"), 1}, {QStringLiteral("page_size"), 100}});
 }
 
 /// 实现 createOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -277,6 +286,21 @@ void ApiClient::handleSuccess(const QString &context, const QJsonValue &data)
         emit activeOrderReady(!data.isNull(), data.isNull() ? ChargingOrder{} : parseOrder(data.toObject()));
         return;
     }
+    if (context.startsWith(QStringLiteral("orderHistory:"))) {
+        const QJsonObject object = data.toObject();
+        const int page = context.section(QLatin1Char(':'), 1, 1).toInt();
+        for (const QJsonValue &value : object.value(QStringLiteral("items")).toArray())
+            m_orderHistory.push_back(parseOrder(value.toObject()));
+        if (m_orderHistory.size() < object.value(QStringLiteral("total")).toInteger()) {
+            send(QStringLiteral("orderHistory:%1").arg(page + 1), QStringLiteral("orders.list"),
+                 QJsonObject{{QStringLiteral("page"), page + 1}, {QStringLiteral("page_size"), 100}});
+            return;
+        }
+        const QVector<ChargingOrder> orders = m_orderHistory;
+        m_orderHistory.clear();
+        emit orderHistoryReady(orders);
+        return;
+    }
     if (context.startsWith(QStringLiteral("order:"))) {
         QJsonObject object = data.toObject();
         if (context == QStringLiteral("order:settle")) {
@@ -367,6 +391,7 @@ ChargingOrder ApiClient::parseOrder(const QJsonObject &object) const
     order.energyWh = object.value(QStringLiteral("energy_wh")).toInteger();
     order.amountCents = object.value(QStringLiteral("amount_cents")).toInteger();
     order.expiresAt = object.value(QStringLiteral("expires_at")).toString();
+    order.createdAt = object.value(QStringLiteral("created_at")).toString();
     order.estimated = object.value(QStringLiteral("estimated")).toBool();
     const QJsonObject station = object.value(QStringLiteral("station")).toObject();
     order.stationId = station.value(QStringLiteral("id")).toInteger();

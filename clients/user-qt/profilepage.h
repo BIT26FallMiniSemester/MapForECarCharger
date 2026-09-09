@@ -16,6 +16,8 @@ class ProfilePage;
 }
 QT_END_NAMESPACE
 
+class QPushButton;
+
 // 创建个人中心表单、余额、头像、充值记录和操作按钮。
 class ProfilePage : public QWidget
 {
@@ -40,6 +42,8 @@ public:
     void setBusy(bool busy);
 // 把充值记录渲染为列表。
     void showRechargeRecords(const QVector<RechargeRecord> &records);
+    void showOrderHistory(const QVector<ChargingOrder> &orders);
+    void showOrderHistoryError(const QString &message);
 // 更新登录页状态文字。
     void setStatus(const QString &text);
 
@@ -50,11 +54,13 @@ signals:
     void chooseAvatarClicked();
 // 实现 rechargeClicked 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void rechargeClicked();
+    void orderHistoryClicked();
 // 实现 logoutClicked 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void logoutClicked();
 
 private:
     Ui::ProfilePage *ui;
+    QPushButton *m_historyButton = nullptr;
 };
 
 #endif

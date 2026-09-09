@@ -76,6 +76,7 @@ struct ChargingOrder {
     qint64 energyWh = 0;
     qint64 amountCents = 0;
     QString expiresAt;
+    QString createdAt;
     bool estimated = false;
 };
 

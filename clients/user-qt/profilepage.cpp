@@ -4,12 +4,17 @@
 #include "profilepage.h"
 #include "ui_profilepage.h"
 
+#include <QDateTime>
+#include <QDialog>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QVBoxLayout>
 
 namespace {
 QPixmap roundAvatar(const QPixmap &source)
@@ -26,6 +31,24 @@ QPixmap roundAvatar(const QPixmap &source)
     painter.drawPixmap(0, 0, scaled.copy((scaled.width() - 72) / 2,
                                          (scaled.height() - 72) / 2, 72, 72));
     return result;
+}
+
+QString orderStatusText(const QString &status)
+{
+    if (status == QStringLiteral("PENDING")) return QStringLiteral("待预约");
+    if (status == QStringLiteral("RESERVED")) return QStringLiteral("已预约");
+    if (status == QStringLiteral("CHARGING")) return QStringLiteral("充电中");
+    if (status == QStringLiteral("UNPAID")) return QStringLiteral("待支付");
+    if (status == QStringLiteral("COMPLETED")) return QStringLiteral("已完成");
+    if (status == QStringLiteral("CANCELLED")) return QStringLiteral("已取消");
+    return status;
+}
+
+QString localOrderTime(const QString &value)
+{
+    QDateTime time = QDateTime::fromString(value, Qt::ISODateWithMs);
+    if (!time.isValid()) time = QDateTime::fromString(value, Qt::ISODate);
+    return time.isValid() ? time.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")) : value;
 }
 }
 
@@ -87,9 +110,20 @@ ProfilePage::ProfilePage(QWidget *parent)
     ui->rechargeButton->setText(QStringLiteral("充值"));
     ui->logoutButton->setText(QStringLiteral("断开账户"));
 
+    m_historyButton = new QPushButton(QStringLiteral("查看全部历史订单  →"), this);
+    m_historyButton->setObjectName(QStringLiteral("secondaryButton"));
+    m_historyButton->setCursor(Qt::PointingHandCursor);
+    m_historyButton->setAccessibleName(QStringLiteral("查看全部历史订单"));
+    ui->profileLayout->insertWidget(ui->profileLayout->count() - 2, m_historyButton);
+
     connect(ui->saveNicknameButton, &QPushButton::clicked, this, &ProfilePage::saveNicknameClicked);
     connect(ui->pickAvatarButton, &QPushButton::clicked, this, &ProfilePage::chooseAvatarClicked);
     connect(ui->rechargeButton, &QPushButton::clicked, this, &ProfilePage::rechargeClicked);
+    connect(m_historyButton, &QPushButton::clicked, this, [this] {
+        m_historyButton->setEnabled(false);
+        m_historyButton->setText(QStringLiteral("正在读取订单档案…"));
+        emit orderHistoryClicked();
+    });
     connect(ui->logoutButton, &QPushButton::clicked, this, &ProfilePage::logoutClicked);
 }
 
@@ -181,4 +215,92 @@ void ProfilePage::showRechargeRecords(const QVector<RechargeRecord> &records)
         line->setWordWrap(true);
         ui->recordListLayout->insertWidget(ui->recordListLayout->count() - 1, line);
     }
+}
+
+void ProfilePage::showOrderHistory(const QVector<ChargingOrder> &orders)
+{
+    m_historyButton->setEnabled(true);
+    m_historyButton->setText(QStringLiteral("查看全部历史订单  %1 笔  →").arg(orders.size()));
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("历史订单"));
+    dialog.resize(qBound(340, width() - 16, 390), qBound(500, height() - 24, 680));
+    auto *root = new QVBoxLayout(&dialog);
+    root->setContentsMargins(16, 18, 16, 14);
+    root->setSpacing(10);
+
+    auto *eyebrow = new QLabel(QStringLiteral("ORDER ARCHIVE / ALL"), &dialog);
+    eyebrow->setObjectName(QStringLiteral("brandLabel"));
+    auto *title = new QLabel(QStringLiteral("历史充电订单"), &dialog);
+    title->setObjectName(QStringLiteral("titleLabel"));
+    auto *summary = new QLabel(QStringLiteral("共 %1 笔，按创建时间从新到旧排列").arg(orders.size()), &dialog);
+    summary->setObjectName(QStringLiteral("subtitleLabel"));
+    root->addWidget(eyebrow);
+    root->addWidget(title);
+    root->addWidget(summary);
+
+    auto *scroll = new QScrollArea(&dialog);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *host = new QWidget(scroll);
+    auto *list = new QVBoxLayout(host);
+    list->setContentsMargins(0, 0, 0, 0);
+    list->setSpacing(8);
+
+    if (orders.isEmpty()) {
+        auto *empty = new QLabel(QStringLiteral("还没有历史订单。完成一次充电后，订单会记录在这里。"), host);
+        empty->setObjectName(QStringLiteral("subtitleLabel"));
+        empty->setWordWrap(true);
+        list->addWidget(empty);
+    }
+    for (const ChargingOrder &order : orders) {
+        auto *card = new QFrame(host);
+        card->setObjectName(QStringLiteral("orderCard"));
+        card->setProperty("orderState", order.status);
+        auto *box = new QVBoxLayout(card);
+        box->setContentsMargins(12, 10, 12, 10);
+        box->setSpacing(5);
+        auto *header = new QHBoxLayout;
+        auto *number = new QLabel(order.orderNo, card);
+        number->setObjectName(QStringLiteral("orderNumber"));
+        auto *status = new QLabel(orderStatusText(order.status), card);
+        status->setObjectName(QStringLiteral("orderStatus"));
+        status->setProperty("orderState", order.status);
+        header->addWidget(number, 1);
+        header->addWidget(status);
+        auto *station = new QLabel(QStringLiteral("%1  ·  %2").arg(order.stationName, order.pileNo), card);
+        station->setObjectName(QStringLiteral("cardTitle"));
+        station->setWordWrap(true);
+        const qint64 minutes = order.durationSeconds / 60;
+        const qint64 seconds = order.durationSeconds % 60;
+        auto *detail = new QLabel(
+            QStringLiteral("%1\n电量 %2 kWh  ·  时长 %3:%4  ·  金额 ¥%5")
+                .arg(localOrderTime(order.createdAt))
+                .arg(order.energyWh / 1000.0, 0, 'f', 2)
+                .arg(minutes)
+                .arg(seconds, 2, 10, QLatin1Char('0'))
+                .arg(centsToYuanText(order.amountCents)), card);
+        detail->setObjectName(QStringLiteral("cardInfo"));
+        detail->setWordWrap(true);
+        box->addLayout(header);
+        box->addWidget(station);
+        box->addWidget(detail);
+        list->addWidget(card);
+    }
+    list->addStretch();
+    scroll->setWidget(host);
+    root->addWidget(scroll, 1);
+
+    auto *close = new QPushButton(QStringLiteral("返回账户"), &dialog);
+    close->setObjectName(QStringLiteral("secondaryButton"));
+    connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    root->addWidget(close);
+    dialog.exec();
+}
+
+void ProfilePage::showOrderHistoryError(const QString &message)
+{
+    m_historyButton->setEnabled(true);
+    m_historyButton->setText(QStringLiteral("重新加载历史订单  →"));
+    setStatus(message);
 }

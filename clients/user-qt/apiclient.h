@@ -59,6 +59,7 @@ public:
     void fetchActiveOrder();
 // 实现 fetchOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void fetchOrder(qint64 orderId);
+    void fetchOrderHistory();
 // 实现 createOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void createOrder(qint64 stationId, qint64 pileId);
 // 实现 reserveOrder 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -103,6 +104,7 @@ signals:
     void activeOrderReady(bool hasOrder, const ChargingOrder &order);
 // 实现 orderReady 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void orderReady(const QString &operation, const ChargingOrder &order);
+    void orderHistoryReady(const QVector<ChargingOrder> &orders);
 // 实现 routeReady 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void routeReady(const RouteInfo &route);
 // 实现 balanceChanged 的本地处理逻辑，保持与项目其他模块的接口约定一致。
@@ -132,6 +134,7 @@ private:
     SocketClient *m_socket = nullptr;
     QString m_token;
     QHash<qint64, QVector<ChargingPile>> m_pileBatches;
+    QVector<ChargingOrder> m_orderHistory;
 };
 
 #endif
