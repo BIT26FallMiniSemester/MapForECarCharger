@@ -119,7 +119,7 @@ void ProfilePage::setUser(const User &user)
     if (user.avatarUrl.isEmpty()) {
         ui->avatarLabel->clear();
         ui->avatarLabel->setText(QStringLiteral("默认"));
-        ui->avatarLabel->setStyleSheet(QStringLiteral("background:#102a26;border:2px solid #58f2b2;border-radius:36px;color:#58f2b2;font-weight:700;"));
+        ui->avatarLabel->setStyleSheet(QStringLiteral("background:#eaf8f3;border:2px solid #00a878;border-radius:36px;color:#008c68;font-weight:700;"));
     }
 }
 
