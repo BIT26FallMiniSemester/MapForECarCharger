@@ -37,6 +37,44 @@ static void info(QWidget *p, const QString &title, const QString &text) { QMessa
 /// 把订单状态转换为管理端中文名称。
 static QString orderStatusText(const QString &status) { static const QMap<QString,QString> names{{"PENDING","待预约"},{"RESERVED","已预约"},{"CHARGING","充电中"},{"UNPAID","待支付"},{"COMPLETED","已完成"},{"CANCELLED","已取消"}};return names.value(status,status); }
 
+/// 使用固定状态顺序创建便于横向比较的电桩数量图。
+static QChart *pileStatusBarChart(const QMap<QString,int> &counts)
+{
+    const QList<QPair<QString,QString>> statuses{{"IDLE","空闲"},{"RESERVED","已预约"},{"CHARGING","充电中"},{"FAULT","故障"},{"OFFLINE","离线"}};
+    auto *values = new QBarSet(QStringLiteral("电桩数量"));
+    auto *categories = new QBarCategoryAxis;
+    int maximum = 1;
+    for (const auto &status : statuses) {
+        const int value = counts.value(status.first);
+        *values << value;
+        categories->append(QStringLiteral("%1  %2").arg(status.second, status.first));
+        maximum = qMax(maximum, value);
+    }
+    values->setColor(QColor(QStringLiteral("#1688e8")));
+    values->setBorderColor(QColor(QStringLiteral("#1688e8")));
+
+    auto *series = new QHorizontalBarSeries;
+    series->append(values);
+    series->setLabelsVisible(true);
+    series->setLabelsPosition(QAbstractBarSeries::LabelsInsideEnd);
+
+    auto *axis = new QValueAxis;
+    axis->setRange(0, maximum * 1.12);
+    axis->setLabelFormat(QStringLiteral("%.0f"));
+    axis->setTitleText(QStringLiteral("电桩数量"));
+
+    auto *chart = new QChart;
+    chart->addSeries(series);
+    chart->addAxis(categories, Qt::AlignLeft);
+    chart->addAxis(axis, Qt::AlignBottom);
+    series->attachAxis(categories);
+    series->attachAxis(axis);
+    chart->legend()->hide();
+    chart->setBackgroundVisible(false);
+    chart->setMargins(QMargins(8, 8, 8, 8));
+    return chart;
+}
+
 /// 组装管理端导航、各业务页面、图表和 API 刷新状态。
 MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &token, QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow), m_demoMode(demoMode), m_api(new ApiClient(this))
 {
@@ -88,7 +126,7 @@ QWidget *MainWindow::metricCard(const QString &title, const QString &value, cons
 QWidget *MainWindow::createDashboard()
 {
     auto *page = new QWidget; auto *v = new QVBoxLayout(page);
-    auto *head = new QHBoxLayout; head->addWidget(titleLabel("运营首页")); head->addStretch();
+    auto *head = new QHBoxLayout; head->addWidget(titleLabel("管理端运营中枢")); head->addStretch();
     auto *period = new QComboBox; period->addItems({"近 7 日", "近 30 日"}); head->addWidget(new QLabel("趋势周期")); head->addWidget(period); v->addLayout(head);
     auto *cards = new QHBoxLayout;
     cards->addWidget(metricCard("今日营收",m_demoMode?"¥ 4,286.50":"加载中…",m_demoMode?"较昨日 +12.6%":"已完成订单实收"));
@@ -122,9 +160,7 @@ void MainWindow::buildStatusChart()
 {
     resetHost(m_statusHost); auto *layout = new QVBoxLayout(m_statusHost); layout->addWidget(new QLabel("电桩状态分布"));
     QMap<QString,int> c{{"IDLE",0},{"RESERVED",0},{"CHARGING",0},{"FAULT",0},{"OFFLINE",0}}; for (const auto &p: MockRepository::instance().piles()) c[p.status]++;
-    const int total=std::accumulate(c.cbegin(),c.cend(),0);auto *series = new QPieSeries; for (auto i=c.cbegin();i!=c.cend();++i) series->append(QString("%1  %2 (%3%)").arg(i.key()).arg(i.value()).arg(total?i.value()*100.0/total:0,0,'f',1),i.value()); series->setHoleSize(.48); series->setLabelsVisible();
-    auto *chart = new QChart; chart->addSeries(series); chart->setBackgroundVisible(false); chart->legend()->hide();
-    auto *view = new QChartView(chart); view->setRenderHint(QPainter::Antialiasing); layout->addWidget(view);
+    auto *view = new QChartView(pileStatusBarChart(c)); view->setRenderHint(QPainter::Antialiasing); layout->addWidget(view);
 }
 
 /// 使用演示数据或后端数据绘制营收/订单趋势图。
@@ -153,8 +189,7 @@ void MainWindow::buildStatusChart(const QJsonArray &items)
     resetHost(m_statusHost); auto *layout = new QVBoxLayout(m_statusHost); layout->addWidget(new QLabel("电桩状态分布（全量聚合）"));
     QMap<QString,int> counts{{"IDLE",0},{"RESERVED",0},{"CHARGING",0},{"FAULT",0},{"OFFLINE",0}};
     for (const auto &value : items) { const auto item=value.toObject(); counts[item.value("status").toString()] = item.value("count").toInt(); }
-    const int total=std::accumulate(counts.cbegin(),counts.cend(),0);auto *series = new QPieSeries; for(auto i=counts.cbegin();i!=counts.cend();++i) series->append(QString("%1  %2 (%3%)").arg(i.key()).arg(i.value()).arg(total?i.value()*100.0/total:0,0,'f',1),i.value()); series->setHoleSize(.48); series->setLabelsVisible();
-    auto *chart = new QChart; chart->addSeries(series); chart->setBackgroundVisible(false); chart->legend()->hide(); auto *view=new QChartView(chart); view->setRenderHint(QPainter::Antialiasing); layout->addWidget(view);
+    auto *view=new QChartView(pileStatusBarChart(counts)); view->setRenderHint(QPainter::Antialiasing); layout->addWidget(view);
 }
 
 /// 创建电桩表格、筛选器、分页和详情/恢复操作。
