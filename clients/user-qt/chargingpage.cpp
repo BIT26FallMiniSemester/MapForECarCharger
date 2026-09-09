@@ -35,11 +35,14 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     root->setContentsMargins(16, 20, 16, 12);
     root->setSpacing(10);
 
-    auto *title = new QLabel(QStringLiteral("当前充电"));
+    auto *eyebrow = new QLabel(QStringLiteral("SESSION CONTROL / LIVE"));
+    eyebrow->setObjectName(QStringLiteral("brandLabel"));
+    auto *title = new QLabel(QStringLiteral("充电控制台"));
     title->setObjectName(QStringLiteral("titleLabel"));
-    auto *subtitle = new QLabel(QStringLiteral("选择空闲电桩后预约；开始充电后费用由 Qt 后端实时计算。"));
+    auto *subtitle = new QLabel(QStringLiteral("选桩 → 锁定 15 分钟 → 启动。计时与费用以服务端为准。"));
     subtitle->setObjectName(QStringLiteral("subtitleLabel"));
     subtitle->setWordWrap(true);
+    root->addWidget(eyebrow);
     root->addWidget(title);
     root->addWidget(subtitle);
 
@@ -68,7 +71,7 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     m_pileHost = new QFrame;
     m_pileHost->setObjectName(QStringLiteral("card"));
     m_pileLayout = new QVBoxLayout(m_pileHost);
-    auto *pileHeading = new QLabel(QStringLiteral("选择电桩"));
+    auto *pileHeading = new QLabel(QStringLiteral("可用电桩 / TAP TO SELECT"));
     pileHeading->setObjectName(QStringLiteral("cardTitle"));
     m_pileSummary = new QLabel(QStringLiteral("请先从首页选择充电站"));
     m_pileSummary->setObjectName(QStringLiteral("cardInfo"));
@@ -84,8 +87,8 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
     m_reservePile->setEnabled(false);
     m_pileLayout->addWidget(pileHeading);
     m_pileLayout->addWidget(m_pileSummary);
-    m_pileLayout->addWidget(pileGridHost);
     m_pileLayout->addWidget(m_reservePile);
+    m_pileLayout->addWidget(pileGridHost);
     contentLayout->addWidget(m_pileHost);
 
     auto *orderCard = new QFrame;
@@ -195,14 +198,11 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
                 .arg(pile.pileNo, type)
                 .arg(pile.ratedPowerW / 1000.0, 0, 'f', 1)
                 .arg(statusText(pile.status)));
-            button->setStyleSheet(QStringLiteral(
-                "QPushButton#pileButton:checked {"
-                "background:#0f766e;color:white;border:2px solid #f59e0b;}"
-                "QPushButton#pileButton:checked:hover {background:#115e59;}"));
             m_pileButtons->addButton(button);
             m_pileGrid->addWidget(button, i / 2, i % 2);
             connect(button, &QPushButton::clicked, this, [this, i] {
                 m_selectedPileIndex = i;
+                m_reservePile->setText(QStringLiteral("预约 %1").arg(m_piles[i].pileNo));
                 m_reservePile->setEnabled(true);
             });
             if (idle) {
@@ -218,6 +218,7 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         if (firstAvailable >= 0) {
             m_selectedPileIndex = firstAvailable;
             firstAvailableButton->setChecked(true);
+            m_reservePile->setText(QStringLiteral("预约 %1").arg(m_piles[firstAvailable].pileNo));
         }
         m_reservePile->setEnabled(firstAvailable >= 0);
         if (piles.isEmpty() || available == 0)
@@ -339,6 +340,7 @@ void ChargingPage::clearPiles()
         delete item;
     }
     m_pileSummary->setText(QStringLiteral("正在读取电桩状态…"));
+    m_reservePile->setText(QStringLiteral("预约所选电桩"));
     m_reservePile->setEnabled(false);
     m_pileHost->setVisible(m_station.id > 0 && m_order.id == 0);
 }

@@ -21,12 +21,16 @@ LocationDialog::LocationDialog(QWidget *parent)
     ui->addressHint->setObjectName(QStringLiteral("subtitleLabel"));
     ui->statusLabel->setObjectName(QStringLiteral("statusLabel"));
     ui->useRegionButton->setObjectName(QStringLiteral("secondaryButton"));
+    ui->titleLabel->setText(QStringLiteral("设定路网起点"));
 
     ui->keyHint->hide();
     ui->keyEdit->hide();
     ui->locateMeButton->hide();
-    ui->addressHint->setText(QStringLiteral("或输入详细地址（由后端调用腾讯地图）"));
-    ui->descLabel->setText(QStringLiteral("选择北京市区域，或输入详细地址定位附近充电站。"));
+    ui->regionHint->setText(QStringLiteral("快速区域 / PRESET"));
+    ui->addressHint->setText(QStringLiteral("精确地址 / TENCENT MAP"));
+    ui->descLabel->setText(QStringLiteral("选择常用区域，或输入详细地址作为距离计算起点。"));
+    ui->useRegionButton->setText(QStringLiteral("使用预设起点"));
+    ui->searchButton->setText(QStringLiteral("解析详细地址"));
     ui->verticalLayout->setContentsMargins(16, 16, 16, 16);
     if (parent)
         resize(qMin(370, parent->width() - 24), qMin(520, parent->height() - 48));
@@ -45,7 +49,7 @@ void LocationDialog::applyGeocodedLocation(double lat, double lng, const QString
 {
     m_searching = false;
     ui->searchButton->setEnabled(true);
-    ui->searchButton->setText(QStringLiteral("搜索位置"));
+    ui->searchButton->setText(QStringLiteral("解析详细地址"));
     applyLocation(lat, lng, displayName);
 }
 
@@ -54,7 +58,7 @@ void LocationDialog::showSearchError(const QString &message)
 {
     m_searching = false;
     ui->searchButton->setEnabled(true);
-    ui->searchButton->setText(QStringLiteral("搜索位置"));
+    ui->searchButton->setText(QStringLiteral("解析详细地址"));
     ui->statusLabel->setText(message);
 }
 
@@ -133,7 +137,7 @@ void LocationDialog::onSearch()
         return;
     m_searching = true;
     ui->searchButton->setEnabled(false);
-    ui->searchButton->setText(QStringLiteral("腾讯地图查询中…"));
+    ui->searchButton->setText(QStringLiteral("正在解析地址…"));
     emit searchRequested(address);
 }
 

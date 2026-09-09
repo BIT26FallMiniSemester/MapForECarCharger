@@ -23,9 +23,17 @@ LoginPage::LoginPage(QWidget *parent)
     ui->statusLabel->setObjectName(QStringLiteral("statusLabel"));
     ui->apiHintLabel->setObjectName(QStringLiteral("subtitleLabel"));
     ui->hintLabel->setObjectName(QStringLiteral("hintLabel"));
-    ui->loginLayout->setContentsMargins(24, 40, 24, 28);
+    ui->loginLayout->setContentsMargins(24, 34, 24, 24);
+    ui->loginLayout->setSpacing(14);
+    ui->brandLabel->setText(QStringLiteral("GRID NODE / BEIJING / 08"));
+    ui->titleLabel->setText(QStringLiteral("接入充电网络"));
+    ui->subtitleLabel->setText(QStringLiteral("手机号即是通行证，新号码将自动建立账户。"));
+    ui->apiHintLabel->setText(QStringLiteral("服务节点 / SOCKET ENDPOINT"));
+    ui->hintLabel->setText(QStringLiteral("演示账号  13900000000\n冻结测试  13800000000"));
+    ui->phoneEdit->setPlaceholderText(QStringLiteral("11 位手机号"));
+    ui->loginButton->setText(QStringLiteral("连接并登录"));
 
-    auto *phoneLabel = new QLabel(QStringLiteral("手机号"), this);
+    auto *phoneLabel = new QLabel(QStringLiteral("手机号 / MOBILE"), this);
     phoneLabel->setObjectName(QStringLiteral("cardTitle"));
     ui->loginLayout->insertWidget(3, phoneLabel);
     ui->phoneEdit->setAccessibleName(QStringLiteral("手机号"));
@@ -66,7 +74,7 @@ bool LoginPage::demoMode() const
 void LoginPage::setBusy(bool busy)
 {
     ui->loginButton->setEnabled(!busy);
-    ui->loginButton->setText(busy ? QStringLiteral("登录中...") : QStringLiteral("登录 / 自动注册"));
+    ui->loginButton->setText(busy ? QStringLiteral("正在建立连接…") : QStringLiteral("连接并登录"));
 }
 
 /// 更新登录页状态文字。

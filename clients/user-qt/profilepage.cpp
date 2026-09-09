@@ -36,10 +36,13 @@ ProfilePage::ProfilePage(QWidget *parent)
 {
     ui->setupUi(this);
     ui->titleLabel->setObjectName(QStringLiteral("titleLabel"));
+    ui->titleLabel->setText(QStringLiteral("账户与能量"));
     ui->phoneLabel->setObjectName(QStringLiteral("subtitleLabel"));
     ui->balanceLabel->setObjectName(QStringLiteral("cardTitle"));
     ui->rechargeTitleLabel->setObjectName(QStringLiteral("cardTitle"));
+    ui->rechargeTitleLabel->setText(QStringLiteral("充值余额 / WALLET"));
     ui->recordTitleLabel->setObjectName(QStringLiteral("cardTitle"));
+    ui->recordTitleLabel->setText(QStringLiteral("资金记录 / LEDGER"));
     ui->statusLabel->setObjectName(QStringLiteral("statusLabel"));
     ui->pickAvatarButton->setObjectName(QStringLiteral("secondaryButton"));
     ui->logoutButton->setObjectName(QStringLiteral("dangerButton"));
@@ -76,6 +79,14 @@ ProfilePage::ProfilePage(QWidget *parent)
     ui->profileLayout->insertLayout(7, rechargeRow);
     ui->recordScroll->setMinimumHeight(96);
 
+    auto *eyebrow = new QLabel(QStringLiteral("DRIVER ID / ACCOUNT 03"), this);
+    eyebrow->setObjectName(QStringLiteral("brandLabel"));
+    ui->profileLayout->insertWidget(0, eyebrow);
+    ui->pickAvatarButton->setText(QStringLiteral("更换识别图像"));
+    ui->saveNicknameButton->setText(QStringLiteral("更新昵称"));
+    ui->rechargeButton->setText(QStringLiteral("充值"));
+    ui->logoutButton->setText(QStringLiteral("断开账户"));
+
     connect(ui->saveNicknameButton, &QPushButton::clicked, this, &ProfilePage::saveNicknameClicked);
     connect(ui->pickAvatarButton, &QPushButton::clicked, this, &ProfilePage::chooseAvatarClicked);
     connect(ui->rechargeButton, &QPushButton::clicked, this, &ProfilePage::rechargeClicked);
@@ -108,7 +119,7 @@ void ProfilePage::setUser(const User &user)
     if (user.avatarUrl.isEmpty()) {
         ui->avatarLabel->clear();
         ui->avatarLabel->setText(QStringLiteral("默认"));
-        ui->avatarLabel->setStyleSheet(QStringLiteral("background:#64748b;border-radius:36px;color:white;"));
+        ui->avatarLabel->setStyleSheet(QStringLiteral("background:#102a26;border:2px solid #58f2b2;border-radius:36px;color:#58f2b2;font-weight:700;"));
     }
 }
 

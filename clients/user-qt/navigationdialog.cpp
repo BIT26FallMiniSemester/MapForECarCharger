@@ -19,14 +19,17 @@ NavigationDialog::NavigationDialog(double fromLatitude, double fromLongitude,
     : QDialog(parent), m_fromLatitude(fromLatitude), m_fromLongitude(fromLongitude),
       m_station(station)
 {
-    setWindowTitle(QStringLiteral("导航到 %1").arg(station.name));
+    setWindowTitle(QStringLiteral("路线节点 / %1").arg(station.name));
     setModal(true);
     resize(parent ? qMin(386, parent->width() - 24) : 386,
            parent ? qMin(700, parent->height() - 48) : 700);
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(8);
-    auto *destination = new QLabel(QStringLiteral("目的地：%1\n%2").arg(station.name, station.address));
+    auto *eyebrow = new QLabel(QStringLiteral("ROUTE LINK / TENCENT MAP"));
+    eyebrow->setObjectName(QStringLiteral("brandLabel"));
+    layout->addWidget(eyebrow);
+    auto *destination = new QLabel(QStringLiteral("目的节点\n%1\n%2").arg(station.name, station.address));
     destination->setObjectName(QStringLiteral("cardTitle"));
     destination->setWordWrap(true);
     layout->addWidget(destination);
