@@ -7,15 +7,20 @@
 
 # Local development/runtime artifacts
 *.log
-__pycache__/
-.pytest_cache/
-.venv/
-venv/
 *.db
 *.sqlite
 *.sqlite3
 .env
-.coverage
-htmlcov/
-coverage.xml
-/backend/runtime/
+/server-qt/build/
+/server-qt/runtime/
+CMakeUserPresets.json
+
+node_modules/
+
+/web-bigscreen/dist/
+
+.env.local
+
+__pycache__/
+
+/analytics-hadoop/runtime/

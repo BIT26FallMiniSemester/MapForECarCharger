@@ -1,2 +1,2 @@
 # Preserve source-data snapshots byte-for-byte, including their original line endings.
-backend/data/raw/*.csv binary
+server-qt/data/raw/*.csv binary

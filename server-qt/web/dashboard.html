@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>北京充电网络 · 运营态势</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+  <style>
+    :root{--night:#071b24;--panel:#0d2933;--line:#204650;--mint:#42e8bd;--cyan:#58b9ff;--amber:#ffca69;--text:#e7f5f3;--muted:#8dafb3}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#123b45 0,var(--night) 38%);color:var(--text);font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;min-height:100vh}
+    main{max-width:1500px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid var(--line);padding-bottom:16px}.eyebrow{color:var(--mint);font:600 12px ui-monospace,monospace;letter-spacing:.18em}.top h1{font-size:28px;margin:5px 0 0}.stamp{color:var(--muted);font:12px ui-monospace,monospace}
+    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:16px 0}.metric,.panel{background:rgba(13,41,51,.9);border:1px solid var(--line);border-radius:10px}.metric{padding:14px}.metric span{color:var(--muted);font-size:12px}.metric b{display:block;font:600 24px ui-monospace,monospace;margin-top:7px;color:var(--text)}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:12px}.panel{padding:16px}.panel h2{font-size:15px;margin:0 0 12px;color:#bfe5e0}.chart{height:300px}.horizons{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.horizon{padding:12px;border-left:3px solid var(--cyan);background:#0a222b}.horizon b{font:600 21px ui-monospace,monospace}.horizon small{display:block;color:var(--muted);margin-top:4px}
+    .warning{margin-top:12px;padding:12px;background:#342c1c;border:1px solid #68552a;color:var(--amber);border-radius:8px}.wide{grid-column:1/-1}.table{width:100%;border-collapse:collapse}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid var(--line);font-size:13px}.table th{color:var(--muted);font-weight:500}.available{color:var(--mint);font-family:ui-monospace,monospace}.model{color:var(--muted);font-size:12px;margin-top:10px}
+    @media(max-width:900px){main{padding:14px}.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.top{align-items:start;gap:12px}.stamp{text-align:right}.chart{height:250px}}
+  </style>
+</head>
+<body><main>
+  <header class="top"><div><div class="eyebrow">BEIJING CHARGING NETWORK</div><h1>电动汽车充电网络运营态势</h1></div><div id="stamp" class="stamp">等待 Qt 后端数据…</div></header>
+  <section class="metrics">
+    <div class="metric"><span>启用站点</span><b id="stations">—</b></div><div class="metric"><span>受管电桩</span><b id="piles">—</b></div>
+    <div class="metric"><span>当前占用</span><b id="busy">—</b></div><div class="metric"><span>今日订单</span><b id="orders">—</b></div>
+    <div class="metric"><span>今日营收</span><b id="revenue">—</b></div><div class="metric"><span>数据刷新</span><b style="color:var(--mint)">5s</b></div>
+  </section>
+  <section class="grid">
+    <div class="panel"><h2>未来 24 小时负载与充电量预测</h2><div id="forecast" class="chart"></div><div id="model" class="model"></div></div>
+    <div class="panel"><h2>电桩实时状态</h2><div id="status" class="chart"></div></div>
+    <div class="panel"><h2>1 / 6 / 24 小时预测</h2><div id="horizons" class="horizons"></div><div id="warning" class="warning">正在计算负载预警…</div></div>
+    <div class="panel"><h2>低拥堵站点推荐</h2><table class="table"><thead><tr><th>站点</th><th>未来1小时预计空闲</th><th>地址</th></tr></thead><tbody id="recommendations"></tbody></table></div>
+    <div class="panel wide"><h2>近 30 日订单、充电量与营收</h2><div id="history" class="chart"></div></div>
+  </section>
+</main><script>
+const $=id=>document.getElementById(id), colors=['#42e8bd','#58b9ff','#ffca69','#f27f8b','#738b92'], esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const forecast=echarts.init($('forecast')), status=echarts.init($('status')), history=echarts.init($('history'));
+const axis={axisLine:{lineStyle:{color:'#45636a'}},axisLabel:{color:'#8dafb3'},splitLine:{lineStyle:{color:'#173b44'}}};
+function render(d){$('stamp').textContent='Qt 后端 · '+(d.generated_at||'');$('stations').textContent=d.station_count??0;$('piles').textContent=d.pile_count??0;$('busy').textContent=d.busy_piles??0;$('orders').textContent=d.today_orders??0;$('revenue').textContent='¥'+((d.today_revenue_cents||0)/100).toFixed(2);$('model').textContent='模型：'+d.model+'；输入来自 SQLite 实际订单，不生成模拟订单。';
+  const fp=d.forecast_points||[];forecast.setOption({tooltip:{trigger:'axis'},legend:{textStyle:{color:'#b9d1d2'}},grid:{left:48,right:48,top:36,bottom:45},xAxis:{...axis,type:'category',data:fp.map(x=>x.time),axisLabel:{color:'#8dafb3',rotate:35}},yAxis:[{...axis,type:'value',name:'kWh',nameTextStyle:{color:'#8dafb3'}},{...axis,type:'value',name:'负载率 %',max:100,nameTextStyle:{color:'#8dafb3'}}],series:[{name:'预测充电量',type:'bar',data:fp.map(x=>x.energy_kwh),itemStyle:{color:'#58b9ff'}},{name:'预测负载率',type:'line',yAxisIndex:1,smooth:true,data:fp.map(x=>x.utilization),lineStyle:{color:'#42e8bd'},itemStyle:{color:'#42e8bd'}}]});
+  status.setOption({tooltip:{trigger:'item'},color:colors,series:[{type:'pie',radius:['48%','72%'],label:{color:'#d6ece9'},data:d.pile_status||[]}]});
+  const tr=d.trend||[];history.setOption({tooltip:{trigger:'axis'},legend:{textStyle:{color:'#b9d1d2'}},grid:{left:48,right:48,top:36,bottom:40},xAxis:{...axis,type:'category',data:tr.map(x=>x.date)},yAxis:[{...axis,type:'value'},{...axis,type:'value'}],series:[{name:'订单',type:'line',data:tr.map(x=>x.orders),itemStyle:{color:'#42e8bd'}},{name:'充电量(kWh)',type:'bar',data:tr.map(x=>(x.energy_wh/1000).toFixed(2)),itemStyle:{color:'#58b9ff'}},{name:'营收(元)',type:'line',yAxisIndex:1,data:tr.map(x=>(x.revenue_cents/100).toFixed(2)),itemStyle:{color:'#ffca69'}}]});
+  $('horizons').innerHTML=(d.forecast_horizons||[]).map(x=>`<div class="horizon"><b>${Number(x.hours)}h</b><small>${Number(x.orders)} 单 · ${Number(x.energy_kwh)} kWh</small></div>`).join('');$('warning').textContent=(d.warnings||[]).join('；');$('recommendations').innerHTML=(d.recommended_stations||[]).slice(0,6).map(x=>`<tr><td>${esc(x.name)}</td><td class="available">${Number(x.predicted_available_piles_1h)}/${Number(x.total_piles)}</td><td>${esc(x.address)}</td></tr>`).join('');}
+async function load(){try{const r=await fetch('/api/dashboard',{cache:'no-store'});if(!r.ok)throw Error(r.status);render(await r.json())}catch(e){$('stamp').textContent='Qt 后端大屏接口暂不可用'}}load();setInterval(load,5000);addEventListener('resize',()=>{forecast.resize();status.resize();history.resize()});
+</script></body></html>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 负责 loginwindow 的配置、数据或界面资源，作为项目构建或运行所需的一部分。 -->
+<!-- 以下节点由 Qt Designer 维护，uic 会据此生成 ui_*.h 界面类。 -->
+<ui version="4.0">
+ <class>LoginWindow</class>
+ <widget class="QWidget" name="LoginWindow">
+  <property name="minimumSize"><size><width>1000</width><height>620</height></size></property>
+  <layout class="QHBoxLayout" name="rootLayout">
+   <property name="spacing"><number>0</number></property>
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <item><widget class="QFrame" name="brandPanel"><layout class="QVBoxLayout" name="brandLayout">
+    <property name="leftMargin"><number>58</number></property><property name="rightMargin"><number>48</number></property>
+    <item><spacer name="brandTopSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+    <item><widget class="QLabel" name="brandBadge"><property name="text"><string>CHARGING OPERATIONS</string></property></widget></item>
+    <item><widget class="QLabel" name="brandTitle"><property name="text"><string>⚡ 充电林</string></property></widget></item>
+    <item><widget class="QLabel" name="brandSubtitle"><property name="text"><string>电动汽车充电运营管理平台</string></property></widget></item>
+    <item><widget class="QLabel" name="brandFeatures"><property name="text"><string>设备管控   ·   站点运营   ·   数据洞察</string></property></widget></item>
+    <item><spacer name="brandBottomSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+    <item><widget class="QLabel" name="brandFooter"><property name="text"><string>安全 · 高效 · 可视化运营</string></property></widget></item>
+   </layout></widget></item>
+   <item><widget class="QFrame" name="loginPanel"><layout class="QVBoxLayout" name="loginLayout">
+    <property name="spacing"><number>12</number></property><property name="leftMargin"><number>76</number></property><property name="rightMargin"><number>76</number></property>
+    <item><spacer name="loginTopSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+    <item><widget class="QLabel" name="loginTitle"><property name="text"><string>欢迎回来</string></property></widget></item>
+    <item><widget class="QLabel" name="loginSubtitle"><property name="text"><string>登录充电林运营管理后台</string></property></widget></item>
+    <item><widget class="QLineEdit" name="accountEdit"><property name="placeholderText"><string>管理员账号</string></property><property name="text"><string>admin</string></property></widget></item>
+    <item><widget class="QLineEdit" name="passwordEdit"><property name="placeholderText"><string>登录密码</string></property><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="text"><string>123456</string></property></widget></item>
+    <item><widget class="QLabel" name="errorLabel"><property name="text"><string/></property></widget></item>
+    <item><widget class="QPushButton" name="loginButton"><property name="text"><string>登 录</string></property><property name="objectName"><string>primaryButton</string></property></widget></item>
+    <item><widget class="QLabel" name="demoHint"><property name="text"><string>Qt 演示账号  admin  /  123456</string></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+    <item><spacer name="loginBottomSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+   </layout></widget></item>
+  </layout>
+ </widget>
+ <resources/><connections/>
+</ui>

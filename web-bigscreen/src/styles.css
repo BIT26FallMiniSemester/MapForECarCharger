@@ -203,3 +203,7 @@ button, input { font: inherit; }
   .metrics-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+
+.analytics-status { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 14px 18px; margin-top: 12px; border: 1px solid #31506f; background: #0a2235; color: #9fb7d4; font-size: 13px; }
+.analytics-status strong { color: #68d8ff; }
+.analytics-warning { color: #facc15; }

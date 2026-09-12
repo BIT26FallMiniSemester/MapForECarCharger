@@ -1,0 +1,18 @@
+# Qt Creator / qmake build products
+build-*/
+*.user
+*.user.*
+Makefile
+.qmake.stash
+moc_*.cpp
+moc_predefs.h
+ui_*.h
+qrc_*.cpp
+*.o
+ChargingAdmin
+
+# Local runtime settings and logs
+*.log
+*.db
+*.sqlite
+docs.zip

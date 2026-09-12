@@ -6,13 +6,19 @@
         <h1>电动汽车充电运营数据大屏</h1>
       </div>
       <div class="topbar-right">
-        <span>接口基线 /api/v1 · 准实时刷新 5s</span>
+        <span>{{ dataSource }} · 每 5 秒刷新</span>
         <strong>{{ currentTime }}</strong>
       </div>
     </header>
 
+    <p v-if="error" role="alert" style="color: #fca5a5">{{ error }}（保留上次成功数据）</p>
+    <section class="analytics-status" aria-live="polite">
+      <strong>{{ analytics.label }}</strong>
+      <span v-if="analytics.batch">快照：{{ new Date(analytics.batch.snapshot_at).toLocaleString('zh-CN') }} · {{ analytics.batch.input_orders }} 笔订单 · {{ analytics.batch.window_start }} 至 {{ analytics.batch.window_end }}</span>
+      <span v-if="analytics.warning" class="analytics-warning">{{ analytics.warning }}</span>
+    </section>
     <section class="metrics-grid">
-      <MetricCard title="总营收" :value="formatNumber(centsToYuan(overview.total_revenue_cents), 1)" unit="元" icon="revenue" />
+      <MetricCard :title="analytics.batch ? '累计营收（批次）' : '累计营收'" :value="formatNumber(centsToYuan(overview.total_revenue_cents), 1)" unit="元" icon="revenue" />
       <MetricCard title="今日营收" :value="formatNumber(centsToYuan(overview.today_revenue_cents), 1)" unit="元" icon="today" />
       <MetricCard title="今日订单" :value="overview.today_order_count || 0" unit="单" icon="order" />
       <MetricCard title="今日充电量" :value="formatNumber(whToKwh(overview.today_energy_wh), 1)" unit="kWh" icon="energy" />
@@ -20,7 +26,7 @@
     </section>
 
     <main class="command-grid">
-      <PanelCard class="area-revenue" title="营收与订单趋势" :subtitle="`近 ${revenueTrend.days || 30} 日`">
+      <PanelCard class="area-revenue" title="营收与订单趋势" :subtitle="`${analytics.batch ? '批处理' : 'Qt'} · 近 ${revenueTrend.days || 30} 日`">
         <RevenueTrend :data="revenueTrend" />
       </PanelCard>
 
@@ -56,7 +62,7 @@
         <LoadPrediction :data="loadPrediction" />
       </PanelCard>
 
-      <PanelCard class="area-orders" title="实时充电订单" subtitle="P1 接口：/dashboard/realtime-orders">
+      <PanelCard class="area-orders" title="实时充电订单" subtitle="最近 8 笔订单 · 额定功率">
         <RealtimeOrders :orders="realtimeOrders.items || []" />
       </PanelCard>
 
@@ -78,18 +84,12 @@ import LoadPrediction from '../components/LoadPrediction.vue'
 import DistributionMap from '../components/DistributionMap.vue'
 import RealtimeOrders from '../components/RealtimeOrders.vue'
 import WarningList from '../components/WarningList.vue'
-import { getLoadPrediction, getOverview, getPileStatus, getRealtimeOrders, getRevenueTrend, getStationDistribution, getStationRanking } from '../api/dashboard'
+import { useDashboard } from '../composables/useDashboard'
 import { centsToYuan, formatNumber, whToKwh } from '../utils/format'
 
 const currentTime = ref('')
-const overview = ref({})
-const revenueTrend = ref({ items: [] })
-const pileStatus = ref({ items: [] })
-const stationRanking = ref({ items: [] })
-const stationDistribution = ref({ items: [] })
-const loadPrediction = ref({ points: [] })
-const realtimeOrders = ref({ items: [] })
-let timer
+const { error, dataSource, overview, revenueTrend, pileStatus, stationRanking,
+  stationDistribution, loadPrediction, realtimeOrders, analytics } = useDashboard()
 let clock
 
 const availablePileText = computed(() => `${overview.value.available_pile_count || 0}/${overview.value.pile_count || 0}`)
@@ -100,9 +100,10 @@ const warnings = computed(() => {
   const fault = statusItems.find(item => item.status === 'FAULT')
   const peakPoint = (loadPrediction.value.points || []).find(item => Number(item.congestion_score) >= 0.8)
   const result = []
+  if (error.value || dataSource.value === '正在连接') return [{ level: '中', title: '数据不可用', detail: error.value || '正在等待首次数据' }]
 
   if (peakPoint) {
-    result.push({ level: '高', title: '高峰负荷预警', detail: `${new Date(peakPoint.predicted_for).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 预测拥堵指数 ${formatNumber(peakPoint.congestion_score * 100, 0)}%` })
+    result.push({ level: '高', title: '高峰负荷预警', detail: `${peakPoint.label || new Date(peakPoint.predicted_for).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 预测拥堵指数 ${formatNumber(peakPoint.congestion_score * 100, 0)}%` })
   }
   if (offline && offline.count > 0) {
     result.push({ level: '中', title: '离线设备提醒', detail: `当前 OFFLINE 电桩 ${offline.count} 台，占比 ${formatNumber(offline.percentage, 1)}%` })
@@ -117,35 +118,13 @@ function updateClock() {
   currentTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
 }
 
-async function loadDashboard() {
-  const [overviewRes, trendRes, statusRes, rankingRes, distributionRes, predictionRes, ordersRes] = await Promise.all([
-    getOverview(),
-    getRevenueTrend(30),
-    getPileStatus(),
-    getStationRanking('revenue', 30, 10),
-    getStationDistribution(120),
-    getLoadPrediction(6),
-    getRealtimeOrders()
-  ])
-  overview.value = overviewRes.data
-  revenueTrend.value = trendRes.data
-  pileStatus.value = statusRes.data
-  stationRanking.value = rankingRes.data
-  stationDistribution.value = distributionRes.data
-  loadPrediction.value = predictionRes.data
-  realtimeOrders.value = ordersRes.data
-}
-
 onMounted(() => {
   updateClock()
-  loadDashboard()
   clock = setInterval(updateClock, 1000)
-  timer = setInterval(loadDashboard, 5000)
 })
 
 onBeforeUnmount(() => {
   clearInterval(clock)
-  clearInterval(timer)
 })
 </script>
 

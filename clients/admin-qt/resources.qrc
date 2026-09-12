@@ -1,0 +1,3 @@
+<!-- 登记管理端嵌入的 Qt 样式资源文件。 -->
+
+<RCC><qresource prefix="/styles"><file>style.qss</file></qresource></RCC>

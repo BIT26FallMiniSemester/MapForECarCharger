@@ -19,11 +19,11 @@ function render() {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, right: 8, textStyle: { color: '#9fb7d4' } },
     grid: { left: 44, right: 44, top: 42, bottom: 34 },
-    xAxis: { type: 'category', data: points.map(item => formatTimeLabel(item.predicted_for)), axisLabel: { color: '#9fb7d4' }, axisLine: { lineStyle: { color: '#31506f' } } },
+    xAxis: { type: 'category', data: points.map(item => item.label || formatTimeLabel(item.predicted_for)), axisLabel: { color: '#9fb7d4' }, axisLine: { lineStyle: { color: '#31506f' } } },
     yAxis: { type: 'value', axisLabel: { color: '#9fb7d4' }, splitLine: { lineStyle: { color: 'rgba(120,160,200,.14)' } } },
     series: [
-      { name: '预测负荷kW', type: 'line', smooth: true, data: points.map(item => wToKw(item.load_w)) },
-      { name: '预测空闲桩', type: 'line', smooth: true, data: points.map(item => item.available_piles) }
+      { name: points[0]?.label ? '预测电量kWh' : '预测负荷kW', type: 'line', smooth: true, data: points.map(item => item.energy_kwh ?? wToKw(item.load_w)) },
+      { name: points[0]?.label ? '预测订单数' : '预测空闲桩', type: 'line', smooth: true, data: points.map(item => item.orders ?? item.available_piles) }
     ]
   })
 }

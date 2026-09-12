@@ -1,12 +1,12 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
+  "protocol_version": 1,
   "user_status": ["NORMAL", "FROZEN"],
   "admin_status": ["NORMAL", "DISABLED"],
   "station_status": ["ACTIVE", "INACTIVE"],
   "pile_status": ["IDLE", "RESERVED", "CHARGING", "FAULT", "OFFLINE"],
-  "pile_type": ["FAST", "SLOW"],
+  "charge_type": ["FAST", "SLOW"],
   "order_status": ["PENDING", "RESERVED", "CHARGING", "UNPAID", "COMPLETED", "CANCELLED"],
-  "prediction_type": ["LOAD_W", "AVAILABLE_PILES", "CONGESTION_SCORE"],
   "units": {
     "money": "cents",
     "electricity_price": "cents_per_kwh",

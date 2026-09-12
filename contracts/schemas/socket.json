@@ -1,0 +1,2734 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:charger:socket:v1",
+  "title": "Qt Socket protocol version 1",
+  "description": "x-actions provides each action's authorization role and data request/response schema. Envelope is request or response.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "version",
+        "request_id",
+        "action",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "user": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 11,
+          "maxLength": 11
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "avatar_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "balance_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "NORMAL",
+            "FROZEN"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "order_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total_spent_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "phone",
+        "nickname",
+        "avatar_id",
+        "balance_cents",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "admin": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "NORMAL",
+            "DISABLED"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "display_name",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "station": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "price_cents_per_kwh": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operator_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "district": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_type": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "region_scope": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "location_type": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "fast_connector_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "slow_connector_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "INACTIVE"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "updated_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "total_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "available_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "online_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "predicted_available_piles_1h": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "address",
+        "latitude",
+        "longitude",
+        "price_cents_per_kwh",
+        "operator_name",
+        "district",
+        "data_source",
+        "external_id",
+        "service_type",
+        "region_scope",
+        "location_type",
+        "fast_connector_count",
+        "slow_connector_count",
+        "status",
+        "created_at",
+        "updated_at",
+        "total_piles",
+        "available_piles"
+      ],
+      "additionalProperties": false
+    },
+    "pile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "station_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "pile_no": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "charge_type": {
+          "type": "string",
+          "enum": [
+            "FAST",
+            "SLOW"
+          ]
+        },
+        "rated_power_w": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "IDLE",
+            "RESERVED",
+            "CHARGING",
+            "FAULT",
+            "OFFLINE"
+          ]
+        },
+        "station_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "total_charge_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total_charge_duration_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "station_id",
+        "pile_no",
+        "charge_type",
+        "rated_power_w",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "order": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "order_no": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "RESERVED",
+            "CHARGING",
+            "UNPAID",
+            "COMPLETED",
+            "CANCELLED"
+          ]
+        },
+        "station": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "pile": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "pile_no": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "rated_power_w": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "pile_no",
+            "rated_power_w"
+          ],
+          "additionalProperties": false
+        },
+        "price_cents_per_kwh": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "reserved_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stopped_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "energy_wh": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amount_cents": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paid_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancelled_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "updated_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "estimated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "order_no",
+        "status",
+        "station",
+        "pile",
+        "price_cents_per_kwh",
+        "reserved_at",
+        "expires_at",
+        "started_at",
+        "stopped_at",
+        "duration_seconds",
+        "energy_wh",
+        "amount_cents",
+        "paid_at",
+        "cancelled_at",
+        "created_at",
+        "updated_at",
+        "estimated"
+      ],
+      "additionalProperties": false
+    },
+    "admin_order": {
+      "type": "object",
+      "properties": {
+        "order": {"$ref": "#/$defs/order"},
+        "user": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+            "phone": {"type": "string", "minLength": 11, "maxLength": 11},
+            "nickname": {"type": "string", "minLength": 1, "maxLength": 32}
+          },
+          "required": ["id", "phone", "nickname"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["order", "user"],
+      "additionalProperties": false
+    },
+    "recharge": {
+      "type": "object",
+      "properties": {
+        "record_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "amount_cents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "balance_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        }
+      },
+      "required": [
+        "record_id",
+        "amount_cents",
+        "balance_cents",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "pile_log": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "pile_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "order_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "old_status": {
+          "type": "string",
+          "enum": [
+            "IDLE",
+            "RESERVED",
+            "CHARGING",
+            "FAULT",
+            "OFFLINE"
+          ]
+        },
+        "new_status": {
+          "type": "string",
+          "enum": [
+            "IDLE",
+            "RESERVED",
+            "CHARGING",
+            "FAULT",
+            "OFFLINE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        }
+      },
+      "required": [
+        "id",
+        "pile_id",
+        "order_id",
+        "old_status",
+        "new_status",
+        "reason",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "nearby_station": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "price_cents_per_kwh": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operator_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "district": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_type": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "region_scope": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "location_type": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 64}, {"type": "null"}]
+        },
+        "fast_connector_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "slow_connector_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "INACTIVE"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "updated_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "total_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "available_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "online_piles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "predicted_available_piles_1h": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "route_distance_meters": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "route_duration_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "address",
+        "latitude",
+        "longitude",
+        "price_cents_per_kwh",
+        "operator_name",
+        "district",
+        "data_source",
+        "external_id",
+        "service_type",
+        "region_scope",
+        "location_type",
+        "fast_connector_count",
+        "slow_connector_count",
+        "status",
+        "created_at",
+        "updated_at",
+        "total_piles",
+        "available_piles",
+        "route_distance_meters",
+        "route_duration_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "user_detail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 11,
+          "maxLength": 11
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "avatar_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "balance_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "NORMAL",
+            "FROZEN"
+          ]
+        },
+        "order_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "recharge_total_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$"
+        },
+        "total_spent_cents": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "recent_orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "order_no": {"type": "string"},
+              "status": {"type": "string"},
+              "amount_cents": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+              "created_at": {"type": "string"}
+            },
+            "required": ["order_no", "status", "amount_cents", "created_at"],
+            "additionalProperties": false
+          }
+        },
+        "recent_recharge_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount_cents": {"type": "integer", "minimum": 1},
+              "created_at": {"type": "string"}
+            },
+            "required": ["amount_cents", "created_at"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "phone",
+        "nickname",
+        "avatar_id",
+        "balance_cents",
+        "status",
+        "order_count",
+        "recharge_total_cents",
+        "created_at",
+        "total_spent_cents",
+        "recent_orders",
+        "recent_recharge_records"
+      ],
+      "additionalProperties": false
+    },
+    "pile_detail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "station_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "pile_no": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "charge_type": {
+          "type": "string",
+          "enum": [
+            "FAST",
+            "SLOW"
+          ]
+        },
+        "rated_power_w": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "IDLE",
+            "RESERVED",
+            "CHARGING",
+            "FAULT",
+            "OFFLINE"
+          ]
+        },
+        "status_logs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pile_log"
+          }
+        },
+        "station_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "total_charge_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total_charge_duration_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "station_id",
+        "pile_no",
+        "charge_type",
+        "rated_power_w",
+        "status",
+        "status_logs"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "action": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": {}
+      },
+      "required": [
+        "version",
+        "request_id",
+        "action",
+        "code",
+        "message",
+        "data"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "x-actions": {
+    "system.health": {
+      "role": "NONE",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "database"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "auth.user.login": {
+      "role": "NONE",
+      "request": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 11,
+            "pattern": "^1[3-9][0-9]{9}$"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "expires_in": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 9007199254740991
+          },
+          "is_new_user": {
+            "type": "boolean"
+          },
+          "user": {
+            "$ref": "#/$defs/user"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "is_new_user",
+          "user"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "auth.admin.login": {
+      "role": "NONE",
+      "request": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "expires_in": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 9007199254740991
+          },
+          "admin": {
+            "$ref": "#/$defs/admin"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "admin"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "users.me.get": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/user"
+      }
+    },
+    "users.me.update": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "nickname"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/user"
+      }
+    },
+    "users.avatar.set": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ]
+          },
+          "content_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 349528
+          }
+        },
+        "required": [
+          "content_type",
+          "content_base64"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "avatar_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "avatar_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "users.avatar.get": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "avatar_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{32}\\.(png|jpg)$"
+          }
+        },
+        "required": [
+          "avatar_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ]
+          },
+          "content_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 349528
+          }
+        },
+        "required": [
+          "content_type",
+          "content_base64"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "wallet.recharges.create": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "client_request_id": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 64
+          },
+          "amount_cents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        },
+        "required": [
+          "client_request_id",
+          "amount_cents"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/recharge"
+      }
+    },
+    "wallet.recharges.list": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/recharge"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "map.geocode": {
+      "role": "EITHER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "formatted_address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "formatted_address"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "map.snapshot": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+          "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+          "zoom": {"type": "integer", "minimum": 10, "maximum": 16}
+        },
+        "required": ["latitude", "longitude"],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "content_type": {"type": "string", "const": "image/png"},
+          "content_base64": {"type": "string", "minLength": 1, "maxLength": 1000000},
+          "width": {"type": "integer", "const": 600},
+          "height": {"type": "integer", "const": 300}
+        },
+        "required": ["content_type", "content_base64", "width", "height"],
+        "additionalProperties": false
+      }
+    },
+    "map.route": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "from_latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "from_longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "to_latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "to_longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "driving",
+              "walking"
+            ]
+          }
+        },
+        "required": [
+          "from_latitude",
+          "from_longitude",
+          "to_latitude",
+          "to_longitude"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "driving",
+              "walking"
+            ]
+          },
+          "distance_meters": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "route_points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "latitude": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "longitude": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                }
+              },
+              "required": [
+                "latitude",
+                "longitude"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "mode",
+          "distance_meters",
+          "duration_seconds",
+          "route_points"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stations.nearby": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "radius_km": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/nearby_station"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stations.list": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "district": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "keyword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/station"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stations.detail": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "station_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/station"
+      }
+    },
+    "stations.piles.list": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IDLE",
+              "RESERVED",
+              "CHARGING",
+              "FAULT",
+              "OFFLINE"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "station_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/pile"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "piles.detail": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "pile_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "pile_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/pile"
+      }
+    },
+    "orders.create": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pile_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "station_id",
+          "pile_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.reserve": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.start": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.detail": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.stop": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.cancel": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/order"
+      }
+    },
+    "orders.settle": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/$defs/order"
+          },
+          "balance_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "order",
+          "balance_cents"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "orders.active": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/order"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "orders.list": {
+      "role": "USER",
+      "request": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RESERVED",
+              "CHARGING",
+              "UNPAID",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/order"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.overview": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "today_revenue_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "month_revenue_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "total_revenue_cents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "today_order_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "today_energy_wh": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "total_energy_wh": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "today_revenue_cents",
+          "month_revenue_cents",
+          "total_revenue_cents",
+          "today_order_count",
+          "today_energy_wh",
+          "total_energy_wh"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.revenue_trend": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "enum": [
+              7,
+              30
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 30
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10
+                },
+                "revenue_cents": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "order_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "date",
+                "revenue_cents",
+                "order_count"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "days",
+          "items"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.pile_status": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "IDLE": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "RESERVED": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "CHARGING": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "FAULT": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "OFFLINE": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "IDLE",
+          "RESERVED",
+          "CHARGING",
+          "FAULT",
+          "OFFLINE"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.orders.list": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "keyword": {"type": "string", "minLength": 1, "maxLength": 64},
+          "status": {"type": "string", "enum": ["PENDING", "RESERVED", "CHARGING", "UNPAID", "COMPLETED", "CANCELLED"]},
+          "page": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+          "page_size": {"type": "integer", "minimum": 1, "maximum": 100}
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/$defs/admin_order"}},
+          "page": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+          "page_size": {"type": "integer", "minimum": 1, "maximum": 100},
+          "total": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+        },
+        "required": ["items", "page", "page_size", "total"],
+        "additionalProperties": false
+      }
+    },
+    "admin.users.list": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "FROZEN"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/user"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.users.detail": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/user_detail"
+      }
+    },
+    "admin.users.freeze": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/user"
+      }
+    },
+    "admin.users.unfreeze": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/user"
+      }
+    },
+    "admin.stations.list": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "district": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/station"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.stations.create": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "price_cents_per_kwh": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "operator_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "district": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "pile_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "latitude",
+          "longitude",
+          "price_cents_per_kwh"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/station"
+      }
+    },
+    "admin.stations.update": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "price_cents_per_kwh": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "operator_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "district": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          }
+        },
+        "required": [
+          "station_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/station"
+      }
+    },
+    "admin.piles.list": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "IDLE",
+              "RESERVED",
+              "CHARGING",
+              "FAULT",
+              "OFFLINE"
+            ]
+          },
+          "charge_type": {
+            "type": "string",
+            "enum": [
+              "FAST",
+              "SLOW"
+            ]
+          },
+          "keyword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/pile"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "total"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "admin.piles.create": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "station_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "pile_no": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "charge_type": {
+            "type": "string",
+            "enum": [
+              "FAST",
+              "SLOW"
+            ]
+          },
+          "rated_power_w": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "station_id",
+          "pile_no",
+          "charge_type",
+          "rated_power_w"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/pile"
+      }
+    },
+    "admin.piles.detail": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "pile_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "pile_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/pile_detail"
+      }
+    },
+    "admin.piles.recover": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {
+          "pile_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "pile_id"
+        ],
+        "additionalProperties": false
+      },
+      "response": {
+        "$ref": "#/$defs/pile"
+      }
+    }
+  }
+}

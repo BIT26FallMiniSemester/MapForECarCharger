@@ -1,0 +1,44 @@
+/* 定义管理端 Qt 控件的视觉样式、状态色和布局强调效果。 */
+
+* { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; font-size: 14px; color: #263247; }
+QWidget { background: #f4f7fb; }
+QLabel, QCheckBox { background: transparent; }
+QFrame#brandPanel { background: #10264b; min-width: 480px; }
+QFrame#brandPanel QLabel { color: white; background: transparent; }
+QFrame#loginPanel { background: white; min-width: 420px; }
+QLabel#brandBadge { color: #66a6ff; font-size: 12px; font-weight: 700; letter-spacing: 2px; padding-bottom: 12px; }
+QLabel#brandTitle { font-size: 44px; font-weight: 700; }
+QLabel#brandSubtitle { font-size: 20px; font-weight: 600; color: #e5efff; padding-top: 10px; }
+QLabel#brandFeatures { font-size: 15px; color: #a9c2e8; padding-top: 8px; }
+QLabel#brandFooter { color: #7896c4; font-size: 13px; padding-bottom: 28px; }
+QLabel#loginTitle { font-size: 32px; font-weight: 700; color: #10264b; }
+QLabel#loginSubtitle { color: #7b879b; font-size: 15px; padding-bottom: 16px; }
+QLabel#demoHint { color: #8995a8; font-size: 12px; padding-top: 5px; }
+QLabel#errorLabel { color: #dc3545; min-height: 22px; }
+QLineEdit, QComboBox, QDoubleSpinBox { min-height: 42px; background: white; border: 1px solid #d6dfec; border-radius: 8px; padding: 0 13px; selection-background-color: #1677ff; }
+QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus { border: 2px solid #4b91f7; }
+QLineEdit:disabled { background: #f2f5f9; color: #8b96a8; }
+QCheckBox { color: #536176; spacing: 8px; padding: 4px 0; }
+QPushButton { min-height: 42px; background: #e7edf6; border: 0; border-radius: 8px; padding: 0 16px; font-weight: 600; }
+QPushButton:hover { background: #d8e5f6; }
+QPushButton#primaryButton { background: #1677ff; color: white; min-height: 44px; }
+QPushButton#primaryButton:hover { background: #0d68e8; }
+QPushButton#primaryButton:pressed { background: #0959c9; }
+QPushButton#dangerButton { background: #fff0f0; color: #cf3030; }
+QFrame#sidebar { background: #10264b; padding: 14px; }
+QFrame#sidebar QLabel { color: #b9cdf0; background: transparent; }
+QLabel#sidebarTitle { font-size: 26px; font-weight: bold; color: white; padding: 15px 6px; }
+QListWidget { background: transparent; border: 0; outline: 0; color: #c7d5ec; }
+QListWidget::item { height: 52px; border-radius: 7px; padding-left: 12px; }
+QListWidget::item:selected { background: #1677ff; color: white; }
+QStackedWidget > QWidget { padding: 20px; }
+QLabel#pageTitle { font-size: 28px; font-weight: 700; color: #17233b; padding: 4px 0 12px; }
+QFrame#metricCard, QFrame#panel { background: white; border: 1px solid #e5ebf3; border-radius: 9px; padding: 12px; }
+QLabel#metricTitle { color: #738096; }
+QLabel#metricValue { font-size: 23px; font-weight: 700; color: #17233b; }
+QLabel#metricHint { color: #8390a5; font-size: 12px; }
+QTableWidget { background: white; border: 1px solid #e1e7f0; border-radius: 8px; gridline-color: #eef2f7; alternate-background-color: #f9fbfe; }
+QHeaderView::section { background: #edf3fb; border: 0; border-bottom: 1px solid #d8e2ef; padding: 11px; font-weight: 700; }
+QTableWidget::item { padding: 8px; }
+QTableWidget::item:selected { background: #dbeafe; color: #16376b; }
+QStatusBar { background: white; color: #63718a; }

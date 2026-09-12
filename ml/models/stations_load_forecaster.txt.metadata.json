@@ -1,0 +1,1 @@
+{"format_version":"PKLOT_ML_V3","timezone":"Asia/Shanghai","features":["intercept","hour_sin","hour_cos","weekday_sin","weekday_cos","weekend","current_load_kw","lag_1h","lag_24h","lag_168h","rolling_24h","is_holiday","idle_ratio","station_id","total_piles","capacity_kw"],"lead_hours":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]}

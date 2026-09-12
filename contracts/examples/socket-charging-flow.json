@@ -1,0 +1,15 @@
+{
+  "note": "Each object is the UTF-8 JSON body; prepend its 4-byte big-endian byte length on the wire. Replace token and IDs with prior responses.",
+  "requests": [
+    {"version": 1, "request_id": "demo_01", "action": "auth.user.login", "data": {"phone": "13800138001"}},
+    {"version": 1, "request_id": "demo_02", "action": "wallet.recharges.create", "token": "<token>", "data": {"client_request_id": "demo-recharge-0001", "amount_cents": 10000}},
+    {"version": 1, "request_id": "demo_03", "action": "stations.list", "token": "<token>", "data": {"page": 1, "page_size": 20}},
+    {"version": 1, "request_id": "demo_04", "action": "orders.create", "token": "<token>", "data": {"station_id": 1, "pile_id": 1}},
+    {"version": 1, "request_id": "demo_05", "action": "orders.reserve", "token": "<token>", "data": {"order_id": 1}},
+    {"version": 1, "request_id": "demo_06", "action": "orders.start", "token": "<token>", "data": {"order_id": 1}},
+    {"version": 1, "request_id": "demo_07", "action": "orders.detail", "token": "<token>", "data": {"order_id": 1}},
+    {"version": 1, "request_id": "demo_08", "action": "orders.stop", "token": "<token>", "data": {"order_id": 1}},
+    {"version": 1, "request_id": "demo_09", "action": "orders.settle", "token": "<token>", "data": {"order_id": 1}},
+    {"version": 1, "request_id": "demo_10", "action": "admin.overview", "token": "<admin_token>", "data": {}}
+  ]
+}

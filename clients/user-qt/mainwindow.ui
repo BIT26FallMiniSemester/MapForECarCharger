@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 负责 mainwindow 的配置、数据或界面资源，作为项目构建或运行所需的一部分。 -->
+<!-- 以下节点由 Qt Designer 维护，uic 会据此生成 ui_*.h 界面类。 -->
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>410</width>
+    <height>820</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>360</width>
+    <height>640</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>440</width>
+    <height>900</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>充电用户端</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="rootLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QStackedWidget" name="rootStack">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="LoginPage" name="loginPage"/>
+      <widget class="QWidget" name="appPage">
+       <layout class="QVBoxLayout" name="appLayout">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QStackedWidget" name="contentStack">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="HomePage" name="homePage"/>
+          <widget class="ProfilePage" name="profilePage"/>
+         </widget>
+        </item>
+        <item>
+         <widget class="QWidget" name="bottomBar">
+          <layout class="QHBoxLayout" name="bottomBarLayout">
+           <property name="leftMargin">
+            <number>8</number>
+           </property>
+           <property name="topMargin">
+            <number>8</number>
+           </property>
+           <property name="rightMargin">
+            <number>8</number>
+           </property>
+           <property name="bottomMargin">
+            <number>8</number>
+           </property>
+           <item>
+            <widget class="QPushButton" name="tabHome">
+             <property name="text">
+              <string>首页</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="tabMine">
+             <property name="text">
+              <string>我的</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>LoginPage</class>
+   <extends>QWidget</extends>
+   <header>loginpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>HomePage</class>
+   <extends>QWidget</extends>
+   <header>homepage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ProfilePage</class>
+   <extends>QWidget</extends>
+   <header>profilepage.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

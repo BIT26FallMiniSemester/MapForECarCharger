@@ -46,7 +46,6 @@ async function loadMap() {
 function render() {
   if (!chart || !mapReady) return
   const points = buildPoints()
-  const topLabels = points.slice(0, 16).map(item => item.name)
 
   chart.setOption({
     backgroundColor: 'transparent',
@@ -107,13 +106,8 @@ function render() {
           shadowBlur: 8,
           shadowColor: 'rgba(45, 212, 191, .55)'
         },
-        label: {
-          show: true,
-          position: 'right',
-          color: '#dcecff',
-          fontSize: 10,
-          formatter: params => topLabels.includes(params.name) ? params.name : ''
-        }
+        label: { show: false },
+        emphasis: { label: { show: false } }
       },
       {
         name: '高利用率站点',
@@ -148,5 +142,4 @@ onBeforeUnmount(() => {
   chart?.dispose()
 })
 </script>
-
 
