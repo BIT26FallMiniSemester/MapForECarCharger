@@ -4,13 +4,12 @@ import csv
 import hashlib
 import json
 import math
-import shutil
-import subprocess
 from collections import defaultdict
 from pathlib import Path
 
 from prepare_history import generate, clean, save_json, catalog_index
 from export_predictions_api import main as export_api
+from pklot_ml import train, predict
 
 def distance_km(lat1, lon1, lat2, lon2):
     if not all(math.isfinite(x) for x in (lat1, lon1, lat2, lon2)) or not (
@@ -138,7 +137,7 @@ def evaluation_report(evaluation_path, metrics_path, output):
         table.append(f'| {lead} | {score["strategy"]} | {score["model_mae"]:.4f} | '
                      f'{score["model_rmse"]:.4f} | {score["persistence_mae"]:.4f} |')
     (output / "stations_evaluation_report.md").write_text(
-        "# V3 负荷预测评估\n\n"
+        "# Python V4 负荷预测评估\n\n"
         "由 workflow.py report 从测试输出重建。24 个逐小时预测头，16 维特征；模型与基线使用时间隔离的测试集。\n\n"
         "## 全站聚合指标\n\n" + "\n".join(table) + "\n\n"
         "## 对比图与误差分析\n\n"
@@ -151,13 +150,10 @@ def evaluation_report(evaluation_path, metrics_path, output):
         encoding="utf-8")
 
 
-def run(output, compiler="c++"):
+def run(output):
     if output.exists() and any(output.iterdir()):
         raise ValueError("demo output must be empty; choose a new directory to avoid overwriting results")
     output.mkdir(parents=True, exist_ok=True)
-    executable = shutil.which(compiler)
-    if executable is None:
-        raise ValueError("C++17 compiler not found; install g++ or clang++")
     generate(output / "data")
     catalog_path = output / "data/catalog.json"
     catalog = json.loads(catalog_path.read_text())
@@ -166,11 +162,9 @@ def run(output, compiler="c++"):
     history, quality = clean(catalog, output / "data/orders.csv", output / "data/devices.csv", history_path,
                              meta["start_epoch"], meta["end_epoch"],
                              json.loads((output / "data/holidays.json").read_text()))
-    binary, model, metrics, predictions_path = (output / name for name in ("pklot_ml", "model.txt", "metrics.json", "predictions.json"))
-    subprocess.run([executable, "-O2", "-std=c++17", "-Wall", "-Wextra", "-Wpedantic",
-                    str(Path(__file__).with_name("main.cpp")), "-o", str(binary)], check=True)
-    subprocess.run([str(binary.resolve()), "train", str(history_path), str(model), str(metrics)], check=True)
-    subprocess.run([str(binary.resolve()), "predict", str(history_path), str(model), str(predictions_path)], check=True)
+    model, metrics, predictions_path = (output / name for name in ("model.json", "metrics.json", "predictions.json"))
+    train(history_path, model, metrics)
+    predict(history_path, model, predictions_path)
     model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
     predictions = json.loads(predictions_path.read_text())
     metadata = json.loads(Path(str(model) + ".metadata.json").read_text())
@@ -191,7 +185,6 @@ if __name__ == "__main__":
     commands = parser.add_subparsers(dest="command", required=True)
     demo = commands.add_parser("demo")
     demo.add_argument("output", type=Path)
-    demo.add_argument("--compiler", default="c++")
     analysis = commands.add_parser("analyze")
     for name in ("catalog", "history", "predictions", "output"):
         analysis.add_argument(name, type=Path)
@@ -204,7 +197,7 @@ if __name__ == "__main__":
         report.add_argument(name, type=Path)
     args = parser.parse_args()
     if args.command == "demo":
-        run(args.output, args.compiler)
+        run(args.output)
     elif args.command == "analyze":
         with args.history.open(newline="") as source:
             result = analyze(json.loads(args.catalog.read_text(encoding="utf-8-sig")), csv.DictReader(source),

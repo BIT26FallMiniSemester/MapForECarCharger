@@ -152,20 +152,19 @@ class WorkflowTest(unittest.TestCase):
         predictions[0]["predicted_load_kw"] = float("nan")
         with self.assertRaises(ValueError):
             build_entries(predictions, 1788220800, "test", refs)
-        model = (self.out / "model.txt").read_text().splitlines()
-        scales = model[3].split()
-        scales[1] = "0"
-        model[3] = " ".join(scales)
-        bad = self.root / "invalid-model.txt"
-        bad.write_text("\n".join(model))
-        process = subprocess.run([str(self.out / "pklot_ml"), "predict", str(self.out / "data/history.csv"),
+        model = json.loads((self.out / "model.json").read_text())
+        model["scales"][1] = 0
+        bad = self.root / "invalid-model.json"
+        bad.write_text(json.dumps(model))
+        cli = Path(__file__).parents[1] / "src/pklot_ml.py"
+        process = subprocess.run([sys.executable, str(cli), "predict", str(self.out / "data/history.csv"),
                                   str(bad), str(self.root / "invalid.json")], capture_output=True, text=True)
         self.assertNotEqual(process.returncode, 0)
         self.assertIn("invalid model scale", process.stderr)
         bad_csv = self.root / "invalid.csv"
         bad_csv.write_text("timestamp_epoch,station_id,total_piles,capacity_kw,load_kw\n1788220800,1oops,4,28,7\n")
-        process = subprocess.run([str(self.out / "pklot_ml"), "predict", str(bad_csv),
-                                  str(self.out / "model.txt"), str(self.root / "invalid.json")],
+        process = subprocess.run([sys.executable, str(cli), "predict", str(bad_csv),
+                                  str(self.out / "model.json"), str(self.root / "invalid.json")],
                                  capture_output=True, text=True)
         self.assertNotEqual(process.returncode, 0)
         self.assertIn("invalid integer field", process.stderr)

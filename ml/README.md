@@ -1,11 +1,11 @@
 # ML 负荷预测：独立运行 / 可选后端接入
 
-依赖：Python 3.10+ 标准库与 C++17 编译器（Ubuntu g++，macOS clang++），不依赖第三方 Python 包、数据库或在线后端。以下命令从仓库根目录执行。
+依赖：Python 3.10+ 标准库，不依赖第三方 Python 包、编译器、数据库或在线后端。以下命令从仓库根目录执行。
 
 ## 一键离线验收
 
 ~~~bash
-python3 ml/src/workflow.py demo ml/outputs/demo --compiler g++
+python3 ml/src/workflow.py demo ml/outputs/demo
 python3 -m unittest discover -s ml/tests -p 'test_*.py' -v
 ~~~
 
@@ -19,12 +19,12 @@ demo 输出目录必须不存在或为空，防止覆盖成果。重新运行请
 | --- | --- | --- |
 | 可重复模拟历史数据 | prepare_history.py generate | 固定 seed/截止时间；覆盖站点、订单、电量、时长、设备状态 |
 | 数据提取与清洗 | prepare_history.py clean | CSV 字段白名单；去重、缺失/非法值/功率越界/重叠订单处理、小时对齐；质量报告 |
-| 时序及运营特征 | main.cpp | 16 维：小时/星期周期、周末、显式节假日、负荷滞后/均值、空闲率、站点 ID、总桩数、容量 |
-| 可解释基线训练 | pklot_ml train | 岭回归系数、标准化参数、版本元数据；验证集选择持续值基线；时间隔离测试集 |
-| 未来 1 小时 | pklot_ml predict | 每站第 1 小时负荷及 UTC 时间点 |
+| 时序及运营特征 | pklot_ml.py | 16 维：小时/星期周期、周末、显式节假日、负荷滞后/均值、空闲率、站点 ID、总桩数、容量 |
+| 可解释基线训练 | pklot_ml.py train | 岭回归系数、标准化参数、版本元数据；验证集选择持续值基线；时间隔离测试集 |
+| 未来 1 小时 | pklot_ml.py predict | 每站第 1 小时负荷及 UTC 时间点 |
 | 未来 6 小时 | 同上 | 第 1～6 小时连续序列，不再只有第 6 小时一个点 |
 | 未来 24 小时/高峰 | predict + workflow.py analyze | 第 1～24 小时序列、最高负荷时间、超过阈值的时间点 |
-| 未来可用桩数量 | pklot_ml predict | 平均单桩功率换算，扣除已知不可用桩；限制在 [0, 总桩数] |
+| 未来可用桩数量 | pklot_ml.py predict | 平均单桩功率换算，扣除已知不可用桩；限制在 [0, 总桩数] |
 | 低拥堵推荐及原因 | workflow.py analyze | 用户距离、当前空闲率、未来拥堵度；输出评分、排序及三项原因 |
 | 高峰/设备异常提示 | 同上 | 容量比阈值预警；故障/离线/缺失设备状态提示 |
 | 指标、对比图、误差分析 | workflow.py report | 每个 lead 的全量 MAE/RMSE；留出集单站真实/预测曲线、偏差、最大绝对误差 |
@@ -55,16 +55,12 @@ python3 ml/src/prepare_history.py clean \
 ## 使用已有全量站点数据
 
 ~~~bash
-cmake -S ml -B ml/build
-cmake --build ml/build
-./ml/build/pklot_ml train ml/data/stations_hourly.csv ml/models/stations_load_forecaster.txt ml/models/stations_metrics.json
-./ml/build/pklot_ml predict ml/data/stations_hourly.csv ml/models/stations_load_forecaster.txt ml/models/stations_predictions.json
+python3 ml/src/pklot_ml.py train ml/data/stations_hourly.csv ml/models/stations_load_forecaster.json ml/models/stations_metrics.json
+python3 ml/src/pklot_ml.py predict ml/data/stations_hourly.csv ml/models/stations_load_forecaster.json ml/models/stations_predictions.json
 python3 ml/src/workflow.py report ml/models/stations_metrics.json.evaluation.csv ml/models/stations_metrics.json ml/models
 ~~~
 
-没有 CMake 时：先创建输出目录，然后使用 c++ -O2 -std=c++17 ml/src/main.cpp -o ml/outputs/pklot_ml 编译。
-
-V3 包含 24 个预测头与 16 维特征，旧 V2 文件必须重训，程序会明确拒绝旧格式。核心 JSON 的 horizon_hours 是逐点 lead（1～24），API 导出才组成窗口（1/6/24）。预测时间基于最后一条输入记录，不基于启动时间；model_version 与模型内容绑定。
+Python V4 包含 24 个预测头与 16 维特征。Python 入口可读取仓库已有 V3 模型用于平滑迁移；新训练统一输出 JSON 格式 V4，V2 仍需重训。核心 JSON 的 horizon_hours 是逐点 lead（1～24），API 导出才组成窗口（1/6/24）。预测时间基于最后一条输入记录，不基于启动时间；model_version 与模型内容绑定。
 
 训练按时间 70/10/20 切分，训练/验证边界清除未来 24 小时标签可能穿越的样本；边界证据见 *.evaluation.csv.split.json。评估与推理使用同样的容量裁剪规则。
 
