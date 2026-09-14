@@ -31,7 +31,8 @@ sudo apt update
 sudo apt install -y \
   build-essential cmake qmake6 \
   qt6-base-dev qt6-base-dev-tools qt6-charts-dev qt6-webengine-dev \
-  libqt6sql6-sqlite python3 python3-pip python3-flask sqlite3 curl
+  libqt6sql6-sqlite python3 python3-pip python3-flask sqlite3 curl \
+  nodejs npm
 ```
 
 安装项目 Python 依赖：
@@ -51,6 +52,8 @@ hadoop version
 hdfs version
 spark-submit --version
 python3 -c "import pyspark, flask, yaml; print(pyspark.__version__)"
+node --version
+npm --version
 ```
 
 ## 3. 首次构建 Qt 程序
@@ -104,7 +107,32 @@ mkdir -p server-qt/runtime
 
 `--seed-showcase` 只适用于尚无业务数据的数据库，不要对已使用的数据库重复执行。
 
-## 5. 终端 1：启动 Qt 后端
+## 5. 配置腾讯地图 WebService Key
+
+用户端、管理端和 Vue 都不保存地图 Key。Qt 后端从环境变量
+`TENCENT_MAP_KEY` 读取它。创建仓库外的服务环境文件：
+
+```bash
+sudo mkdir -p /etc/map-for-ecar
+sudo cp "$PROJECT_ROOT/server-qt/server.env.example" /etc/map-for-ecar/server.env
+sudo chmod 600 /etc/map-for-ecar/server.env
+sudoedit /etc/map-for-ecar/server.env
+```
+
+至少填写：
+
+```dotenv
+SERVER_HOST=127.0.0.1
+SERVER_PORT=9000
+DASHBOARD_PORT=9001
+DATABASE_PATH=/absolute/path/to/server-qt/runtime/showcase.db
+TENCENT_MAP_KEY=replace_with_your_webservice_key
+```
+
+该 Key 需要在腾讯位置服务控制台启用 **WebService API**，并为地址解析、距离矩阵、
+驾车路线和静态地图分配日配额及并发配额。修改环境文件后需要重启 Qt 后端。
+
+## 6. 终端 1：启动 Qt 后端
 
 腾讯地图 Key 应保存在仓库外的环境文件中：
 
@@ -128,7 +156,7 @@ set +a
 ss -ltn | grep -E ':9000|:9001'
 ```
 
-## 6. 终端 2：打开用户端
+## 7. 终端 2：打开用户端
 
 必须在 Linux 桌面终端中执行：
 
@@ -139,7 +167,7 @@ cd "$PROJECT_ROOT/clients/user-qt"
 
 默认演示用户为 `13900000000`。
 
-## 7. 终端 3：打开管理端
+## 8. 终端 3：打开管理端
 
 必须在 Linux 桌面终端中执行：
 
@@ -150,7 +178,7 @@ cd "$PROJECT_ROOT/clients/admin-qt"
 
 默认演示账号为 `admin / 123456`。
 
-## 8. 完成一笔真实订单
+## 9. 完成一笔真实订单
 
 在用户端依次执行：
 
@@ -177,7 +205,7 @@ sqlite3 -header -column "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
   "SELECT id,pile_id,order_id,old_status,new_status,reason,created_at FROM pile_status_logs ORDER BY id DESC LIMIT 10;"
 ```
 
-## 9. 终端 4：导出 SQLite 只读快照
+## 10. 终端 4：导出 SQLite 只读快照
 
 ```bash
 cd "$PROJECT_ROOT"
@@ -197,7 +225,7 @@ cat "$SNAPSHOT/metadata.json"
 快照包含用户、站点、电桩、订单、充值和电桩状态日志六张 CSV。导出器以 SQLite
 只读模式打开数据库，并在同一事务中读取所有表。
 
-## 10. 运行 ODS→质量检测→DWD→DWS→ADS
+## 11. 运行 ODS→质量检测→DWD→DWS→ADS
 
 ```bash
 cd "$PROJECT_ROOT/spark-warehouse"
@@ -227,7 +255,7 @@ cat "$WAREHOUSE/ads/ads_quality_overview/batch_id=$BATCH/json"/part-*.json
 
 实际数据库至少需要一条带业务日期的订单，否则 ADS 无法确定统计截止日期。
 
-## 11. 终端 5：启动 Flask API
+## 12. 终端 5：启动 Flask API
 
 跨终端时重新定位最新成功批次：
 
@@ -249,7 +277,7 @@ python3 flask-api/app.py
 
 保持终端运行。
 
-## 12. 终端 6：验证 Flask
+## 13. 终端 6：验证 Flask
 
 ```bash
 curl -fsS http://127.0.0.1:5000/health
@@ -258,12 +286,14 @@ curl -fsS http://127.0.0.1:5000/api/dashboard
 curl -fsS http://127.0.0.1:5000/api/analytics
 ```
 
-## 13. 启动 Vue/ECharts 大屏
+## 14. Ubuntu 终端 7：启动 Vue/ECharts 大屏
 
-Vue 可以与 Flask 在同一台主机运行，也可以从开发电脑连接 Linux 主机。先进入
-`web-bigscreen`：
+Vue 可以和 Qt、Spark、Flask 一起在同一台 Ubuntu 主机运行。先确认 Node.js 版本
+不低于 18，然后进入 `web-bigscreen`：
 
 ```bash
+node --version
+npm --version
 cd "$PROJECT_ROOT/web-bigscreen"
 npm install
 ```
@@ -274,10 +304,18 @@ npm install
 export DASHBOARD_TARGET=http://127.0.0.1:5000
 export VITE_USE_MOCK=false
 export VITE_USE_ANALYTICS=true
-npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
+npm run dev -- --host 0.0.0.0 --port 5174 --strictPort
 ```
 
-跨主机运行时，将 `FLASK_HOST` 替换为 Linux 主机地址：
+在 Ubuntu 浏览器访问 `http://127.0.0.1:5174/`。局域网中的其他电脑访问
+`http://UBUNTU_HOST:5174/`。如启用了 UFW：
+
+```bash
+sudo ufw allow 5000/tcp
+sudo ufw allow 5174/tcp
+```
+
+也可以在开发电脑运行 Vue。此时将 `FLASK_HOST` 替换为 Ubuntu 主机地址：
 
 ```bash
 export DASHBOARD_TARGET=http://FLASK_HOST:5000
@@ -299,18 +337,18 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
-## 14. 验证完整数据闭环
+## 15. 验证完整数据闭环
 
 1. 记录管理端和 Vue 当前订单数、营收、趋势及站点排行。
 2. 在用户端完成并支付一笔新订单。
 3. 确认管理端实时订单列表立即出现该订单。
-4. 重新执行第 9、10 节，生成新的快照和 ADS 批次。
+4. 重新执行第 10、11 节，生成新的快照和 ADS 批次。
 5. 使用新批次重新启动 Flask。
 6. 刷新 Vue，确认订单数、营收、趋势、站点排行及批次时间更新。
 
 每个 SQLite 快照和数仓批次都有唯一目录，旧结果不会被覆盖。
 
-## 15. HDFS 基础验证
+## 16. HDFS 基础验证
 
 ```bash
 start-dfs.sh
@@ -333,10 +371,10 @@ hdfs dfs -put -f "$SNAPSHOT/metadata.json" "/user/$USER/map-for-ecar/business-sn
 hdfs dfs -ls -R "/user/$USER/map-for-ecar/business-snapshots/$BATCH"
 ```
 
-当前推荐使用第 10 节的本地文件系统模式完成现场演示。单节点环境下 Spark 全部分层
+当前推荐使用第 11 节的本地文件系统模式完成现场演示。单节点环境下 Spark 全部分层
 直接写入 HDFS 的质量检测阶段仍在优化。
 
-## 16. 测试和构建检查
+## 17. 测试和构建检查
 
 ```bash
 cd "$PROJECT_ROOT"
@@ -348,7 +386,7 @@ cd web-bigscreen
 npm run build
 ```
 
-## 17. 停止服务
+## 18. 停止服务
 
 关闭用户端和管理端窗口。Qt 后端、Flask 和 Vue 所在终端分别按 `Ctrl+C`。
 
