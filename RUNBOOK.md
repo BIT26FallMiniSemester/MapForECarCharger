@@ -132,7 +132,29 @@ TENCENT_MAP_KEY=replace_with_your_webservice_key
 该 Key 需要在腾讯位置服务控制台启用 **WebService API**，并为地址解析、距离矩阵、
 驾车路线和静态地图分配日配额及并发配额。修改环境文件后需要重启 Qt 后端。
 
-## 6. 终端 1：启动 Qt 后端
+## 6. 可选：创建大数据量演示数据库
+
+为了展示 90 日趋势、站点排行、用户列表和订单分析，可以从原始展示库克隆一份
+独立数据库并加入确定性的历史数据：
+
+```bash
+cd "$PROJECT_ROOT"
+
+python3 server-qt/tools/create_showcase_simulation.py \
+  --source "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
+  --target "$PROJECT_ROOT/server-qt/runtime/showcase-sim.db" \
+  --orders 50000 \
+  --users 1000 \
+  --days 90 \
+  --seed 20260914
+```
+
+生成内容包括 1,000 个演示用户、1,000 条充值、50,000 笔已完成订单和
+150,000 条电桩状态日志，并复用原库中的真实站点和电桩。原始 `showcase.db`
+不会被修改。演示期间把 `DATABASE_PATH` 设置为 `showcase-sim.db`，用户端后续产生
+的新订单也会写入同一数据库，从而形成实时业务和历史分析闭环。
+
+## 7. 终端 1：启动 Qt 后端
 
 腾讯地图 Key 应保存在仓库外的环境文件中：
 
@@ -144,7 +166,7 @@ set -a
 set +a
 
 ./server-qt/build/charger-server \
-  --database "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
+  --database "${DATABASE_PATH:-$PROJECT_ROOT/server-qt/runtime/showcase.db}" \
   --host 127.0.0.1 \
   --port 9000 \
   --dashboard-port 9001
@@ -156,7 +178,7 @@ set +a
 ss -ltn | grep -E ':9000|:9001'
 ```
 
-## 7. 终端 2：打开用户端
+## 8. 终端 2：打开用户端
 
 必须在 Linux 桌面终端中执行：
 
@@ -167,7 +189,7 @@ cd "$PROJECT_ROOT/clients/user-qt"
 
 默认演示用户为 `13900000000`。
 
-## 8. 终端 3：打开管理端
+## 9. 终端 3：打开管理端
 
 必须在 Linux 桌面终端中执行：
 
@@ -178,7 +200,7 @@ cd "$PROJECT_ROOT/clients/admin-qt"
 
 默认演示账号为 `admin / 123456`。
 
-## 9. 完成一笔真实订单
+## 10. 完成一笔真实订单
 
 在用户端依次执行：
 
@@ -205,13 +227,13 @@ sqlite3 -header -column "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
   "SELECT id,pile_id,order_id,old_status,new_status,reason,created_at FROM pile_status_logs ORDER BY id DESC LIMIT 10;"
 ```
 
-## 10. 终端 4：导出 SQLite 只读快照
+## 11. 终端 4：导出 SQLite 只读快照
 
 ```bash
 cd "$PROJECT_ROOT"
 
 SNAPSHOT=$(python3 spark-warehouse/generator/export_sqlite_snapshot.py \
-  --database "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
+  --database "${DATABASE_PATH:-$PROJECT_ROOT/server-qt/runtime/showcase.db}" \
   --output "$PROJECT_ROOT/spark-warehouse/runtime/business-snapshots")
 
 export SNAPSHOT
@@ -225,7 +247,7 @@ cat "$SNAPSHOT/metadata.json"
 快照包含用户、站点、电桩、订单、充值和电桩状态日志六张 CSV。导出器以 SQLite
 只读模式打开数据库，并在同一事务中读取所有表。
 
-## 11. 运行 ODS→质量检测→DWD→DWS→ADS
+## 12. 运行 ODS→质量检测→DWD→DWS→ADS
 
 ```bash
 cd "$PROJECT_ROOT/spark-warehouse"
@@ -255,7 +277,7 @@ cat "$WAREHOUSE/ads/ads_quality_overview/batch_id=$BATCH/json"/part-*.json
 
 实际数据库至少需要一条带业务日期的订单，否则 ADS 无法确定统计截止日期。
 
-## 12. 终端 5：启动 Flask API
+## 13. 终端 5：启动 Flask API
 
 跨终端时重新定位最新成功批次：
 
@@ -277,7 +299,7 @@ python3 flask-api/app.py
 
 保持终端运行。
 
-## 13. 终端 6：验证 Flask
+## 14. 终端 6：验证 Flask
 
 ```bash
 curl -fsS http://127.0.0.1:5000/health
@@ -286,7 +308,7 @@ curl -fsS http://127.0.0.1:5000/api/dashboard
 curl -fsS http://127.0.0.1:5000/api/analytics
 ```
 
-## 14. Ubuntu 终端 7：启动 Vue/ECharts 大屏
+## 15. Ubuntu 终端 7：启动 Vue/ECharts 大屏
 
 Vue 可以和 Qt、Spark、Flask 一起在同一台 Ubuntu 主机运行。先确认 Node.js 版本
 不低于 18，然后进入 `web-bigscreen`：
@@ -337,18 +359,18 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
-## 15. 验证完整数据闭环
+## 16. 验证完整数据闭环
 
 1. 记录管理端和 Vue 当前订单数、营收、趋势及站点排行。
 2. 在用户端完成并支付一笔新订单。
 3. 确认管理端实时订单列表立即出现该订单。
-4. 重新执行第 10、11 节，生成新的快照和 ADS 批次。
+4. 重新执行第 11、12 节，生成新的快照和 ADS 批次。
 5. 使用新批次重新启动 Flask。
 6. 刷新 Vue，确认订单数、营收、趋势、站点排行及批次时间更新。
 
 每个 SQLite 快照和数仓批次都有唯一目录，旧结果不会被覆盖。
 
-## 16. HDFS 基础验证
+## 17. HDFS 基础验证
 
 ```bash
 start-dfs.sh
@@ -371,10 +393,10 @@ hdfs dfs -put -f "$SNAPSHOT/metadata.json" "/user/$USER/map-for-ecar/business-sn
 hdfs dfs -ls -R "/user/$USER/map-for-ecar/business-snapshots/$BATCH"
 ```
 
-当前推荐使用第 11 节的本地文件系统模式完成现场演示。单节点环境下 Spark 全部分层
+当前推荐使用第 12 节的本地文件系统模式完成现场演示。单节点环境下 Spark 全部分层
 直接写入 HDFS 的质量检测阶段仍在优化。
 
-## 17. 测试和构建检查
+## 18. 测试和构建检查
 
 ```bash
 cd "$PROJECT_ROOT"
@@ -386,7 +408,7 @@ cd web-bigscreen
 npm run build
 ```
 
-## 18. 停止服务
+## 19. 停止服务
 
 关闭用户端和管理端窗口。Qt 后端、Flask 和 Vue 所在终端分别按 `Ctrl+C`。
 
