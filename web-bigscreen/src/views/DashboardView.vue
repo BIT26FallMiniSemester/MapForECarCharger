@@ -14,7 +14,7 @@
     <p v-if="error" role="alert" style="color: #fca5a5">{{ error }}（保留上次成功数据）</p>
     <section class="analytics-status" aria-live="polite">
       <strong>{{ analytics.label }}</strong>
-      <span v-if="analytics.batch">快照：{{ new Date(analytics.batch.snapshot_at).toLocaleString('zh-CN') }} · {{ analytics.batch.input_orders }} 笔订单 · {{ analytics.batch.window_start }} 至 {{ analytics.batch.window_end }}</span>
+      <span v-if="analytics.batch">快照：{{ new Date(analytics.batch.snapshot_at).toLocaleString('zh-CN') }} · {{ analytics.batch.input_orders }} 笔订单 · {{ analytics.batch.window_start }} 至 {{ analytics.batch.window_end }}<template v-if="analytics.batch.quality_score != null"> · 质量评分 {{ formatNumber(analytics.batch.quality_score, 1) }}</template></span>
       <span v-if="analytics.warning" class="analytics-warning">{{ analytics.warning }}</span>
     </section>
     <section class="metrics-grid">

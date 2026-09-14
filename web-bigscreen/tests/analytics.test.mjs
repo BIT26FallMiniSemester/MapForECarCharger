@@ -31,3 +31,11 @@ test('invalid result does not overwrite live data', () => {
 test('local validation results are not labelled Hadoop', () => {
   assert.match(mergeAnalytics(live, {available:true,data:{...batch,engine:'local-mapreduce'}}).analytics.label, /本地验证/)
 })
+test('SparkSQL batches with a partial date window are accepted and labelled', () => {
+  const sparkBatch = { ...batch, engine: 'spark-sql', quality_score: 97.5,
+    revenue_trend: { items: [{ biz_date: '2026-09-14', revenue_cents: 100 }] } }
+  const result = mergeAnalytics(live, { available: true, stale: false, data: sparkBatch })
+  assert.match(result.analytics.label, /SparkSQL/)
+  assert.equal(result.analytics.batch.quality_score, 97.5)
+  assert.equal(result.revenueTrend.items.length, 1)
+})

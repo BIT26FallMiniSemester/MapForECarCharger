@@ -1,0 +1,25 @@
+project:
+  name: map-for-ecar-warehouse
+  timezone: Asia/Shanghai
+  random_seed: 20260914
+
+hdfs:
+  root: /user/zjs/map-for-ecar/warehouse
+  ods: /user/zjs/map-for-ecar/warehouse/ods
+  dwd: /user/zjs/map-for-ecar/warehouse/dwd
+  dws: /user/zjs/map-for-ecar/warehouse/dws
+  ads: /user/zjs/map-for-ecar/warehouse/ads
+  quarantine: /user/zjs/map-for-ecar/warehouse/quarantine
+  quality_reports: /user/zjs/map-for-ecar/warehouse/quality-reports
+
+spark:
+  app_name: MapForECarChargerWarehouse
+  master: yarn
+  deploy_mode: client
+  shuffle_partitions: 8
+  output_format: parquet
+
+api:
+  host: 127.0.0.1
+  port: 5000
+  ads_cache_seconds: 60

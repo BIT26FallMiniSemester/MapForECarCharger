@@ -14,13 +14,14 @@ export function adaptDashboard(data) {
       station_count: data.station_count,
       pile_count: total,
       available_pile_count: counts.IDLE || 0,
-      online_rate: total ? 100 * (total - (counts.OFFLINE || 0)) / total : 0
+      online_rate: total ? 100 * (total - (counts.OFFLINE || 0)) / total : 0,
+      quality_score: data.quality_score
     },
     revenueTrend: { days: 30, items: data.trend.map(item => ({ ...item, order_count: item.orders })) },
     pileStatus: { total, items: data.pile_status.map(item => ({ status: item.name, count: item.value, percentage: total ? 100 * item.value / total : 0 })) },
     stationRanking: { days: 30, items: data.station_ranking.map(item => ({ ...stations.find(s => s.station_id === item.station_id), ...item })) },
     stationDistribution: { items: stations },
-    loadPrediction: {
+    loadPrediction: data.load_prediction || {
       model_version: data.model, horizon_hours: 6,
       points: (data.forecast_points || []).slice(0, 6).map(item => ({
         label: item.time, energy_kwh: item.energy_kwh, orders: item.orders,

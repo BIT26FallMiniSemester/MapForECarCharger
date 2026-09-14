@@ -1,0 +1,23 @@
+defaults:
+  enabled: true
+  issue_row_target_ratio: 0.08
+  allow_multiple_issues_per_row: true
+
+rules:
+  DQ001: {table: users, ratio: 0.004, severity: ERROR, type: invalid_phone}
+  DQ002: {table: users, ratio: 0.004, severity: ERROR, type: duplicate_key}
+  DQ003: {table: stations, ratio: 0.003, severity: ERROR, type: invalid_coordinate}
+  DQ004: {table: stations, ratio: 0.007, severity: WARN, type: dirty_dimension_text}
+  DQ005: {table: charging_piles, ratio: 0.003, severity: ERROR, type: orphan_station}
+  DQ006: {table: charging_piles, ratio: 0.004, severity: ERROR, type: invalid_enum}
+  DQ007: {table: charging_orders, ratio: 0.005, severity: ERROR, type: duplicate_order_no}
+  DQ008: {table: charging_orders, ratio: 0.008, severity: ERROR, type: broken_foreign_key}
+  DQ009: {table: charging_orders, ratio: 0.006, severity: ERROR, type: reversed_timeline}
+  DQ010: {table: charging_orders, ratio: 0.005, severity: ERROR, type: negative_measure}
+  DQ011: {table: charging_orders, ratio: 0.005, severity: ERROR, type: incomplete_completed_order}
+  DQ012: {table: charging_orders, ratio: 0.006, severity: ERROR, type: inconsistent_amount}
+  DQ013: {table: charging_orders, ratio: 0.006, severity: ERROR, type: status_time_conflict}
+  DQ014: {table: recharge_records, ratio: 0.004, severity: ERROR, type: invalid_recharge}
+  DQ015: {table: pile_status_logs, ratio: 0.005, severity: ERROR, type: invalid_status_transition}
+  DQ016: {table: all, ratio: 0.008, severity: WARN, type: dirty_format}
+  DQ017: {table: charging_orders, ratio: 0.005, severity: ERROR, type: overlapping_session}

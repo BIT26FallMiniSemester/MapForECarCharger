@@ -24,3 +24,6 @@ node_modules/
 __pycache__/
 
 /analytics-hadoop/runtime/
+/spark-warehouse/runtime/
+/spark-warehouse/data/generated/
+/.idea/

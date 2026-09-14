@@ -2,6 +2,11 @@
 
 默认使用 main 的 Qt 后端真实数据，分别请求 `/api/dashboard`（实时数据）与 `/api/analytics`（批处理历史统计）。每轮完成后等待 5 秒再刷新，避免请求重叠。
 
+第二阶段完成 SparkSQL ADS 后，可以把两个兼容接口全部切换到 Flask。复制
+`.env.flask.example` 为 `.env.local`，启动 `spark-warehouse/flask-api/app.py`
+后再运行 Vite。页面会标记“SparkSQL 离线数仓”，并显示批次时间、统计窗口、
+订单数与数据质量评分。
+
 ## 运行
 
 先按照 `../server-qt/README.md` 构建并运行本合并目录中的 Qt 服务，HTTP 端口为 9001。
