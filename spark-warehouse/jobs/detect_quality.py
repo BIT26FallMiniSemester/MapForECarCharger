@@ -109,7 +109,10 @@ def main() -> None:
     spark = create_spark(f"MapForECar-Quality-{batch_id}", args.master)
     try:
         frames = {table: spark.read.parquet(batch_table_path(args.ods, f"ods_{table}", batch_id)) for table in TABLE_COLUMNS}
-        issues = detect(frames, batch_id).cache()
+        # The rule branches form many tiny partitions.  Coalesce before
+        # caching so every downstream action avoids materializing that small
+        # file fan-out on a single-node HDFS installation.
+        issues = detect(frames, batch_id).coalesce(2).cache()
         details_path = batch_table_path(args.output, "details", batch_id)
         summary_path = batch_table_path(args.output, "summary", batch_id)
         issues.write.mode("overwrite").parquet(details_path)

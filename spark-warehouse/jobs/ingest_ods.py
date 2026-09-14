@@ -37,7 +37,10 @@ def main() -> None:
             csv_path = source / "dirty" / f"{table}.csv"
             if not csv_path.is_file():
                 raise FileNotFoundError(f"missing source table: {csv_path}")
-            frame = spark.read.option("header", True).option("mode", "FAILFAST").schema(raw_schema(table)).csv(str(csv_path))
+            # Keep generated input on the local filesystem even when Hadoop's
+            # default filesystem is HDFS.  A bare absolute path is otherwise
+            # resolved against fs.defaultFS by Spark.
+            frame = spark.read.option("header", True).option("mode", "FAILFAST").schema(raw_schema(table)).csv(csv_path.as_uri())
             if frame.columns != columns:
                 raise ValueError(f"unexpected columns for {table}: {frame.columns}")
             enriched = (frame.withColumn("source_file", F.input_file_name())
