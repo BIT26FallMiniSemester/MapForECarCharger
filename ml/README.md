@@ -2,6 +2,8 @@
 
 依赖：Python 3.10+ 标准库，不依赖第三方 Python 包、编译器、数据库或在线后端。以下命令从仓库根目录执行。
 
+当前主分支使用Qt后端，请按 [QT_DELIVERY.md](QT_DELIVERY.md) 运行SQLite只读导出及 `/api/predictions` 接入；本文末尾FastAPI上传器仅适用于保留该API的历史分支。
+
 ## 一键离线验收
 
 ~~~bash
@@ -9,7 +11,7 @@ python3 ml/src/workflow.py demo ml/outputs/demo
 python3 -m unittest discover -s ml/tests -p 'test_*.py' -v
 ~~~
 
-demo 输出目录必须不存在或为空，防止覆盖成果。重新运行请选择新目录。命令依次生成模拟订单/设备日志、清洗小时数据、编译、训练、预测、推荐/预警、评估图和 API 请求体，**不会发出网络请求**。
+demo 输出目录必须不存在或为空，防止覆盖成果。重新运行请选择新目录。命令依次生成模拟订单/设备日志、清洗小时数据、训练、预测、推荐/预警、评估图和 API 请求体，**不会发出网络请求**。
 
 输出包括 data/orders.csv、data/devices.csv、data/history.csv、清洗质量报告、模型及特征元数据、manifest.json、predictions.json、operations.json、evaluation.svg、evaluation.json、predictions_api.json。
 
@@ -75,7 +77,7 @@ python3 ml/src/workflow.py analyze \
 
 分数越低越好：0.4 × 距离/半径 + 0.3 × 当前忙碌率 + 0.3 × 下小时拥堵率。距离为球面直线距离，不是导航距离。缺坐标、超过半径、全部设备不可用的站点不参与推荐并注明原因。阈值和半径可调；这是可解释规则基线，不是学习得到的个性化推荐模型。
 
-## 可选后端接入
+## 历史FastAPI分支接入
 
 以 api.md、database.md 为设计规范，当前分支 contracts/openapi.yaml 为机器契约。后端是唯一写库入口，不直接写数据库或自行创建表。
 

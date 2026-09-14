@@ -45,3 +45,10 @@ server-qt/build/charger-server --database server-qt/runtime/showcase.db \
 - [验证范围](analytics-hadoop/VALIDATION.md)
 
 设置 `VITE_USE_ANALYTICS=false` 可仅使用 Qt 实时汇总，业务服务本身不依赖 Hadoop。
+
+## 大数据统计与机器学习交付
+
+`analytics-hadoop/` 提供脱敏导出、清洗校验、真实 HDFS/YARN MapReduce 营收趋势与站点排行，结果由独立 SQLite 查询核对。
+`ml/src/qt_pipeline.py` 从当前 Qt 数据库只读导出充电历史，运行 Python 岭回归训练、逐小时负荷及可用桩预测，输出 MAE/RMSE 和 SVG 评估图，原子发布结果供 Qt `GET /api/predictions` 读取。
+
+运行步骤、结果单位、模拟数据边界和联合验收命令见 [两模块运行说明](ml/QT_DELIVERY.md)。此 Python 模型独立于 `/api/dashboard` 原有历史均值模型；新结果由 `/api/predictions` 提供。

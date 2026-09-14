@@ -37,6 +37,15 @@ DashboardServer::DashboardServer(Business &business, QObject *parent)
                     body=QJsonDocument(result).toJson(QJsonDocument::Compact);
                     type="application/json; charset=utf-8";
                 }
+                else if(path=="/api/predictions") {
+                    bool valid=false;
+                    int age=qEnvironmentVariable("ML_MAX_AGE_SECONDS","7200").toInt(&valid);
+                    if(!valid || age<1) age=7200;
+                    const auto result=readForecastResult(qEnvironmentVariable("ML_RESULT_PATH"),age);
+                    if(!result["available"].toBool()) status="503 Service Unavailable";
+                    body=QJsonDocument(result).toJson(QJsonDocument::Compact);
+                    type="application/json; charset=utf-8";
+                }
                 else if(path=="/"||path=="/dashboard.html") {QFile file(":/web/dashboard.html");if(file.open(QIODevice::ReadOnly))body=file.readAll();type="text/html; charset=utf-8";}
                 else {status="404 Not Found";body="Not found";type="text/plain; charset=utf-8";}
                 const QByteArray header="HTTP/1.1 "+status+"\r\nContent-Type: "+type+"\r\nContent-Length: "+QByteArray::number(body.size())+"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";

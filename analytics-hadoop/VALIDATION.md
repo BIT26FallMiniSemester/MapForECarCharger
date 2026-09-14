@@ -1,5 +1,14 @@
 # 验证范围
 
+## 2026-09-14 联合验收
+
+复用主分支已有导出、Mapper/Combiner/Reducer和独立SQL核对程序。
+18项Python测试通过。在Ubuntu ARM64、Hadoop3.5.0、Java17、单节点HDFS/YARN上，真实作业 `job_1789366766594_0002` 完成：2个Mapper、2个Reducer，3981条输入订单；总营收1428540分，30日趋势和站点排名通过8项独立SQLite查询核对。
+
+数据为45天3站合成订单，不写生产库。结果通过Qt真实HTTP `/api/analytics` 逐字段读取一致，缺失/损坏/恢复场景通过。同批ML接口同步通过。联合命令见 `ml/QT_DELIVERY.md`。
+
+## 此前记录
+
 验证日期：2026-09-12。
 
 - Python 导出/MapReduce：18 项测试通过，包括 SQLite 独立查询核对、跨日边界、全部状态、无效站点、空数据和并发快照。
