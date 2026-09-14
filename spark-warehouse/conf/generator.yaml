@@ -1,0 +1,26 @@
+profiles:
+  quick:
+    days: 30
+    users: 100
+    stations: 50
+    orders: 3000
+    recharge_records: 500
+    pile_status_logs: 5000
+  full:
+    days: 90
+    users: 10000
+    stations: 2614
+    orders: 300000
+    recharge_records: 50000
+    pile_status_logs: 500000
+
+defaults:
+  profile: quick
+  seed: 20260914
+  end_date: 2026-09-14
+  price_cents_per_kwh: 150
+  output_format: csv
+  encoding: utf-8
+
+source:
+  station_catalog: ../../server-qt/data/processed/beijing_public_charging_stations.json

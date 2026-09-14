@@ -46,6 +46,16 @@ server-qt/build/charger-server --database server-qt/runtime/showcase.db \
 
 设置 `VITE_USE_ANALYTICS=false` 可仅使用 Qt 实时汇总，业务服务本身不依赖 Hadoop。
 
+## 第二阶段 PySpark 数仓
+
+`spark-warehouse/` 是新的第二阶段主链路：根据第一阶段表结构生成含质量问题的模拟数据，随后进入 HDFS ODS、PySpark 质量检测与清洗、SparkSQL DWD/DWS/ADS，最后由 Flask API 提供给 Vue/ECharts。
+
+- [环境检查](spark-warehouse/ENVIRONMENT_CHECK.md)
+- [数据质量与分层设计](spark-warehouse/DATA_DESIGN.md)
+- [模拟数据生成器](spark-warehouse/generator/README.md)
+
+原 `analytics-hadoop/` 保留为 Hadoop Streaming 对比实验，不作为第二阶段 PySpark 主链路。
+
 ## 大数据统计与机器学习交付
 
 `analytics-hadoop/` 提供脱敏导出、清洗校验、真实 HDFS/YARN MapReduce 营收趋势与站点排行，结果由独立 SQLite 查询核对。

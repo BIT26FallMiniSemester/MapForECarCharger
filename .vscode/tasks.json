@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "验证：Python 数据与作业",
+      "type": "shell",
+      "command": "python -m unittest discover -s spark-warehouse/tests -v && python -m py_compile spark-warehouse/generator/generate_all.py spark-warehouse/schemas/table_schemas.py spark-warehouse/jobs/common.py spark-warehouse/jobs/ingest_ods.py spark-warehouse/jobs/detect_quality.py spark-warehouse/jobs/build_dwd.py spark-warehouse/jobs/build_dws.py spark-warehouse/jobs/build_ads.py spark-warehouse/jobs/run_pipeline.py spark-warehouse/flask-api/app.py",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "验证：Vue 大屏构建",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/web-bigscreen"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "验证：主机完整检查",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "验证：Python 数据与作业",
+        "验证：Vue 大屏构建"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "启动：Web 大屏",
+      "type": "shell",
+      "command": "npm run dev -- --port 5174",
+      "options": {
+        "cwd": "${workspaceFolder}/web-bigscreen"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE.*ready",
+          "endsPattern": "Local:.*http"
+        }
+      }
+    }
+  ]
+}
