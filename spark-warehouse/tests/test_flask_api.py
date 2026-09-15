@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import sqlite3
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_PATH = ROOT / "flask-api" / "app.py"
@@ -54,8 +56,22 @@ class FlaskApiTests(unittest.TestCase):
             {"station_id": 2, "horizon_hours": 1, "predicted_for_epoch": 1789347600,
              "predicted_load_kw": 7.5, "predicted_available_piles": 2, "predicted_occupied_piles": 2},
         ]}), encoding="utf-8")
+        self.database = self.root / "live.db"
+        connection = sqlite3.connect(self.database)
+        connection.executescript("""
+            CREATE TABLE stations(id INTEGER PRIMARY KEY,name TEXT,status TEXT);
+            CREATE TABLE charging_piles(id INTEGER PRIMARY KEY,station_id INTEGER,pile_no TEXT,status TEXT,rated_power_w INTEGER);
+            CREATE TABLE charging_orders(id INTEGER PRIMARY KEY,order_no TEXT,status TEXT,station_id INTEGER,pile_id INTEGER,amount_cents INTEGER,energy_wh INTEGER,created_at TEXT,paid_at TEXT,stopped_at TEXT);
+            INSERT INTO stations VALUES(1,'实时站','ACTIVE');
+            INSERT INTO charging_piles VALUES(1,1,'P-1','CHARGING',60000);
+        """)
+        now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        connection.execute("INSERT INTO charging_orders VALUES(1,'LIVE-1','CHARGING',1,1,450,3000,?,NULL,NULL)", (now,))
+        connection.commit()
+        connection.close()
         app = self.module.create_app({"TESTING": True, "ADS_ROOT": str(self.root), "ADS_BATCH_ID": self.batch,
-                                      "ADS_CACHE_SECONDS": 0, "ML_PREDICTIONS_PATH": str(self.ml_path)})
+                                      "ADS_CACHE_SECONDS": 0, "ML_PREDICTIONS_PATH": str(self.ml_path),
+                                      "DATABASE_PATH": str(self.database)})
         self.client = app.test_client()
 
     def tearDown(self):
@@ -69,11 +85,12 @@ class FlaskApiTests(unittest.TestCase):
 
     def test_compatibility_endpoints(self):
         dashboard = self.client.get("/api/dashboard").json
-        self.assertEqual(dashboard["today_orders"], 2)
-        self.assertEqual(dashboard["pile_status"], [{"name": "IDLE", "value": 2}])
+        self.assertEqual(dashboard["today_orders"], 1)
         self.assertEqual(dashboard["load_prediction"]["model_version"], "test-v1")
         self.assertEqual(dashboard["load_prediction"]["points"][0]["load_w"], 20000.0)
         self.assertEqual(dashboard["load_prediction"]["points"][0]["available_piles"], 5)
+        self.assertEqual(dashboard["realtime_orders"][0]["order_no"], "LIVE-1")
+        self.assertEqual(dashboard["pile_status"], [{"name": "CHARGING", "value": 1}])
         analytics = self.client.get("/api/analytics").json
         self.assertTrue(analytics["available"])
         self.assertEqual(analytics["data"]["engine"], "spark-sql")

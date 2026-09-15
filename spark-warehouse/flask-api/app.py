@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
 from time import monotonic
+from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request
 
@@ -74,12 +76,48 @@ def load_ml_prediction(path):
     return {"model_version": document.get("model_version"), "horizon_hours": len(points), "points": points}
 
 
+def load_live_dashboard(database_path):
+    if not database_path:
+        return None
+    path = Path(database_path).resolve()
+    uri = f"file:{path.as_posix()}?mode=ro"
+    zone = ZoneInfo("Asia/Shanghai")
+    local_now = datetime.now(timezone.utc).astimezone(zone)
+    start = datetime(local_now.year, local_now.month, local_now.day, tzinfo=zone).astimezone(timezone.utc)
+    end = start + timedelta(days=1)
+    lower = start.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    upper = end.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    with sqlite3.connect(uri, uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        scalar = lambda sql, args=(): connection.execute(sql, args).fetchone()[0]
+        statuses = [dict(row) for row in connection.execute(
+            "SELECT status name,count(*) value FROM charging_piles GROUP BY status ORDER BY status")]
+        orders = [dict(row) for row in connection.execute(
+            "SELECT o.id,o.order_no,o.status,s.name station_name,p.pile_no,"
+            "CASE WHEN o.status='CHARGING' THEN p.rated_power_w ELSE 0 END power_w,"
+            "coalesce(o.amount_cents,0) amount_cents FROM charging_orders o "
+            "JOIN stations s ON s.id=o.station_id JOIN charging_piles p ON p.id=o.pile_id "
+            "ORDER BY o.created_at DESC,o.id DESC LIMIT 8")]
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "total_revenue_cents": scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED'"),
+            "today_revenue_cents": scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?", (lower, upper)),
+            "today_orders": scalar("SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?", (lower, upper)),
+            "today_energy_wh": scalar("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE status IN ('UNPAID','COMPLETED') AND stopped_at>=? AND stopped_at<?", (lower, upper)),
+            "station_count": scalar("SELECT count(*) FROM stations WHERE status='ACTIVE'"),
+            "pile_count": scalar("SELECT count(*) FROM charging_piles"),
+            "pile_status": statuses,
+            "realtime_orders": orders,
+        }
+
+
 def create_app(config=None):
     app = Flask(__name__)
     app.config.update(ADS_ROOT=os.environ.get("ADS_ROOT", "runtime/warehouse/ads"),
                       ADS_BATCH_ID=os.environ.get("ADS_BATCH_ID", ""),
                       ADS_CACHE_SECONDS=int(os.environ.get("ADS_CACHE_SECONDS", "60")),
-                      ML_PREDICTIONS_PATH=os.environ.get("ML_PREDICTIONS_PATH", ""))
+                      ML_PREDICTIONS_PATH=os.environ.get("ML_PREDICTIONS_PATH", ""),
+                      DATABASE_PATH=os.environ.get("DATABASE_PATH", ""))
     if config:
         app.config.update(config)
     if not app.config["ADS_BATCH_ID"]:
@@ -149,7 +187,8 @@ def create_app(config=None):
         row = store.load("ads_overview")[0]
         trend = store.load("ads_revenue_trend_30d")
         statuses = store.load("ads_pile_status")
-        return jsonify({"generated_at": row["generated_at"], "model": "spark-sql-offline",
+        live = load_live_dashboard(app.config["DATABASE_PATH"])
+        dashboard = {"generated_at": row["generated_at"], "model": "spark-sql-offline",
             "total_revenue_cents": row["total_revenue_cents"], "today_revenue_cents": row["today_revenue_cents"],
             "today_orders": row["today_order_count"], "station_count": row["station_count"], "pile_count": row["pile_count"],
             "quality_score": row.get("quality_score"),
@@ -157,7 +196,13 @@ def create_app(config=None):
             "pile_status": [{"name": item["status"], "value": item["count"]} for item in statuses],
             "station_ranking": store.load("ads_station_ranking_30d")[:10],
             "stations": store.load("ads_station_distribution"), "forecast_points": [],
-            "load_prediction": load_ml_prediction(app.config["ML_PREDICTIONS_PATH"]), "realtime_orders": []})
+            "load_prediction": load_ml_prediction(app.config["ML_PREDICTIONS_PATH"]), "realtime_orders": []}
+        if live:
+            dashboard.update(live)
+            dashboard["trend"][-1] = {**dashboard["trend"][-1], "orders": live["today_orders"],
+                "order_count": live["today_orders"], "revenue_cents": live["today_revenue_cents"],
+                "energy_wh": live["today_energy_wh"]}
+        return jsonify(dashboard)
 
     @app.get("/api/analytics")
     def compatible_analytics():

@@ -15,7 +15,10 @@ DashboardServer::DashboardServer(Business &business, QObject *parent)
     connect(&m_workerThread,&QThread::finished,m_worker,&QObject::deleteLater);
     connect(m_worker,&ForecastWorker::ready,this,[this](const QJsonObject &result){m_data=result;});
     m_workerThread.start();
-    m_refreshTimer.setInterval(5000);
+    bool intervalOk=false;
+    int refreshInterval=qEnvironmentVariable("DASHBOARD_REFRESH_MS","5000").toInt(&intervalOk);
+    if(!intervalOk || refreshInterval<1000) refreshInterval=5000;
+    m_refreshTimer.setInterval(refreshInterval);
     connect(&m_refreshTimer,&QTimer::timeout,this,&DashboardServer::refresh);
     connect(this,&QTcpServer::newConnection,this,[this]{
         while(hasPendingConnections()) {
@@ -53,7 +56,11 @@ DashboardServer::DashboardServer(Business &business, QObject *parent)
             });
         }
     });
-    refresh();m_refreshTimer.start();
+    bool delayOk=false;
+    int initialDelay=qEnvironmentVariable("DASHBOARD_INITIAL_DELAY_MS","0").toInt(&delayOk);
+    if(!delayOk || initialDelay<0) initialDelay=0;
+    QTimer::singleShot(initialDelay,this,&DashboardServer::refresh);
+    m_refreshTimer.start();
 }
 
 DashboardServer::~DashboardServer()

@@ -12,7 +12,7 @@ export function mergeAnalytics(live, response, failure = '') {
   const stations = new Map((live.stationDistribution?.items || []).map(row => [row.station_id, row]))
   return {
     ...live,
-    overview: { ...live.overview, total_revenue_cents: batch.total_revenue_cents },
+    overview: live.overview,
     revenueTrend: batch.revenue_trend,
     stationRanking: { ...batch.station_ranking, items: batch.station_ranking.items.map(row => ({ ...stations.get(row.station_id), ...row })) },
     analytics: {
