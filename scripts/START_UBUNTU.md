@@ -55,3 +55,32 @@ bash "$PROJECT_ROOT/scripts/start_ubuntu.sh"
 ```
 
 地图配置仍从 /etc/map-for-ecar/server.env 读取，不输出 Key。脚本默认各服务仅监听本机，供 Ubuntu 完整测试。
+
+## 丰富业务场景模拟库
+
+保留原模拟库，生成新的副本。先退出用户端/管理端并停止旧服务，再在 Ubuntu 执行：
+
+```bash
+cd /home/zjs/MapForECarCharger
+RICH_DB="$PWD/server-qt/runtime/showcase-rich-$(date +%Y%m%d-%H%M%S).db"
+python3 server-qt/tools/enrich_showcase_simulation.py --source server-qt/runtime/showcase-sim.db --target "$RICH_DB" --seed 20260915
+export LAUNCH_DATABASE_PATH="$RICH_DB"
+bash scripts/start_ubuntu.sh --refresh-data
+```
+
+目标路径必须不存在，生成器不会覆盖原库。原约 5 万历史订单保留，再增加 650 笔多状态订单、100 名冻结用户、200 笔不同金额充值；电桩状态覆盖 IDLE/RESERVED/CHARGING/FAULT/OFFLINE。数量取决于原库可用用户和电桩，现有库实测充电中 194、预约 128、故障 3180、离线 1060。被冻结的用户没有活跃订单；预约/充电电桩绑定对应订单且一个用户最多一笔活跃订单。保留演示手机号 13900000000 为正常用户方便人工操作。
+
+预约生成后 15 分钟自动到期，不应改业务超时规则。建议提前准备依赖与构建，再临近展示时生成新库；重新生成的新库路径需重新设置 LAUNCH_DATABASE_PATH。--refresh-data 重新计算这份库的 Spark 历史结果；机器学习仍需另行训练，演示预测不会自动成为新库训练结果。离线明确表示模拟断连，故障表示已接入但不可服务。
+
+```bash
+python3 - <<'PY'
+import os,sqlite3
+with sqlite3.connect(os.environ['LAUNCH_DATABASE_PATH']) as db:
+    for table in ('users','charging_piles','charging_orders'):
+        print(table,db.execute(f'SELECT status,count(*) FROM {table} GROUP BY status').fetchall())
+    print('foreign_keys',db.execute('PRAGMA foreign_key_check').fetchall())
+    print('integrity',db.execute('PRAGMA quick_check').fetchall())
+PY
+```
+
+预期 users 有 NORMAL/FROZEN，电桩有五种状态，订单有六种状态；foreign_keys=[]、integrity=[('ok',)]。大屏状态饼图、矩阵、订单漏斗、用户冻结分布和充值图应更丰富。新库是业务展示数据，不另外注入非法外键或时间字段；原历史库已有质量问题仍保留给 Spark 检测清洗。
