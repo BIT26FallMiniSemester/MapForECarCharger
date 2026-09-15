@@ -27,5 +27,12 @@ def create_spark(app_name: str, master: str | None = None):
     return builder.config("spark.sql.session.timeZone", "UTC").getOrCreate()
 
 
+def parse_timestamp(column):
+    """Parse ISO-8601 timestamps with optional fractional seconds."""
+    from pyspark.sql import functions as F
+
+    return F.to_timestamp(F.trim(column), "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]X")
+
+
 def batch_table_path(root: str, layer_table: str, batch_id: str) -> str:
     return f"{root.rstrip('/')}/{layer_table}/batch_id={validate_batch_id(batch_id)}"
