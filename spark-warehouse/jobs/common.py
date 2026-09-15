@@ -35,4 +35,7 @@ def parse_timestamp(column):
 
 
 def batch_table_path(root: str, layer_table: str, batch_id: str) -> str:
-    return f"{root.rstrip('/')}/{layer_table}/batch_id={validate_batch_id(batch_id)}"
+    # Bare paths belong to the local warehouse, regardless of Hadoop fs.defaultFS.
+    # Preserve explicit storage URIs such as hdfs:// and file://.
+    storage_root = root if "://" in root else Path(root).resolve().as_uri()
+    return f"{storage_root.rstrip('/')}/{layer_table}/batch_id={validate_batch_id(batch_id)}"

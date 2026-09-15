@@ -1,420 +1,383 @@
-# MapForECarCharger 完整运行与闭环验收
+# Ubuntu 完整测试操作手册
 
-本文说明如何启动 Qt 业务系统，完成一笔真实充电订单，将 SQLite 快照送入
-PySpark 数仓，并通过 Flask 和 Vue/ECharts 展示分析结果。
+更新时间：2026-09-15。适用于迁移到 D 盘后的 Ubuntu 虚拟机，代码包含提交 `5eb7ba9` 的大屏修复。
 
-## 1. 目录和环境变量
+虚拟机在 Windows 上的位置不影响 Ubuntu 内部项目路径。以下命令全部在 **Ubuntu 的 Bash 终端** 执行；每个新终端先执行第 2 节。不要复制 Windows 的 `PS>` 提示符。Bash 多行命令使用反斜杠 `\`，最后一行不加反斜杠。
 
-以下命令默认仓库位于 Linux 用户主目录。若目录不同，只需修改
-`PROJECT_ROOT`：
+## 1. 先检查虚拟机和代码
+
+```bash
+hostname -I
+ip -br address
+df -h /
+cd "$HOME/MapForECarCharger"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git status --short
+  git log -3 --oneline
+else
+  echo '当前为文件复制部署，没有 .git；跳过 Git 检查，继续第 2/3 节。'
+  test ! -f .deployed-main || cat .deployed-main
+fi
+```
+
+迁移后根分区已扩展到约 30GB，上次检查约有 12GB 可用空间。原 IP 为 `192.168.88.128`，以当前 `hostname -I` 为准。输出为空时先恢复 VMware NAT 和 DHCP，暂不进行联网更新。
+
+当前 zjs 虚拟机是文件复制部署，没有 `.git`，跳过 Git 更新即可继续测试。`.deployed-main` 是旧部署标记，不代表后续上传修复的完整版本。不要在该目录直接 git init 或覆盖克隆。以下更新命令仅适用于真正的 Git 克隆目录且没有本地修改时：
+
+```bash
+cd "$HOME/MapForECarCharger"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git fetch origin feature/web-bigscreen
+  git switch feature/web-bigscreen && git pull --ff-only origin feature/web-bigscreen
+  git log -3 --oneline
+else
+  echo '文件部署无需执行 git fetch/switch/pull；保留当前目录，直接继续构建。'
+fi
+```
+
+若 Git 提示本地修改冲突，先保留修改并检查差异，不要使用 `reset --hard`。之前通过上传方式部署的修复可能显示为未提交修改。
+
+## 2. 每个终端：设置运行环境
+
+迁移后的现有安装路径如下；在新终端复制整个代码块：
 
 ```bash
 export PROJECT_ROOT="$HOME/MapForECarCharger"
+export JAVA_HOME="$HOME/apps/jdk1.8.0_261"
+export HADOOP_HOME="$HOME/apps/hadoop-3.2.1"
+export SPARK_HOME="$HOME/apps/pyspark-3.5.9/deps"
+export PYTHONPATH="$HOME/apps/pyspark-3.5.9:$HOME/apps/pyspark-3.5.9/lib/py4j-0.10.9.7-src.zip${PYTHONPATH:+:$PYTHONPATH}"
+export PATH="$HOME/.local/bin:$HOME/.local/node20/node_modules/.bin:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$SPARK_HOME/bin:$PATH"
+export DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
 cd "$PROJECT_ROOT"
 ```
 
-默认端口：
-
-| 服务 | 端口 |
-|---|---:|
-| Qt Socket 后端 | 9000 |
-| Qt 内嵌大屏 | 9001 |
-| Flask ADS API | 5000 |
-| Vue 开发服务器 | 5174 |
-
-## 2. 首次安装依赖
-
-Ubuntu 22.04+：
-
-```bash
-sudo apt update
-sudo apt install -y \
-  build-essential cmake qmake6 \
-  qt6-base-dev qt6-base-dev-tools qt6-charts-dev qt6-webengine-dev \
-  libqt6sql6-sqlite python3 python3-pip python3-flask sqlite3 curl \
-  nodejs npm
-```
-
-安装项目 Python 依赖：
-
-```bash
-cd "$PROJECT_ROOT"
-python3 -m pip install --user -r spark-warehouse/requirements-dev.txt
-python3 -m pip install --user -r spark-warehouse/flask-api/requirements.txt
-```
-
-项目需要可用的 Java、Hadoop、HDFS、PySpark 和 `spark-submit`。安装路径由使用者
-自行配置，但以下命令都应成功：
+依赖检查：
 
 ```bash
 java -version
 hadoop version
-hdfs version
 spark-submit --version
-python3 -c "import pyspark, flask, yaml; print(pyspark.__version__)"
+python3 -c 'import pyspark, flask, yaml; print(pyspark.__version__)'
 node --version
 npm --version
+command -v qmake6
+sqlite3 --version
 ```
 
-## 3. 首次构建 Qt 程序
+当前环境为 Java 8、Hadoop 3.2.1、PySpark 3.5.9、Node 20.20.2。Vite 8 需要 Node **20.19+ 或 22.12+**，不要使用原来的系统 Node 18。`SPARK_HOME` 指向 `deps`，不是 PySpark 源码顶层目录。
 
-构建后端：
+现有环境无需重复安装。若 Python 包缺失：
+
+```bash
+python3 -m pip install --user PyYAML==6.0.2 pytest==8.3.5
+python3 -m pip install --user -r spark-warehouse/flask-api/requirements.txt
+```
+
+PySpark 已通过上述源码路径使用，不必再次下载大体积安装包。
+
+## 3. 构建和数据库检查
 
 ```bash
 cd "$PROJECT_ROOT"
-cmake -S server-qt -B server-qt/build \
-  -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build server-qt/build -j"$(nproc)"
+cmake -S server-qt -B server-qt/build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build server-qt/build -j2
 ctest --test-dir server-qt/build --output-on-failure
-```
 
-构建用户端：
-
-```bash
 cd "$PROJECT_ROOT/clients/user-qt"
 qmake6 charging-user-client.pro
-make -j"$(nproc)"
-```
+make -j2
 
-构建管理端：
-
-```bash
 cd "$PROJECT_ROOT/clients/admin-qt"
 qmake6 ChargingAdmin.pro
-make -j"$(nproc)"
+make -j2
+
+cd "$PROJECT_ROOT/web-bigscreen"
+npm ci
+npm run build
 ```
 
-## 4. 初始化演示数据库
-
-首次运行时创建一个新的数据库：
+使用 `-j2` 降低虚拟机内存压力。检查模拟库：
 
 ```bash
 cd "$PROJECT_ROOT"
-mkdir -p server-qt/runtime
-
-./server-qt/build/charger-server \
-  --database "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  --migrate-only
-
-./server-qt/build/charger-server \
-  --database "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  --import-catalog "$PROJECT_ROOT/server-qt/data/processed/beijing_public_charging_stations.json"
-
-./server-qt/build/charger-server \
-  --database "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  --seed-showcase --migrate-only
+test -f "$DATABASE_PATH" && ls -lh "$DATABASE_PATH"
+sqlite3 "$DATABASE_PATH" 'PRAGMA integrity_check;'
+sqlite3 "$DATABASE_PATH" 'SELECT count(*) FROM charging_orders; SELECT count(*) FROM users;'
 ```
 
-`--seed-showcase` 只适用于尚无业务数据的数据库，不要对已使用的数据库重复执行。
+预期完整性为 `ok`；初始模拟库有 50,000 笔订单、1,002 个用户。完成新订单后数量会增加。所有端都使用此数据库，避免混用 `showcase.db` 或 `/var/lib/map-for-ecar/charger.db`。
 
-## 5. 配置腾讯地图 WebService Key
+## 4. 终端 A：启动 Qt 后端
 
-用户端、管理端和 Vue 都不保存地图 Key。Qt 后端从环境变量
-`TENCENT_MAP_KEY` 读取它。创建仓库外的服务环境文件：
-
-```bash
-sudo mkdir -p /etc/map-for-ecar
-sudo cp "$PROJECT_ROOT/server-qt/server.env.example" /etc/map-for-ecar/server.env
-sudo chmod 600 /etc/map-for-ecar/server.env
-sudoedit /etc/map-for-ecar/server.env
-```
-
-至少填写：
+保留仓库外 `/etc/map-for-ecar/server.env` 中的地图 Key。可用 `sudoedit /etc/map-for-ecar/server.env` 修改数据库行为：
 
 ```dotenv
-SERVER_HOST=127.0.0.1
-SERVER_PORT=9000
-DASHBOARD_PORT=9001
-DATABASE_PATH=/absolute/path/to/server-qt/runtime/showcase.db
-TENCENT_MAP_KEY=replace_with_your_webservice_key
+DATABASE_PATH=/home/zjs/MapForECarCharger/server-qt/runtime/showcase-sim.db
 ```
 
-该 Key 需要在腾讯位置服务控制台启用 **WebService API**，并为地址解析、距离矩阵、
-驾车路线和静态地图分配日配额及并发配额。修改环境文件后需要重启 Qt 后端。
+路径后不要紧接注释。启动前确认没有旧服务占用端口：
 
-## 6. 可选：创建大数据量演示数据库
+```bash
+ss -ltnp | grep -E ':9000|:9001|:5000|:5174'
+```
 
-为了展示 90 日趋势、站点排行、用户列表和订单分析，可以从原始展示库克隆一份
-独立数据库并加入确定性的历史数据：
+已有服务时在原终端按 Ctrl+C；使用 systemd 启动的服务应通过对应服务单元停止，不要重复启动。
 
 ```bash
 cd "$PROJECT_ROOT"
-
-python3 server-qt/tools/create_showcase_simulation.py \
-  --source "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  --target "$PROJECT_ROOT/server-qt/runtime/showcase-sim.db" \
-  --orders 50000 \
-  --users 1000 \
-  --days 90 \
-  --seed 20260914
-```
-
-生成内容包括 1,000 个演示用户、1,000 条充值、50,000 笔已完成订单和
-150,000 条电桩状态日志，并复用原库中的真实站点和电桩。原始 `showcase.db`
-不会被修改。演示期间把 `DATABASE_PATH` 设置为 `showcase-sim.db`，用户端后续产生
-的新订单也会写入同一数据库，从而形成实时业务和历史分析闭环。
-
-## 7. 终端 1：启动 Qt 后端
-
-腾讯地图 Key 应保存在仓库外的环境文件中：
-
-```bash
-cd "$PROJECT_ROOT"
-
 set -a
-[ -f /etc/map-for-ecar/server.env ] && source /etc/map-for-ecar/server.env
+[ ! -f /etc/map-for-ecar/server.env ] || source /etc/map-for-ecar/server.env
 set +a
-
+export DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
+export DASHBOARD_REFRESH_MS=300000
+export DASHBOARD_INITIAL_DELAY_MS=300000
 ./server-qt/build/charger-server \
-  --database "${DATABASE_PATH:-$PROJECT_ROOT/server-qt/runtime/showcase.db}" \
+  --database "$DATABASE_PATH" \
   --host 127.0.0.1 \
   --port 9000 \
   --dashboard-port 9001
 ```
 
-保持终端运行。另开终端检查：
+保持终端运行。此处将 Qt 内嵌大屏汇总推迟 5 分钟，减少大模拟库启动时的阻塞；Vue 通过 Flask 读取实时数据，不依赖 9001 的汇总刷新。
+
+如果报 `Startup failed, code=50000`，先检查数据库路径、完整性和权限，查看终端日志，再检查迁移，不要删除数据库：
 
 ```bash
-ss -ltn | grep -E ':9000|:9001'
+ls -l "$DATABASE_PATH"
+test -r "$DATABASE_PATH" && test -w "$DATABASE_PATH" && echo 'database readable/writable'
+./server-qt/build/charger-server --help
 ```
 
-## 8. 终端 2：打开用户端
+## 5. 终端 B/C：打开用户端和管理端
 
-必须在 Linux 桌面终端中执行：
+必须在 Ubuntu 桌面终端中运行，不能直接在没有图形会话的 SSH 中打开 Qt 窗口。
+
+终端 B：
 
 ```bash
 cd "$PROJECT_ROOT/clients/user-qt"
 ./charging-user-client
 ```
 
-默认演示用户为 `13900000000`。
+演示用户手机号：`13900000000`。
 
-## 9. 终端 3：打开管理端
-
-必须在 Linux 桌面终端中执行：
+终端 C：
 
 ```bash
 cd "$PROJECT_ROOT/clients/admin-qt"
 ./ChargingAdmin
 ```
 
-默认演示账号为 `admin / 123456`。
+管理账号：`admin / 123456`。连接同机 Qt 后端 `127.0.0.1:9000`。
 
-## 10. 完成一笔真实订单
-
-在用户端依次执行：
-
-1. 登录并充值。
-2. 选择有空闲电桩的站点。
-3. 创建订单并预约。
-4. 开始充电。
-5. 结束充电。
-6. 使用余额支付。
-
-随后在管理端检查订单、今日订单数、营收和电桩状态。管理端实时业务数据直接来自
-Qt 后端和 SQLite，因此应立即更新。
-
-检查数据库：
+先确认两个端均能登录、查询站点和订单。在用户端依次充值、预约空闲电桩、开始充电、结束充电、支付。记下订单号，在管理端找到同一笔订单。
 
 ```bash
-sqlite3 -header -column "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  "SELECT id,order_no,status,energy_wh,amount_cents,paid_at FROM charging_orders ORDER BY id DESC LIMIT 5;"
-
-sqlite3 -header -column "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  "SELECT id,user_id,amount_cents,balance_after_cents,created_at FROM recharge_records ORDER BY id DESC LIMIT 5;"
-
-sqlite3 -header -column "$PROJECT_ROOT/server-qt/runtime/showcase.db" \
-  "SELECT id,pile_id,order_id,old_status,new_status,reason,created_at FROM pile_status_logs ORDER BY id DESC LIMIT 10;"
+sqlite3 -header -column "$DATABASE_PATH" \
+  'SELECT id,order_no,status,energy_wh,amount_cents,paid_at FROM charging_orders ORDER BY id DESC LIMIT 5;'
 ```
 
-## 11. 终端 4：导出 SQLite 只读快照
+## 6. 终端 D：导出快照并运行 Spark 数仓
 
 ```bash
 cd "$PROJECT_ROOT"
-
-SNAPSHOT=$(python3 spark-warehouse/generator/export_sqlite_snapshot.py \
-  --database "${DATABASE_PATH:-$PROJECT_ROOT/server-qt/runtime/showcase.db}" \
-  --output "$PROJECT_ROOT/spark-warehouse/runtime/business-snapshots")
-
-export SNAPSHOT
-export BATCH=$(basename "$SNAPSHOT")
-
-echo "SNAPSHOT=$SNAPSHOT"
-echo "BATCH=$BATCH"
-cat "$SNAPSHOT/metadata.json"
-```
-
-快照包含用户、站点、电桩、订单、充值和电桩状态日志六张 CSV。导出器以 SQLite
-只读模式打开数据库，并在同一事务中读取所有表。
-
-## 12. 运行 ODS→质量检测→DWD→DWS→ADS
-
-```bash
-cd "$PROJECT_ROOT/spark-warehouse"
-
+python3 -m pytest -q spark-warehouse/tests
+mkdir -p spark-warehouse/runtime
+export SNAPSHOT="$(python3 spark-warehouse/generator/export_sqlite_snapshot.py \
+  --database "$DATABASE_PATH" \
+  --output "$PROJECT_ROOT/spark-warehouse/runtime/business-snapshots")"
+export BATCH="$(basename "$SNAPSHOT")"
 export WAREHOUSE="$PROJECT_ROOT/spark-warehouse/runtime/business-warehouse/$BATCH"
+cat "$SNAPSHOT/metadata.json"
 
+cd "$PROJECT_ROOT/spark-warehouse"
+set -o pipefail
 python3 jobs/run_pipeline.py \
   --master 'local[2]' \
-  --spark-submit "$(command -v spark-submit)" \
+  --spark-submit "$SPARK_HOME/bin/spark-submit" \
   --input "$SNAPSHOT" \
   --warehouse "$WAREHOUSE" \
   --batch-id "$BATCH" \
   2>&1 | tee "runtime/pipeline-$BATCH.log"
-
-echo "PIPELINE_EXIT=${PIPESTATUS[0]}"
+export PIPELINE_EXIT=$?
+echo "PIPELINE_EXIT=$PIPELINE_EXIT"
 ```
 
-`PIPELINE_EXIT=0` 表示全部分层成功。检查结果：
+只有 `PIPELINE_EXIT=0` 才继续。失败时查看日志末尾，暂不切换 Flask 批次。成功后保存跨终端配置：
 
 ```bash
+if [ "$PIPELINE_EXIT" -eq 0 ]; then
+  printf 'export SNAPSHOT=%q\nexport BATCH=%q\nexport WAREHOUSE=%q\n' \
+    "$SNAPSHOT" "$BATCH" "$WAREHOUSE" > "$PROJECT_ROOT/spark-warehouse/runtime/latest-flow.env"
+fi
 find "$WAREHOUSE" -name _SUCCESS | sort
 cat "$WAREHOUSE/ads/ads_overview/batch_id=$BATCH/json"/part-*.json
-cat "$WAREHOUSE/ads/ads_revenue_trend_30d/batch_id=$BATCH/json"/part-*.json
-head -10 "$WAREHOUSE/ads/ads_station_ranking_30d/batch_id=$BATCH/json"/part-*.json
 cat "$WAREHOUSE/ads/ads_quality_overview/batch_id=$BATCH/json"/part-*.json
 ```
 
-实际数据库至少需要一条带业务日期的订单，否则 ADS 无法确定统计截止日期。
+流程为 SQLite 只读导出六张表 → ODS → 质量检测 → DWD 清洗 → DWS 聚合 → ADS 指标。业务库不会被 Spark 清洗修改。
 
-## 13. 终端 5：启动 Flask API
+此前本地文件系统模式已通过，初始批次有 49,945 笔有效订单、735 个质量问题、55 条隔离记录。新业务和代码更新后数字可能变化，数据质量问题的存在不等于流程失败。
 
-跨终端时重新定位最新成功批次：
+## 7. HDFS 存储验证
 
 ```bash
-cd "$PROJECT_ROOT/spark-warehouse"
+jps
+```
 
-export SNAPSHOT=$(find runtime/business-snapshots -mindepth 1 -maxdepth 1 \
-  -type d -name 'sqlite-*' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
-export BATCH=$(basename "$SNAPSHOT")
-export WAREHOUSE="$PROJECT_ROOT/spark-warehouse/runtime/business-warehouse/$BATCH"
+若 NameNode、DataNode 未运行，执行：
+
+```bash
+start-dfs.sh
+```
+
+检查 HDFS，等待安全模式自动退出：
+
+```bash
+jps
+hdfs dfsadmin -safemode get
+hdfs dfsadmin -report
+```
+
+不要重新执行 NameNode format。已有数据时，若长期处于安全模式，先检查 DataNode 和磁盘，不要直接强制退出。
+
+```bash
+source "$PROJECT_ROOT/spark-warehouse/runtime/latest-flow.env"
+export HDFS_INPUT="/map-for-ecar/input/$BATCH"
+hdfs dfs -mkdir -p "$HDFS_INPUT"
+hdfs dfs -put -f "$SNAPSHOT/dirty" "$HDFS_INPUT/"
+hdfs dfs -put -f "$SNAPSHOT/metadata.json" "$HDFS_INPUT/"
+hdfs dfs -ls -R "$HDFS_INPUT"
+hdfs dfs -cat "$HDFS_INPUT/metadata.json"
+```
+
+应看到六张 CSV 和 metadata。当前完整测试使用本地 Spark 数仓加 HDFS 快照存储；Spark 全部分层直接在 HDFS 中读写仍需单独验证，不能将本节上传成功当成 HDFS 数仓计算成功。
+
+## 8. 预测：先验证演示，再测试真实业务训练
+
+快速生成项目自带模拟预测：
+
+```bash
+cd "$PROJECT_ROOT"
+python3 ml/src/workflow.py demo ml/outputs/dashboard-demo-test
+export ML_PREDICTIONS_PATH="$PROJECT_ROOT/ml/outputs/dashboard-demo-test/predictions.json"
+python3 -m json.tool "$ML_PREDICTIONS_PATH" | head -40
+```
+
+这是模拟站点的预测展示测试，演示日期由生成器决定，不能用于证明当前真实站点预测准确。
+
+真实业务训练可单独测试（大库耗时并产生较多中间文件）：
+
+```bash
+cd "$PROJECT_ROOT"
+python3 ml/src/qt_pipeline.py \
+  --database "$DATABASE_PATH" \
+  --start 2026-06-17T00:00:00Z \
+  --work-dir ml/outputs/qt-showcase-test \
+  --output ml/outputs/forecast-live-test.json \
+  --simulated
+```
+
+此起始日期对应当前历史模拟库。此前这份库训练被质量门禁拦截，曾出现 `Rejected orders/events`，因此真实库预测尚未通过完整验收。若再次出现该错误，查看工作目录的 `history.quality.json`；保留演示预测，不要绕过门禁发布结果。`--simulated` 明确标记输入为模拟库。
+
+## 9. 终端 E：启动 Flask
+
+执行第 2 节，然后：
+
+```bash
+cd "$PROJECT_ROOT"
+source spark-warehouse/runtime/latest-flow.env
 export ADS_ROOT="$WAREHOUSE/ads"
 export ADS_BATCH_ID="$BATCH"
 export ADS_CACHE_SECONDS=5
+export DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
+export ML_PREDICTIONS_PATH="$PROJECT_ROOT/ml/outputs/dashboard-demo-test/predictions.json"
 export FLASK_HOST=0.0.0.0
 export FLASK_PORT=5000
-
-python3 flask-api/app.py
+python3 spark-warehouse/flask-api/app.py
 ```
 
-保持终端运行。
+实时订单、今日数据、电桩状态来自只读 SQLite；历史排行、分析和质量报告来自 ADS；预测来自指定 JSON。`/api/v1/overview` 是批次指标，比较管理端今日实时指标应使用 `/api/dashboard`。
 
-## 14. 终端 6：验证 Flask
-
-```bash
-curl -fsS http://127.0.0.1:5000/health
-curl -fsS http://127.0.0.1:5000/api/v1/overview
-curl -fsS http://127.0.0.1:5000/api/dashboard
-curl -fsS http://127.0.0.1:5000/api/analytics
-```
-
-## 15. Ubuntu 终端 7：启动 Vue/ECharts 大屏
-
-Vue 可以和 Qt、Spark、Flask 一起在同一台 Ubuntu 主机运行。先确认 Node.js 版本
-不低于 18，然后进入 `web-bigscreen`：
+## 10. 终端 F：启动 Vue 大屏
 
 ```bash
-node --version
-npm --version
 cd "$PROJECT_ROOT/web-bigscreen"
-npm install
-```
-
-同机运行：
-
-```bash
 export DASHBOARD_TARGET=http://127.0.0.1:5000
 export VITE_USE_MOCK=false
 export VITE_USE_ANALYTICS=true
 npm run dev -- --host 0.0.0.0 --port 5174 --strictPort
 ```
 
-在 Ubuntu 浏览器访问 `http://127.0.0.1:5174/`。局域网中的其他电脑访问
-`http://UBUNTU_HOST:5174/`。如启用了 UFW：
+Ubuntu 浏览器打开 `http://127.0.0.1:5174/`。Windows 主机打开 `http://192.168.88.128:5174/`，IP 改变时替换为当前地址。端口占用时关闭旧 Vue，不要改端口掩盖重复服务。
+
+## 11. 终端 G：接口和数据闭环验收
 
 ```bash
-sudo ufw allow 5000/tcp
-sudo ufw allow 5174/tcp
+curl -fsS http://127.0.0.1:5000/health
+curl -fsS http://127.0.0.1:5000/api/dashboard | python3 -m json.tool
+curl -fsS http://127.0.0.1:5000/api/analytics | python3 -m json.tool
+curl -fsS http://127.0.0.1:5174/api/dashboard | python3 -m json.tool
 ```
 
-也可以在开发电脑运行 Vue。此时将 `FLASK_HOST` 替换为 Ubuntu 主机地址：
+执行自动对账（比较过程中暂停创建或支付新订单）：
 
 ```bash
-export DASHBOARD_TARGET=http://FLASK_HOST:5000
-export VITE_USE_MOCK=false
-export VITE_USE_ANALYTICS=true
-npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
+python3 - <<'PY'
+import json, os, sqlite3, urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+with urllib.request.urlopen('http://127.0.0.1:5174/api/dashboard', timeout=30) as r:
+    data = json.load(r)
+now = datetime.now(ZoneInfo('Asia/Shanghai'))
+start = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+bounds = tuple(t.isoformat(timespec='milliseconds').replace('+00:00', 'Z') for t in (start, start + timedelta(days=1)))
+with sqlite3.connect(Path(os.environ['DATABASE_PATH']).resolve().as_uri() + '?mode=ro', uri=True) as db:
+    orders = db.execute('SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?', bounds).fetchone()[0]
+    revenue = db.execute("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?", bounds).fetchone()[0]
+    energy = db.execute("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE status IN ('UNPAID','COMPLETED') AND stopped_at>=? AND stopped_at<?", bounds).fetchone()[0]
+assert data['today_orders'] == orders, (data['today_orders'], orders)
+assert data['today_revenue_cents'] == revenue, (data['today_revenue_cents'], revenue)
+assert data['trend'][-1]['energy_wh'] == energy
+assert data['realtime_orders'], '实时订单为空'
+assert data['load_prediction']['points'], '预测为空，请检查预测路径'
+print('PASS 今日订单/营收/电量与SQLite一致；实时订单和预测均非空')
+print('今日订单:', orders, '营收(分):', revenue, '电量(Wh):', energy)
+print('最新订单:', data['realtime_orders'][0]['order_no'])
+PY
 ```
 
-访问 `http://127.0.0.1:5174/`。
+今日统计按北京时间：订单数按创建时间；营收按已完成订单的支付时间；电量按结束时间统计 UNPAID/COMPLETED。界面会将分换算为元、Wh 换算为 kWh，不要直接比较显示值与数据库整数。
 
-Windows PowerShell 等价命令：
+闭环测试按以下顺序：
 
-```powershell
-cd PATH_TO_REPOSITORY\web-bigscreen
-$env:DASHBOARD_TARGET='http://FLASK_HOST:5000'
-$env:VITE_USE_MOCK='false'
-$env:VITE_USE_ANALYTICS='true'
-npm install
-npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
-```
+1. 记录管理端和大屏今日订单、营收和电量。
+2. 用户端完成并支付一笔新订单，记录订单号。
+3. 刷新管理端和大屏，确认订单号出现，再运行上述对账。
+4. 重跑第 6 节生成新 ADS 批次；历史排行和分析需要该批次计算，不是实时刷新。
+5. 在终端 E 按 Ctrl+C，重跑第 9 节加载新批次；刷新 Vue，检查排行、趋势、批次信息。
+6. 重跑第 7 节上传新快照；预测不会随订单自动重训，需单独执行第 8 节。
 
-## 16. 验证完整数据闭环
+## 12. 停止与问题定位
 
-1. 记录管理端和 Vue 当前订单数、营收、趋势及站点排行。
-2. 在用户端完成并支付一笔新订单。
-3. 确认管理端实时订单列表立即出现该订单。
-4. 重新执行第 11、12 节，生成新的快照和 ADS 批次。
-5. 使用新批次重新启动 Flask。
-6. 刷新 Vue，确认订单数、营收、趋势、站点排行及批次时间更新。
-
-每个 SQLite 快照和数仓批次都有唯一目录，旧结果不会被覆盖。
-
-## 17. HDFS 基础验证
-
-```bash
-start-dfs.sh
-jps
-hdfs dfsadmin -safemode get
-```
-
-首次启动处于安全模式时：
-
-```bash
-hdfs dfsadmin -safemode leave
-```
-
-上传当前快照：
-
-```bash
-hdfs dfs -mkdir -p "/user/$USER/map-for-ecar/business-snapshots/$BATCH"
-hdfs dfs -put -f "$SNAPSHOT/dirty" "/user/$USER/map-for-ecar/business-snapshots/$BATCH/"
-hdfs dfs -put -f "$SNAPSHOT/metadata.json" "/user/$USER/map-for-ecar/business-snapshots/$BATCH/"
-hdfs dfs -ls -R "/user/$USER/map-for-ecar/business-snapshots/$BATCH"
-```
-
-当前推荐使用第 12 节的本地文件系统模式完成现场演示。单节点环境下 Spark 全部分层
-直接写入 HDFS 的质量检测阶段仍在优化。
-
-## 18. 测试和构建检查
-
-```bash
-cd "$PROJECT_ROOT"
-python3 -m unittest discover -s ml/tests -p 'test_*.py' -v
-python3 -m unittest discover -s analytics-hadoop -p 'test_*.py' -v
-python3 -m unittest discover -s spark-warehouse/tests -p 'test_*.py' -v
-
-cd web-bigscreen
-npm run build
-```
-
-## 19. 停止服务
-
-关闭用户端和管理端窗口。Qt 后端、Flask 和 Vue 所在终端分别按 `Ctrl+C`。
-
-停止 HDFS：
+关闭 Qt 客户端窗口，在 Qt 后端、Flask、Vue 各终端按 Ctrl+C。需要停止 HDFS 时：
 
 ```bash
 stop-dfs.sh
-jps
+ss -ltnp | grep -E ':9000|:9001|:5000|:5174'
+df -h /
 ```
+
+| 现象 | 首先检查 |
+|---|---|
+| Ubuntu 无 IP | Windows 的 VMware NAT Service、VMnetDHCP 以及虚拟机网卡连接状态 |
+| Node/Vite 报错 | `node --version`、`command -v node`，确认用户安装的 Node 20 优先 |
+| 用户端/管理端连接失败 | 9000 监听、Qt 后端日志、客户端连接地址 |
+| 实时订单为空或今日不一致 | Flask 的 DATABASE_PATH 是否与 Qt 完全相同、代码是否含 5eb7ba9 |
+| 预测为空 | ML_PREDICTIONS_PATH 文件存在且含 predictions，重启 Flask |
+| ADS 空或读取失败 | 流程退出码、_SUCCESS、ADS_ROOT、ADS_BATCH_ID |
+| 磁盘或内存不足 | `df -h /`、`free -h`，避免重复运行大库训练/数仓任务 |
+
+原模拟数据日期不会随每天开机自动前移；今日指标可能为零。请通过用户端新增当日业务来验证实时回路。重复生成大量批次会占用磁盘，先确认需要保留哪些批次，再清理指定旧目录。

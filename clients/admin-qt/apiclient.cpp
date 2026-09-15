@@ -34,7 +34,7 @@ QJsonObject pagination(QJsonObject object)
 QJsonObject adaptPile(QJsonObject pile)
 {
     pile.insert(QStringLiteral("pile_type"), pile.value(QStringLiteral("charge_type")));
-    pile.insert(QStringLiteral("last_heartbeat_at"), QStringLiteral("未接入"));
+    pile.insert(QStringLiteral("last_heartbeat_at"), QStringLiteral("已接入（模拟）"));
     return pile;
 }
 }

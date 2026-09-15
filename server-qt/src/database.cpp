@@ -57,6 +57,22 @@ void Database::migrate() {
     for(const auto &table:QStringList{"users","admins","stations","charging_piles","charging_orders","recharge_records","pile_status_logs","operation_logs"})
         if(!db.tables().contains(table)) fail(50001);
     if(!rows("PRAGMA foreign_key_check").isEmpty()) fail(50001);
+    // Install query indexes on both existing and newly created databases.
+    // Station must lead the ranking index to avoid scanning all paid orders per station.
+    Transaction indexes(*this);
+    for(const auto &sql:QStringList{
+        "CREATE INDEX IF NOT EXISTS idx_orders_created_id ON charging_orders(created_at,id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_started ON charging_orders(started_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_status_paid ON charging_orders(status,paid_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_station_status_paid ON charging_orders(station_id,status,paid_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_pile_status ON charging_orders(pile_id,status)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_user_status ON charging_orders(user_id,status)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_status_stopped ON charging_orders(status,stopped_at)",
+        "CREATE INDEX IF NOT EXISTS idx_piles_station_status ON charging_piles(station_id,status)",
+        "CREATE INDEX IF NOT EXISTS idx_pile_logs_pile_id ON pile_status_logs(pile_id,id)",
+        "CREATE INDEX IF NOT EXISTS idx_recharges_user_id ON recharge_records(user_id,id)"
+    }) execute(sql);
+    indexes.commit();
 }
 /// 以幂等方式创建管理员，校验账号长度并保存加密密码摘要。
 void Database::createAdmin(const QString &name,const QString &password) {

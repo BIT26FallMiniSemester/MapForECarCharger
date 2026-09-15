@@ -39,6 +39,17 @@ class JobContractTests(unittest.TestCase):
             "hdfs:///warehouse/ods_users/batch_id=batch-001",
         )
 
+    def test_local_batch_path_is_explicit_even_with_hadoop_config(self):
+        root = ROOT / "runtime" / "warehouse"
+        self.assertEqual(
+            batch_table_path(str(root), "ods_users", "batch-001"),
+            root.resolve().as_uri() + "/ods_users/batch_id=batch-001",
+        )
+        self.assertEqual(
+            batch_table_path("file:///tmp/warehouse/", "ods_users", "batch-001"),
+            "file:///tmp/warehouse/ods_users/batch_id=batch-001",
+        )
+
     def test_vscode_tasks_are_valid_json(self):
         tasks = json.loads((ROOT.parent / ".vscode" / "tasks.json").read_text(encoding="utf-8"))
         self.assertEqual(tasks["version"], "2.0.0")
