@@ -85,6 +85,11 @@ button, input { font: inherit; }
 .area-orders { grid-area: orders; }
 .area-warning { grid-area: warning; }
 .area-overview { grid-area: overview; }
+.comparison-panel { height: 380px; margin-top: 16px; }
+.comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: calc(100% - 36px); }
+.comparison-grid > div { min-width: 0; height: 100%; }
+.comparison-grid h3 { margin: 0; font-size: 14px; color: #9fb7d4; }
+.comparison-grid .chart { height: calc(100% - 24px); }
 
 .panel {
   min-width: 0;

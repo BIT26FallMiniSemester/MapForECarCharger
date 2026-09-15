@@ -1,4 +1,4 @@
-"""Detect DQ001-DQ017 from ODS data without consulting injection metadata."""
+"""Detect DQ001-DQ018 from ODS data without consulting injection metadata."""
 from __future__ import annotations
 
 import argparse
@@ -97,6 +97,16 @@ def detect(frames: dict, batch_id: str):
                  .withColumn("_start", started).withColumn("_stop", stopped)
                  .withColumn("_previous_stop", F.max("_stop").over(Window.partitionBy(F.trim("pile_id")).orderBy("_start", "row_id").rowsBetween(Window.unboundedPreceding, -1))))
     issue_frames.append(intervals.where(F.col("_previous_stop").isNotNull() & (F.col("_start") < F.col("_previous_stop"))).select(F.lit(batch_id).alias("batch_id"), F.lit("charging_orders").alias("table_name"), "row_id", F.lit("DQ017").alias("rule_id"), F.lit("ERROR").alias("severity"), F.lit("charging session overlaps an earlier session on the same pile").alias("reason"), F.current_timestamp().alias("detected_at")))
+    rated = piles.select(F.trim("id").alias("rated_pid"), F.col("rated_power_w").cast("double").alias("rated_power_w"))
+    powered = orders.alias("o").join(rated, F.trim("o.pile_id") == F.col("rated_pid"), "left")
+    duration = F.unix_timestamp(parse_timestamp("o.stopped_at")) - F.unix_timestamp(parse_timestamp("o.started_at"))
+    issue_frames.append(powered.where((F.col("rated_power_w") > 0) & (duration > 0) &
+        (F.col("o.energy_wh").cast("double") > F.col("rated_power_w") * duration / 3600 + 1)).select(
+        F.lit(batch_id).alias("batch_id"), F.lit("charging_orders").alias("table_name"),
+        F.col("o.row_id").alias("row_id"), F.lit("DQ018").alias("rule_id"),
+        F.lit("ERROR").alias("severity"),
+        F.lit("charging energy exceeds pile rated power over the order interval").alias("reason"),
+        F.current_timestamp().alias("detected_at")))
     return reduce(lambda left, right: left.unionByName(right), issue_frames).dropDuplicates(["batch_id", "table_name", "row_id", "rule_id"])
 
 

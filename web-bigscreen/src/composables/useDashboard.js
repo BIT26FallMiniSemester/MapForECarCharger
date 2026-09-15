@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getDashboard, getAnalytics, USE_MOCK, USE_ANALYTICS } from '../api/dashboard'
+import { getDashboard, getAnalytics, getComparisons, USE_MOCK, USE_ANALYTICS, USE_SPARK_COMPARISONS } from '../api/dashboard'
 import { mergeAnalytics } from '../api/analytics.mjs'
 
 export function useDashboard() {
@@ -7,6 +7,8 @@ export function useDashboard() {
     stationRanking: { items: [] }, stationDistribution: { items: [] },
     loadPrediction: { points: [] }, realtimeOrders: { items: [] } })
   const batch = ref(null)
+  const comparisons = ref(null)
+  const comparisonError = ref('正在读取 Spark 双维对比')
   const batchError = ref('正在读取批处理结果')
   const error = ref('')
   const dataSource = ref('正在连接')
@@ -32,13 +34,20 @@ export function useDashboard() {
         if (stopped) return
         batch.value = null
         batchError.value = '批处理结果不可用，历史图表暂用 Qt 汇总'
+      })),
+      (USE_MOCK || !USE_SPARK_COMPARISONS ? Promise.resolve() : getComparisons(controller.signal).then(data => {
+        if (stopped) return
+        comparisons.value = data
+        comparisonError.value = ''
+      }).catch(() => {
+        if (!stopped) comparisonError.value = 'Spark 双维对比暂不可用'
       }))
     ])
     if (!stopped) timer = setTimeout(refresh, 5000)
   }
   onMounted(refresh)
   onBeforeUnmount(() => { stopped = true; clearTimeout(timer); controller?.abort() })
-  return { error, dataSource,
+  return { error, dataSource, comparisons, comparisonError,
     ...Object.fromEntries(['overview', 'revenueTrend', 'pileStatus', 'stationRanking',
       'stationDistribution', 'loadPrediction', 'realtimeOrders', 'analytics'].map(key => [key, computed(() => merged.value[key])])) }
 }

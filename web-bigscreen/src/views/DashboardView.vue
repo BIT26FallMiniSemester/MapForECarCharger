@@ -70,6 +70,10 @@
         <WarningList :warnings="warnings" />
       </PanelCard>
     </main>
+    <PanelCard v-if="USE_SPARK_COMPARISONS" class="comparison-panel" title="Spark 双维交叉对比" subtitle="近 30 日 · 区域×桩型 / 工作日类型×充电开始小时">
+      <p v-if="comparisonError" role="status">{{ comparisonError }}</p>
+      <DimensionComparison v-if="comparisons" :data="comparisons" />
+    </PanelCard>
   </div>
 </template>
 
@@ -84,12 +88,14 @@ import LoadPrediction from '../components/LoadPrediction.vue'
 import DistributionMap from '../components/DistributionMap.vue'
 import RealtimeOrders from '../components/RealtimeOrders.vue'
 import WarningList from '../components/WarningList.vue'
+import DimensionComparison from '../components/DimensionComparison.vue'
 import { useDashboard } from '../composables/useDashboard'
+import { USE_SPARK_COMPARISONS } from '../api/dashboard'
 import { centsToYuan, formatNumber, whToKwh } from '../utils/format'
 
 const currentTime = ref('')
 const { error, dataSource, overview, revenueTrend, pileStatus, stationRanking,
-  stationDistribution, loadPrediction, realtimeOrders, analytics } = useDashboard()
+  stationDistribution, loadPrediction, realtimeOrders, analytics, comparisons, comparisonError } = useDashboard()
 let clock
 
 const availablePileText = computed(() => `${overview.value.available_pile_count || 0}/${overview.value.pile_count || 0}`)
@@ -127,7 +133,6 @@ onBeforeUnmount(() => {
   clearInterval(clock)
 })
 </script>
-
 
 
 

@@ -34,7 +34,13 @@ def build(spark, frames: dict, stations, piles, batch_id: str):
       WITH latest AS (SELECT * FROM dws_platform_day WHERE biz_date=date'{data_as_of}'),
       totals AS (SELECT sum(revenue_cents) total_revenue_cents,sum(order_count) total_order_count FROM dws_platform_day),
       pile_stats AS (SELECT count(*) pile_count,sum(CASE WHEN status NOT IN ('FAULT','OFFLINE') THEN 1 ELSE 0 END) online_pile_count FROM dim_pile),
-      quality AS (SELECT sum(issue_count) issue_count,sum(total_rows) checked_rows FROM dws_data_quality_batch)
+      quality AS (
+        SELECT sum(issue_count) issue_count,
+          (SELECT sum(total_rows) FROM (
+            SELECT table_name,max(total_rows) total_rows FROM dws_data_quality_batch GROUP BY table_name
+          )) checked_rows
+        FROM dws_data_quality_batch
+      )
       SELECT '{batch_id}' batch_id,current_timestamp() generated_at,date'{data_as_of}' data_as_of,
         t.total_revenue_cents,t.total_order_count,l.revenue_cents today_revenue_cents,l.order_count today_order_count,
         l.energy_wh today_energy_wh,(SELECT count(*) FROM dim_station) station_count,p.pile_count,p.online_pile_count,
@@ -91,10 +97,16 @@ def build(spark, frames: dict, stations, piles, batch_id: str):
       GROUP BY p.pile_id,p.station_id,s.station_name ORDER BY utilization_rate DESC,p.pile_id LIMIT 100
     """)
     quality_overview = spark.sql(f"""
+      WITH totals AS (
+        SELECT table_name,max(total_rows) total_rows,max(quarantine_count) quarantine_count
+        FROM dws_data_quality_batch GROUP BY table_name
+      ), issues AS (
+        SELECT sum(issue_count) issue_count,sum(affected_rows) affected_rows FROM dws_data_quality_batch
+      )
       SELECT '{batch_id}' batch_id,current_timestamp() generated_at,date'{data_as_of}' data_as_of,
-        sum(issue_count) issue_count,sum(affected_rows) affected_rows,sum(quarantine_count) quarantine_count,
-        sum(total_rows) checked_rows,round(100.0*(1.0-least(sum(issue_count)/sum(total_rows),1.0)),2) quality_score
-      FROM dws_data_quality_batch
+        i.issue_count,i.affected_rows,sum(t.quarantine_count) quarantine_count,sum(t.total_rows) checked_rows,
+        round(100.0*(1.0-least(i.issue_count/sum(t.total_rows),1.0)),2) quality_score
+      FROM issues i CROSS JOIN totals t GROUP BY i.issue_count,i.affected_rows
     """)
     quality_rules = spark.sql(f"""
       SELECT '{batch_id}' batch_id,current_timestamp() generated_at,date'{data_as_of}' data_as_of,
@@ -102,11 +114,52 @@ def build(spark, frames: dict, stations, piles, batch_id: str):
         round(sum(issue_count)/sum(total_rows),6) issue_rate
       FROM dws_data_quality_batch GROUP BY rule_id ORDER BY rule_id
     """)
+    district_charge_type = spark.sql(f"""
+      WITH counts AS (
+        SELECT s.district,p.charge_type,count(*) order_count,sum(o.energy_wh) energy_wh,
+          sum(o.amount_cents) revenue_cents
+        FROM dwd_charging_order_detail o
+        JOIN dim_station s ON o.station_id=s.station_id
+        JOIN dim_pile p ON o.pile_id=p.pile_id AND o.station_id=p.station_id
+        WHERE o.status='COMPLETED' AND o.biz_date > date_sub(date'{data_as_of}',30)
+        GROUP BY s.district,p.charge_type
+      ), population AS (
+        SELECT district,count(*) station_count FROM dim_station GROUP BY district
+      )
+      SELECT '{batch_id}' batch_id,current_timestamp() generated_at,date'{data_as_of}' data_as_of,
+        c.*,p.station_count,round(c.order_count/p.station_count,4) orders_per_station
+      FROM counts c JOIN population p ON c.district=p.district ORDER BY c.district,c.charge_type
+    """)
+    day_type_hour = spark.sql(f"""
+      WITH starts AS (
+        SELECT o.energy_wh,o.amount_cents,
+          to_date(from_utc_timestamp(o.started_at,'Asia/Shanghai')) start_date,
+          hour(from_utc_timestamp(o.started_at,'Asia/Shanghai')) start_hour
+        FROM dwd_charging_order_detail o
+        WHERE o.status='COMPLETED' AND o.started_at IS NOT NULL
+          AND o.biz_date > date_sub(date'{data_as_of}',30)
+      ), counts AS (
+        SELECT CASE WHEN dayofweek(start_date) IN (1,7) THEN 'WEEKEND' ELSE 'WEEKDAY' END day_type,
+          start_hour biz_hour,count(*) order_count,sum(energy_wh) energy_wh,
+          sum(amount_cents) revenue_cents
+        FROM starts GROUP BY day_type,start_hour
+      ), calendar AS (
+        SELECT CASE WHEN dayofweek(biz_date) IN (1,7) THEN 'WEEKEND' ELSE 'WEEKDAY' END day_type,
+          count(*) sample_days
+        FROM (SELECT explode(sequence(date_sub(date'{data_as_of}',29),date'{data_as_of}',interval 1 day)) biz_date)
+        GROUP BY day_type
+      )
+      SELECT '{batch_id}' batch_id,current_timestamp() generated_at,date'{data_as_of}' data_as_of,
+        c.*,d.sample_days,round(c.order_count/d.sample_days,4) avg_orders_per_day
+      FROM counts c JOIN calendar d ON c.day_type=d.day_type ORDER BY c.day_type,c.biz_hour
+    """)
     return {"ads_overview": overview, "ads_revenue_trend_30d": trend,
             "ads_station_ranking_30d": ranking, "ads_district_distribution": districts,
             "ads_station_distribution": station_distribution, "ads_pile_status": pile_status,
             "ads_pile_utilization": utilization, "ads_quality_overview": quality_overview,
-            "ads_quality_rules": quality_rules}
+            "ads_quality_rules": quality_rules,
+            "ads_district_charge_type_30d": district_charge_type,
+            "ads_day_type_hour_30d": day_type_hour}
 
 
 def main():
@@ -117,6 +170,8 @@ def main():
         frames = {name: spark.read.parquet(batch_table_path(args.dws, name, batch_id)) for name in DWS_TABLES}
         stations = spark.read.parquet(batch_table_path(args.dwd, "dim_station", batch_id))
         piles = spark.read.parquet(batch_table_path(args.dwd, "dim_pile", batch_id))
+        orders = spark.read.parquet(batch_table_path(args.dwd, "dwd_charging_order_detail", batch_id))
+        orders.createOrReplaceTempView("dwd_charging_order_detail")
         for name, frame in build(spark, frames, stations, piles, batch_id).items():
             target = batch_table_path(args.output, name, batch_id)
             frame.write.mode("overwrite").parquet(f"{target}/parquet")

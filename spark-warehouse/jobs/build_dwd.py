@@ -11,7 +11,7 @@ BLOCKING_RULES = {
     "users": ["DQ001"],
     "stations": ["DQ003"],
     "charging_piles": ["DQ005", "DQ006"],
-    "charging_orders": ["DQ008", "DQ009", "DQ010", "DQ011", "DQ012", "DQ013", "DQ017"],
+    "charging_orders": ["DQ008", "DQ009", "DQ010", "DQ011", "DQ012", "DQ013", "DQ017", "DQ018"],
     "recharge_records": ["DQ014"],
     "pile_status_logs": ["DQ015"],
 }
@@ -78,8 +78,10 @@ def build(frames: dict, issues):
         F.col("id").cast("long").alias("station_id"), F.trim("name").alias("station_name"),
         F.trim("address").alias("address"), F.col("latitude").cast("double").alias("latitude"),
         F.col("longitude").cast("double").alias("longitude"),
-        F.when(F.trim("operator_name") == "", "UNKNOWN").otherwise(F.trim("operator_name")).alias("operator_name"),
-        F.when(F.trim("district") == "", "未知区域").otherwise(F.trim("district")).alias("district"),
+        F.when(F.coalesce(F.trim("operator_name"), F.lit("")) == "", "UNKNOWN")
+        .otherwise(F.trim("operator_name")).alias("operator_name"),
+        F.when(F.coalesce(F.trim("district"), F.lit("")) == "", "未知区域")
+        .otherwise(F.trim("district")).alias("district"),
         F.col("price_cents_per_kwh").cast("long").alias("price_cents_per_kwh"),
         F.upper(F.trim("status")).alias("status"), F.trim("service_type").alias("service_type"),
         F.trim("location_type").alias("location_type"), F.col("fast_connector_count").cast("int").alias("fast_connector_count"),
