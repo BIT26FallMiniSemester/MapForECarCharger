@@ -43,11 +43,11 @@ fi
 
 ```bash
 export PROJECT_ROOT="$HOME/MapForECarCharger"
-export JAVA_HOME="$HOME/apps/jdk1.8.0_261"
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export HADOOP_HOME="$HOME/apps/hadoop-3.2.1"
-export SPARK_HOME="$HOME/apps/pyspark-3.5.9/deps"
-export PYTHONPATH="$HOME/apps/pyspark-3.5.9:$HOME/apps/pyspark-3.5.9/lib/py4j-0.10.9.7-src.zip${PYTHONPATH:+:$PYTHONPATH}"
-export PATH="$HOME/.local/bin:$HOME/.local/node20/node_modules/.bin:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$SPARK_HOME/bin:$PATH"
+export SPARK_HOME=/home/zjs/apps/map-for-ecar-spark42/lib/python3.12/site-packages/pyspark
+unset PYTHONPATH
+export PATH="/home/zjs/apps/map-for-ecar-spark42/bin:$HOME/.local/bin:$HOME/.local/node24/node_modules/.bin:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$SPARK_HOME/bin:$PATH"
 export DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
 cd "$PROJECT_ROOT"
 ```
@@ -65,16 +65,16 @@ command -v qmake6
 sqlite3 --version
 ```
 
-当前环境为 Java 8、Hadoop 3.2.1、PySpark 3.5.9、Node 20.20.2。Vite 8 需要 Node **20.19+ 或 22.12+**，不要使用原来的系统 Node 18。`SPARK_HOME` 指向 `deps`，不是 PySpark 源码顶层目录。
+当前环境为 Java 17、Hadoop 3.2.1、PySpark 4.2.0、Node 24。Vite 8 需要 Node **20.19+ 或 22.12+**，不要使用原来的系统 Node 18。`SPARK_HOME` 指向新版虚拟环境内的 pyspark 包目录，不再使用旧源码 deps。
 
 现有环境无需重复安装。若 Python 包缺失：
 
 ```bash
-python3 -m pip install --user PyYAML==6.0.2 pytest==8.3.5
-python3 -m pip install --user -r spark-warehouse/flask-api/requirements.txt
+python3 -m pip install PyYAML==6.0.2 pytest==8.3.5
+python3 -m pip install -r spark-warehouse/flask-api/requirements.txt
 ```
 
-PySpark 已通过上述源码路径使用，不必再次下载大体积安装包。
+PySpark 已通过上述独立虚拟环境使用，不必再次下载大体积安装包。
 
 ## 3. 构建和数据库检查
 
@@ -307,6 +307,7 @@ cd "$PROJECT_ROOT/web-bigscreen"
 export DASHBOARD_TARGET=http://127.0.0.1:5000
 export VITE_USE_MOCK=false
 export VITE_USE_ANALYTICS=true
+export VITE_USE_SPARK_COMPARISONS=true
 npm run dev -- --host 0.0.0.0 --port 5174 --strictPort
 ```
 

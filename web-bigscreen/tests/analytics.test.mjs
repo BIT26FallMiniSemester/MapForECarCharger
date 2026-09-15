@@ -8,9 +8,10 @@ const live = { overview: { total_revenue_cents: 200, today_order_count: 8 },
 const batch = { schema_version: 1, engine: 'hadoop-mapreduce', snapshot_at: '2026-09-12T00:00:00Z',
   total_revenue_cents: 100, revenue_trend: { items: Array.from({length:30}, () => ({})) },
   station_ranking: { items: [{ station_id: 1, revenue_cents: 100 }] } }
-test('batch replaces historical totals while preserving realtime orders and current status', () => {
+test('batch replaces historical charts while preserving live totals, orders and current status', () => {
   const result = mergeAnalytics(live, { available: true, stale: false, data: batch })
-  assert.equal(result.overview.total_revenue_cents, 100)
+  assert.equal(result.overview.total_revenue_cents, 200)
+  assert.equal(result.stationRanking.items[0].revenue_cents, 100)
   assert.equal(result.overview.today_order_count, 8)
   assert.equal(result.realtimeOrders, live.realtimeOrders)
   assert.equal(result.stationRanking.items[0].utilization_rate, 20)

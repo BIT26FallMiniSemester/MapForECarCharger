@@ -182,6 +182,15 @@ def create_app(config=None):
     def quality_rules():
         return jsonify(envelope(store.load("ads_quality_rules")))
 
+    @app.get("/api/v1/comparisons")
+    def comparisons():
+        district = store.load("ads_district_charge_type_30d")
+        hours = store.load("ads_day_type_hour_30d")
+        first = (district or hours)[0] if district or hours else {}
+        return jsonify({"batch_id": first.get("batch_id"), "generated_at": first.get("generated_at"),
+                        "data_as_of": first.get("data_as_of"),
+                        "district_charge_type": district, "day_type_hour": hours})
+
     @app.get("/api/dashboard")
     def compatible_dashboard():
         row = store.load("ads_overview")[0]

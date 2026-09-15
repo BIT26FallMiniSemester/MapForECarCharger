@@ -7,6 +7,11 @@
 后再运行 Vite。页面会标记“SparkSQL 离线数仓”，并显示批次时间、统计窗口、
 订单数与数据质量评分。
 
+本地 Node.js 要求 23 以上（本轮检查为 v24.20.0），前端使用 Vue 3。Flask 模式的 `VITE_USE_SPARK_COMPARISONS=true` 会额外请求 `/api/v1/comparisons`，并排展示区域×快慢充、工作日/周末×充电开始小时两组对比；默认 Qt 模式不会请求 Flask 专属接口。
+
+macOS 请使用 Node.js 官方发行版；不要把 ChatGPT 应用包内的签名 Node 当作
+项目运行时，否则 Vite/Rolldown 的原生绑定可能因 Team ID 不一致而被系统拒绝加载。
+
 ## 运行
 
 先按照 `../server-qt/README.md` 构建并运行本合并目录中的 Qt 服务，HTTP 端口为 9001。

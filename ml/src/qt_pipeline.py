@@ -76,7 +76,11 @@ def publish(predictions_path, catalog, target, simulated=False):
             Path(name).unlink()
 
 
-def run(database, output, result, start, end, holidays=(), simulated=False):
+def run(database, output, result, start, end, holidays=(), simulated=False, accept_cleaned=False):
+    if accept_cleaned and not simulated:
+        raise ValueError('Accepting cleaned records requires an explicitly simulated database')
+    if end > int(time.time()) // 3600 * 3600:
+        raise ValueError('History end must not be in the future')
     if output.exists() and any(output.iterdir()):
         raise ValueError('Work directory must be empty')
     if result.resolve() == database.resolve():
@@ -87,7 +91,8 @@ def run(database, output, result, start, end, holidays=(), simulated=False):
     history = output / 'data/history.csv'
     _, quality = clean(catalog, output / 'data/orders.csv', output / 'data/devices.csv',
                        history, start, end, holidays)
-    if any(quality['counts'].get(key) for key in ('rejected_orders', 'overlapping_orders', 'rejected_events')):
+    dirty_keys = ('rejected_orders', 'overlapping_orders', 'rejected_events')
+    if any(quality['counts'].get(key) for key in dirty_keys) and not accept_cleaned:
         raise ValueError('Rejected orders/events; inspect history.quality.json before publishing')
     if not quality['counts'].get('accepted_orders'):
         raise ValueError('No completed charging history in this window; cannot train an operational model')
@@ -96,6 +101,8 @@ def run(database, output, result, start, end, holidays=(), simulated=False):
     predict(history, model, predictions)
     evaluation_report(Path(str(metrics) + '.evaluation.csv'), metrics, output)
     publish(predictions, catalog, result, simulated)
+    removed = sum(quality['counts'].get(key, 0) for key in dirty_keys)
+    print(f"Data cleaning: accepted_orders={quality['counts']['accepted_orders']}; removed_records={removed}")
     print(f'Qt ML ready: {result}; evaluation: {output}')
 
 
@@ -108,6 +115,8 @@ if __name__ == '__main__':
     parser.add_argument('--end', type=epoch, default=int(time.time()) // 3600 * 3600)
     parser.add_argument('--holidays', type=Path)
     parser.add_argument('--simulated', action='store_true', help='Explicitly label a synthetic input database')
+    parser.add_argument('--accept-cleaned', action='store_true',
+                        help='Continue after cleaning rejected/overlapping simulated records')
     args = parser.parse_args()
     run(args.database, args.work_dir, args.output, args.start, args.end,
-        json.loads(args.holidays.read_text()) if args.holidays else [], args.simulated)
+        json.loads(args.holidays.read_text()) if args.holidays else [], args.simulated, args.accept_cleaned)

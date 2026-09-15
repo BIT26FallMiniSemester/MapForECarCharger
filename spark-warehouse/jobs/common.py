@@ -31,7 +31,9 @@ def parse_timestamp(column):
     """Parse ISO-8601 timestamps with optional fractional seconds."""
     from pyspark.sql import functions as F
 
-    return F.to_timestamp(F.trim(column), "yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]X")
+    return F.try_to_timestamp(
+        F.trim(column), F.lit("yyyy-MM-dd'T'HH:mm:ss[.SSSSSSSSS]X")
+    )
 
 
 def batch_table_path(root: str, layer_table: str, batch_id: str) -> str:

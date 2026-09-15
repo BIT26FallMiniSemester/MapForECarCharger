@@ -44,6 +44,8 @@ class FlaskApiTests(unittest.TestCase):
             "ads_pile_utilization": [{**meta, "pile_id": 1, "utilization_rate": 0.2}],
             "ads_quality_overview": [{**meta, "quality_score": 98.0}],
             "ads_quality_rules": [{**meta, "rule_id": "DQ001", "issue_count": 1}],
+            "ads_district_charge_type_30d": [{**meta, "district": "海淀区", "charge_type": "FAST", "order_count": 3}],
+            "ads_day_type_hour_30d": [{**meta, "day_type": "WEEKEND", "biz_hour": 18, "order_count": 2}],
         }
         for name, rows in datasets.items():
             target = self.root / name / f"batch_id={self.batch}" / "json"
@@ -82,6 +84,10 @@ class FlaskApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/overview").json["total_revenue_cents"], 1000)
         self.assertEqual(self.client.get("/api/v1/trends/revenue?days=1").json["items"][0]["order_count"], 2)
         self.assertEqual(self.client.get("/api/v1/quality/rules").json["items"][0]["rule_id"], "DQ001")
+        comparison = self.client.get("/api/v1/comparisons").json
+        self.assertEqual(comparison["batch_id"], self.batch)
+        self.assertEqual(comparison["district_charge_type"][0]["charge_type"], "FAST")
+        self.assertEqual(comparison["day_type_hour"][0]["biz_hour"], 18)
 
     def test_compatibility_endpoints(self):
         dashboard = self.client.get("/api/dashboard").json
@@ -99,6 +105,11 @@ class FlaskApiTests(unittest.TestCase):
         for path in (self.root / "ads_quality_rules" / f"batch_id={self.batch}" / "json").glob("*.json"):
             path.unlink()
         response = self.client.get("/api/v1/quality/rules")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json["error"], "ads_not_ready")
+        for path in (self.root / "ads_day_type_hour_30d" / f"batch_id={self.batch}" / "json").glob("*.json"):
+            path.unlink()
+        response = self.client.get("/api/v1/comparisons")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json["error"], "ads_not_ready")
 

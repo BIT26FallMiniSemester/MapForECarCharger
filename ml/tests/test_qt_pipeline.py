@@ -66,6 +66,9 @@ class QtPipelineTests(unittest.TestCase):
             root = Path(directory)
             database, start, end = fixture(root)
             before = database.read_bytes()
+            with self.assertRaisesRegex(ValueError, 'future'):
+                run(database, root / 'future', root / 'forecast.json', start, end + 3600,
+                    simulated=True)
             run(database, root / 'ml', root / 'forecast.json', start, end, simulated=True)
             self.assertEqual(before, database.read_bytes())
             payload = json.loads((root / 'forecast.json').read_text())
@@ -83,6 +86,14 @@ class QtPipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Rejected'):
                 run(database, root / 'invalid', root / 'forecast.json', start, end)
             self.assertEqual(published, (root / 'forecast.json').read_bytes())
+            with self.assertRaisesRegex(ValueError, 'explicitly simulated'):
+                run(database, root / 'not-simulated', root / 'forecast.json', start, end,
+                    accept_cleaned=True)
+            run(database, root / 'cleaned', root / 'cleaned-forecast.json', start, end,
+                simulated=True, accept_cleaned=True)
+            quality = json.loads((root / 'cleaned/data/history.quality.json').read_text())
+            self.assertEqual(quality['counts']['rejected_orders'], 1)
+            self.assertTrue(json.loads((root / 'cleaned-forecast.json').read_text())['simulated'])
             with closing(sqlite3.connect(database)) as db, db:
                 db.execute("UPDATE charging_orders SET stopped_at=NULL WHERE id=1")
             with self.assertRaisesRegex(ValueError, 'Incomplete'):
