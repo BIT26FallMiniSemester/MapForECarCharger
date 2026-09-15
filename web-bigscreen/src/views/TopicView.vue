@@ -1,0 +1,83 @@
+<template>
+  <p v-if="topicError" role="alert" class="topic-notice">{{ topicError }}</p>
+  <p class="topic-source">{{ topics?.source || '等待业务数据' }} · 实时统计与 Spark 历史分析分别标注 · 电量为平台统计值</p>
+
+  <template v-if="page === 'stations'">
+    <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 80).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
+    <div class="topic-grid spatial-layout">
+      <PanelCard title="区域资源分布" subtitle="实时 · 各行政区电桩数量"><TopicChart :option="districtChart" label="区域电桩数量排名"/></PanelCard>
+      <PanelCard title="站点空间态势" :subtitle="`实时 · ${mapMode} · 站点以编号展示`" class="topic-map"><div class="mode-tabs"><button v-for="mode in ['繁忙率','空闲率','故障率']" :key="mode" :class="{ active: mapMode === mode }" @click="mapMode = mode">{{ mode }}</button></div><DistributionMap :stations="mapStations" :overview="overview" :metric-label="mapMode"/></PanelCard>
+      <PanelCard title="资源紧张站点" subtitle="实时 · 繁忙率 Top 10"><div class="rank-list"><div v-for="s in busiest" :key="s.station_id"><span>站点 #{{ s.station_id }} · {{ s.district }}</span><strong>{{ s.utilization_rate }}%</strong><small>空闲 {{ s.available_pile_count }}/{{ s.pile_count }}</small></div></div></PanelCard>
+    </div>
+    <PanelCard v-if="comparisons" class="topic-wide comparison-panel" title="清洗后空间运营对比" subtitle="Spark ADS · 近30日 · 区域×桩型 / 日类型×小时"><DimensionComparison :data="comparisons"/></PanelCard>
+  </template>
+
+  <template v-else-if="page === 'piles'">
+    <div class="metrics-grid"><MetricCard v-for="item in pileStatus.items || []" :key="item.status" :title="statusLabel(item.status)" :value="item.count" unit="台"/></div>
+    <div class="topic-grid device-layout"><PanelCard title="电桩实时状态矩阵" subtitle="业务状态 · 已接入（模拟） · 支持筛选和翻页"><PileMatrix/></PanelCard><PanelCard title="设备状态占比" subtitle="实时业务状态，非硬件心跳"><PileStatusChart :data="pileStatus"/></PanelCard></div>
+    <PanelCard class="topic-wide" title="电桩状态变化时间线" subtitle="SQLite pile_status_logs · 最近20条"><div class="event-table"><table><thead><tr><th>时间</th><th>电桩编号</th><th>状态变化</th><th>原因</th></tr></thead><tbody><tr v-for="log in topics?.pile_logs || []" :key="log.id"><td>{{ timestamp(log.created_at) }}</td><td>{{ log.pile_no }}</td><td>{{ statusLabel(log.old_status) }} → {{ statusLabel(log.new_status) }}</td><td>{{ log.reason }}</td></tr></tbody></table></div></PanelCard>
+  </template>
+
+  <template v-else-if="page === 'orders'">
+    <div class="metrics-grid"><MetricCard title="今日创建" :value="overview.today_order_count || 0" unit="单"/><MetricCard title="历史已完成" :value="orderCount('COMPLETED')" unit="单"/><MetricCard title="正在充电" :value="orderCount('CHARGING')" unit="单"/><MetricCard title="待支付" :value="orderCount('UNPAID')" unit="单"/><MetricCard title="平均充电时长" :value="number((orders.avg_duration_seconds || 0) / 60)" unit="分钟"/></div>
+    <div class="topic-grid"><PanelCard title="今日订单业务历程" subtitle="按今日创建订单的实际时间字段计数"><TopicChart :option="funnelChart" label="创建、预约、充电、结束和支付里程碑"/></PanelCard><PanelCard title="当前订单状态分布" subtitle="业务库 · 全部历史与进行中订单"><TopicChart :option="orderChart" label="订单状态数量"/></PanelCard><PanelCard title="今日小时订单分布" subtitle="北京时间 · 按订单创建时间"><TopicChart :option="hourChart" label="今日每小时订单数"/></PanelCard></div>
+    <PanelCard class="topic-wide" title="最新充电订单" subtitle="实时 · 最近8笔订单"><RealtimeOrders :orders="realtimeOrders.items || []"/></PanelCard>
+  </template>
+
+  <template v-else-if="page === 'users'">
+    <div class="metrics-grid"><MetricCard title="用户总量" :value="users.total_users || 0" unit="人"/><MetricCard title="今日新增" :value="users.today_new || 0" unit="人"/><MetricCard title="近30日活跃" :value="users.active_30d || 0" unit="人"/><MetricCard title="累计充值" :value="money(users.recharge_cents)" unit="元"/><MetricCard title="账户余额合计" :value="money(users.balance_cents)" unit="元"/></div>
+    <div class="topic-grid"><PanelCard title="用户增长" subtitle="业务库 · 近30日每日新增"><TopicChart :option="growthChart" label="每日新增用户"/></PanelCard><PanelCard title="消费层级" subtitle="按每位用户累计已支付金额分组"><TopicChart :option="spendChart" label="用户消费金额分布"/></PanelCard><PanelCard title="充值趋势" subtitle="业务库 · 近30日"><TopicChart :option="rechargeChart" label="每日充值金额"/></PanelCard></div>
+    <div class="topic-grid two-columns topic-wide"><PanelCard title="用户消费 Top 10" subtitle="全历史已完成订单 · 用户以编号匿名展示"><div class="event-table"><table><thead><tr><th>用户</th><th>完成订单</th><th>消费金额</th></tr></thead><tbody><tr v-for="user in users.top || []" :key="user.user_id"><td>用户 #{{ user.user_id }}</td><td>{{ user.order_count }}</td><td>¥ {{ money(user.amount_cents) }}</td></tr></tbody></table></div></PanelCard><PanelCard title="用户账户状态" subtitle="真实业务字段，不推断年龄/性别/车型"><TopicChart :option="userStatusChart" label="正常和冻结用户数量"/></PanelCard></div>
+  </template>
+
+  <template v-else-if="page === 'energy'">
+    <div class="metrics-grid"><MetricCard title="今日统计电量" :value="number((overview.today_energy_wh || 0) / 1000)" unit="kWh"/><MetricCard title="本月统计电量" :value="number((topics?.energy.month_energy_wh || 0) / 1000)" unit="kWh"/><MetricCard title="今日营收" :value="money(overview.today_revenue_cents)" unit="元"/><MetricCard title="本月营收" :value="money(topics?.energy.month_revenue_cents)" unit="元"/><MetricCard title="平均订单金额" :value="money(orders.avg_amount_cents)" unit="元"/></div>
+    <div class="topic-grid energy-layout"><PanelCard title="能源与营收双轴趋势" :subtitle="`${analytics.batch ? 'Spark清洗后批次' : '业务汇总'} · 近30日`"><TopicChart :option="energyChart" label="充电量和营收双轴趋势"/></PanelCard><PanelCard title="站点营收 Top 10" subtitle="实时业务库 · 近30日已支付"><TopicChart :option="revenueChart" label="站点营收排名"/></PanelCard></div>
+    <PanelCard class="topic-wide" title="负荷预测" :subtitle="`独立ML结果 · ${loadPrediction.model_version || '未加载'} · 尚非设备电表遥测`"><LoadPrediction :data="loadPrediction"/></PanelCard>
+  </template>
+
+  <template v-else-if="page === 'system'">
+    <div class="metrics-grid"><MetricCard title="数据库体积" :value="number((system.database_bytes || 0) / 1048576)" unit="MB"/><MetricCard title="迁移版本" :value="system.schema_version ?? '—'" unit=""/><MetricCard title="数仓质量评分" :value="overview.quality_score ?? analytics.batch?.quality_score ?? '—'" unit="分"/><MetricCard title="Socket连接数" value="未采集" unit=""/><MetricCard title="地图接口状态" :value="system.map_status || '未采集'" unit=""/></div>
+    <div class="topic-grid two-columns"><PanelCard title="系统运行架构" subtitle="Qt业务回路 + 实时查询 + 批量数仓"><div class="system-flow"><div>Qt 用户端 / 管理端</div><span>↓ 原生 TCP · 长度前缀 + JSON</span><div>QTcpServer → 校验 → 授权 → Business</div><span>↓ 事务写入</span><div>SQLite · WAL</div><span>↙ 实时只读查询　　↘ 只读快照</span><div>Flask → Vue　　｜　　HDFS存储 / Spark计算</div><span>↓ ODS → 质量检测 → DWD → DWS → ADS</span><div>Flask → Vue 历史分析</div></div></PanelCard><PanelCard title="数据库表规模" subtitle="实时只读查询 · 不展示凭据"><div class="event-table"><table><thead><tr><th>业务表</th><th>记录数</th></tr></thead><tbody><tr v-for="table in system.tables || []" :key="table.name"><td>{{ table.name }}</td><td>{{ table.count.toLocaleString() }}</td></tr></tbody></table></div><p>journal_mode：{{ system.journal_mode || '—' }} · 快照 {{ timestamp(topics?.generated_at) }}</p></PanelCard></div>
+    <div class="topic-grid two-columns topic-wide"><PanelCard title="数仓批次状态" subtitle="已发布结果，不代替集群运行探测"><p>{{ analytics.label }}</p><p v-if="analytics.batch">{{ analytics.batch.window_start }} → {{ analytics.batch.window_end }}</p><p v-if="analytics.batch">输入订单 {{ analytics.batch.input_orders }} · 质量 {{ analytics.batch.quality_score ?? '—' }}</p><p>{{ analytics.warning || '批次读取正常' }}</p><p>Socket请求量、平均业务响应时间、HDFS/YARN在线状态尚未采集。</p></PanelCard><PanelCard title="最近管理员操作" subtitle="operation_logs · 不是Socket请求日志"><div class="event-table"><table><thead><tr><th>时间</th><th>操作</th><th>目标</th></tr></thead><tbody><tr v-for="(event, index) in system.admin_events || []" :key="index"><td>{{ timestamp(event.created_at) }}</td><td>{{ event.action }}</td><td>{{ event.target_type }} #{{ event.target_id }}</td></tr></tbody></table><p v-if="!system.admin_events?.length">暂无管理员操作记录</p></div></PanelCard></div>
+  </template>
+</template>
+<script setup>
+import { computed, inject, ref } from 'vue'
+import MetricCard from '../components/MetricCard.vue'
+import PanelCard from '../components/PanelCard.vue'
+import TopicChart from '../components/TopicChart.vue'
+import PileMatrix from '../components/PileMatrix.vue'
+import PileStatusChart from '../components/PileStatusChart.vue'
+import DistributionMap from '../components/DistributionMap.vue'
+import RealtimeOrders from '../components/RealtimeOrders.vue'
+import DimensionComparison from '../components/DimensionComparison.vue'
+import LoadPrediction from '../components/LoadPrediction.vue'
+defineProps({ page: { type: String, required: true } })
+const { topics, topicError, overview, pileStatus, realtimeOrders, revenueTrend, analytics, comparisons, loadPrediction } = inject('dashboard')
+const orders = computed(() => topics.value?.orders || {}), users = computed(() => topics.value?.users || {}), system = computed(() => topics.value?.system || {})
+const stations = computed(() => topics.value?.stations || []), mapMode = ref('繁忙率')
+const number = n => Number(n || 0).toLocaleString('zh-CN', { maximumFractionDigits: 1 })
+const money = n => number(Number(n || 0) / 100)
+const timestamp = value => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—'
+const labels = { IDLE: '空闲', RESERVED: '预约', CHARGING: '充电中', FAULT: '故障', OFFLINE: '离线', PENDING: '待预约', UNPAID: '待支付', COMPLETED: '已完成', CANCELLED: '已取消', NORMAL: '正常', FROZEN: '冻结' }
+const statusLabel = s => labels[s] || s
+const orderCount = s => orders.value.statuses?.find(row => row.status === s)?.count || 0
+function chart(names, values, name, type = 'bar', unit = '') {
+  return { color: ['#38bdf8', '#34d399'], tooltip: { trigger: 'axis' }, grid: { left: 64, right: 28, top: 35, bottom: 65 }, xAxis: { type: 'category', data: names, axisLabel: { color: '#9fb7d4', rotate: names.length > 12 ? 30 : 0 } }, yAxis: { type: 'value', name: unit, nameTextStyle: { color: '#9fb7d4' }, axisLabel: { color: '#9fb7d4' }, splitLine: { lineStyle: { color: '#183348' } } }, series: [{ name, type, data: values, smooth: true, areaStyle: type === 'line' ? { opacity: 0.12 } : undefined }] }
+}
+const districts = computed(() => { const data = new Map(); for (const s of stations.value) data.set(s.district, (data.get(s.district) || 0) + s.pile_count); return [...data].sort((a,b) => b[1]-a[1]) })
+const districtChart = computed(() => chart(districts.value.map(r => r[0]), districts.value.map(r => r[1]), '电桩', 'bar', '台'))
+const busiest = computed(() => [...stations.value].filter(s => s.station_status === 'ACTIVE').sort((a,b) => b.utilization_rate-a.utilization_rate || a.station_id-b.station_id).slice(0,10))
+const mapStations = computed(() => stations.value.map(s => ({ ...s, utilization_rate: mapMode.value === '空闲率' ? (s.pile_count ? 100*s.available_pile_count/s.pile_count : 0) : mapMode.value === '故障率' ? (s.pile_count ? 100*s.fault_count/s.pile_count : 0) : s.utilization_rate })))
+const orderChart = computed(() => chart((orders.value.statuses || []).map(r => statusLabel(r.status)), (orders.value.statuses || []).map(r => r.count), '订单', 'bar', '单'))
+const hourChart = computed(() => chart(Array.from({length:24},(_,i) => `${i}:00`), Array.from({length:24},(_,i) => orders.value.hourly?.find(r => r.hour === i)?.count || 0), '今日创建', 'line', '单'))
+const funnelChart = computed(() => { const keys = ['created','reserved','started','stopped','paid'], names = ['创建订单','已预约','已开始','已结束','已支付']; return { color: ['#38bdf8','#22d3ee','#34d399','#60a5fa','#a78bfa'], tooltip: { trigger: 'item' }, series: [{ type: 'funnel', sort: 'none', left: '15%', width: '70%', top: 20, bottom: 25, label: { formatter: '{b}: {c}' }, data: keys.map((k,i) => ({ name: names[i], value: orders.value.funnel?.[k] || 0 })) }] } })
+function calendarSeries(rows, field) { const dates = Array.from({length:30},(_,i) => { const date = new Date(); date.setDate(date.getDate()-29+i); return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(date) }); return { dates, values: dates.map(date => rows?.find(r => r.date === date)?.[field] || 0) } }
+const growthChart = computed(() => { const s=calendarSeries(users.value.growth,'count'); return chart(s.dates,s.values,'新增用户','line','人') })
+const rechargeChart = computed(() => { const s=calendarSeries(users.value.recharges,'amount_cents'); return chart(s.dates,s.values.map(v => v/100),'充值','line','元') })
+const spendChart = computed(() => chart((users.value.spending || []).map(r => r.band), (users.value.spending || []).map(r => r.count),'用户','bar','人'))
+const userStatusChart = computed(() => chart((users.value.statuses || []).map(r => statusLabel(r.status)), (users.value.statuses || []).map(r => r.count),'用户','bar','人'))
+const energyChart = computed(() => { const rows=revenueTrend.value.items || []; const base=chart(rows.map(r => r.biz_date || r.date),rows.map(r => Number(r.energy_wh || 0)/1000),'电量','line','kWh'); base.legend={ textStyle:{color:'#9fb7d4'} }; base.yAxis=[base.yAxis,{...base.yAxis,name:'元',position:'right'}]; base.series.push({name:'营收',type:'bar',yAxisIndex:1,data:rows.map(r => Number(r.revenue_cents || 0)/100)}); return base })
+const revenueChart = computed(() => { const rows=[...stations.value].sort((a,b) => b.revenue_cents-a.revenue_cents).slice(0,10); return chart(rows.map(s => `#${s.station_id}`),rows.map(s => s.revenue_cents/100),'已支付营收','bar','元') })
+</script>

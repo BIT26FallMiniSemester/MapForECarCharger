@@ -24,3 +24,13 @@ export async function getComparisons(signal) {
   const { data } = await request.get('/v1/comparisons', { signal })
   return data
 }
+
+export async function getTopics(signal) {
+  const { data } = await request.get('/v1/topics', { signal })
+  return data
+}
+
+export async function getPiles(page, status, signal) {
+  const { data } = await request.get('/v1/piles', { params: { page, page_size: 120, status }, signal })
+  return data
+}

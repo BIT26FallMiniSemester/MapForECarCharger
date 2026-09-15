@@ -9,7 +9,8 @@ import { formatNumber } from '../utils/format'
 
 const props = defineProps({
   stations: { type: Array, default: () => [] },
-  overview: { type: Object, default: () => ({}) }
+  overview: { type: Object, default: () => ({}) },
+  metricLabel: { type: String, default: '利用率' }
 })
 
 const chartRef = ref(null)
@@ -20,12 +21,13 @@ function buildPoints() {
   return props.stations
     .filter(station => Number.isFinite(Number(station.longitude)) && Number.isFinite(Number(station.latitude)))
     .map(station => ({
-      name: station.station_name || station.name,
+      name: `站点 #${station.station_id ?? station.id ?? '—'}`,
       value: [
         Number(station.longitude),
         Number(station.latitude),
         station.utilization_rate || 0,
-        station.order_count || 0
+        station.order_count || 0,
+        station.pile_count || station.total_piles || 0
       ],
       revenue: station.revenue_cents || 0,
       available: station.available_pile_count || station.available_piles || 0,
@@ -54,7 +56,7 @@ function render() {
       formatter: params => {
         if (!params.data || !Array.isArray(params.data.value)) return params.name
         const value = params.data.value
-        return `${params.name}<br/>经纬度：${formatNumber(value[1], 5)}, ${formatNumber(value[0], 5)}<br/>利用率：${formatNumber(value[2], 1)}%<br/>空闲/总桩：${params.data.available}/${params.data.pileCount}`
+        return `${params.name}<br/>经纬度：${formatNumber(value[1], 5)}, ${formatNumber(value[0], 5)}<br/>${props.metricLabel}：${formatNumber(value[2], 1)}%<br/>空闲/总桩：${params.data.available}/${params.data.pileCount}`
       }
     },
     geo: {
@@ -98,8 +100,7 @@ function render() {
         zlevel: 2,
         data: points,
         symbolSize: value => {
-          const utilization = Number(value[2]) || 0
-          return Math.max(3, Math.min(9, 3 + utilization / 18))
+          return Math.max(3, Math.min(12, 3 + Math.sqrt(Number(value[4]) || 0)))
         },
         itemStyle: {
           color: 'rgba(45, 212, 191, .92)',
@@ -110,7 +111,7 @@ function render() {
         emphasis: { label: { show: false } }
       },
       {
-        name: '高利用率站点',
+        name: `${props.metricLabel}高值站点`,
         type: 'effectScatter',
         coordinateSystem: 'geo',
         zlevel: 3,
@@ -136,10 +137,9 @@ onMounted(async () => {
   render()
   window.addEventListener('resize', chart.resize)
 })
-watch(() => [props.stations, props.overview], render, { deep: true })
+watch(() => [props.stations, props.overview, props.metricLabel], render, { deep: true })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', chart?.resize)
   chart?.dispose()
 })
 </script>
-

@@ -2,7 +2,7 @@
   <div class="orders-list">
     <div v-for="order in orders" :key="order.id" class="order-row">
       <div>
-        <strong>{{ order.station_name }}</strong>
+        <strong>{{ order.station_id ? `站点 #${order.station_id}` : order.pile_no }}</strong>
         <span>{{ order.order_no }} · {{ order.pile_no }}</span>
       </div>
       <b :class="['status', order.status.toLowerCase()]">{{ statusText(order.status) }}</b>

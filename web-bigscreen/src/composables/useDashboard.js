@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getDashboard, getAnalytics, getComparisons, USE_MOCK, USE_ANALYTICS, USE_SPARK_COMPARISONS } from '../api/dashboard'
+import { getDashboard, getAnalytics, getComparisons, getTopics, USE_MOCK, USE_ANALYTICS, USE_SPARK_COMPARISONS } from '../api/dashboard'
 import { mergeAnalytics } from '../api/analytics.mjs'
 
 export function useDashboard() {
@@ -7,6 +7,8 @@ export function useDashboard() {
     stationRanking: { items: [] }, stationDistribution: { items: [] },
     loadPrediction: { points: [] }, realtimeOrders: { items: [] } })
   const batch = ref(null)
+  const topics = ref(null)
+  const topicError = ref('正在读取专题数据')
   const comparisons = ref(null)
   const comparisonError = ref('正在读取 Spark 双维对比')
   const batchError = ref('正在读取批处理结果')
@@ -20,6 +22,9 @@ export function useDashboard() {
   async function refresh() {
     controller = new AbortController()
     await Promise.all([
+      (USE_MOCK ? Promise.resolve() : getTopics(controller.signal).then(data => {
+        if (!stopped) { topics.value = data; topicError.value = '' }
+      }).catch(() => { if (!stopped) topicError.value = '专题数据更新失败，请检查 Flask 服务（保留上次成功数据）' })),
       getDashboard(controller.signal).then(data => {
         if (stopped) return
         live.value = data
@@ -47,7 +52,7 @@ export function useDashboard() {
   }
   onMounted(refresh)
   onBeforeUnmount(() => { stopped = true; clearTimeout(timer); controller?.abort() })
-  return { error, dataSource, comparisons, comparisonError,
+  return { error, dataSource, comparisons, comparisonError, topics, topicError,
     ...Object.fromEntries(['overview', 'revenueTrend', 'pileStatus', 'stationRanking',
       'stationDistribution', 'loadPrediction', 'realtimeOrders', 'analytics'].map(key => [key, computed(() => merged.value[key])])) }
 }

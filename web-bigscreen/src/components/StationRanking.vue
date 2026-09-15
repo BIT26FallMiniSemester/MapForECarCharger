@@ -19,7 +19,7 @@ function render() {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: 92, right: 46, top: 16, bottom: 30 },
     xAxis: { type: 'value', axisLabel: { color: '#9fb7d4' }, splitLine: { lineStyle: { color: 'rgba(120,160,200,.14)' } } },
-    yAxis: { type: 'category', inverse: true, data: items.map(item => item.station_name), axisLabel: { color: '#dcecff', width: 84, overflow: 'truncate' } },
+    yAxis: { type: 'category', inverse: true, data: items.map(item => `站点 #${item.station_id}`), axisLabel: { color: '#dcecff', width: 84, overflow: 'truncate' } },
     series: [{
       name: '站点营收',
       type: 'bar',

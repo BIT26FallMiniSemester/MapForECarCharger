@@ -1,15 +1,5 @@
 <template>
-  <div class="dashboard-shell">
-    <header class="topbar">
-      <div>
-        <p>EV Charging Operation Center</p>
-        <h1>电动汽车充电运营数据大屏</h1>
-      </div>
-      <div class="topbar-right">
-        <span>{{ dataSource }} · 每 5 秒刷新</span>
-        <strong>{{ currentTime }}</strong>
-      </div>
-    </header>
+  <div class="overview-page">
 
     <p v-if="error" role="alert" style="color: #fca5a5">{{ error }}（保留上次成功数据）</p>
     <section class="analytics-status" aria-live="polite">
@@ -50,7 +40,7 @@
           </div>
           <div class="health-items">
             <div v-for="item in topStations" :key="item.station_id">
-              <span>{{ item.station_name }}</span>
+              <span>站点 #{{ item.station_id }}</span>
               <strong>{{ formatNumber(item.utilization_rate, 1) }}%</strong>
               <div><i :style="{ width: item.utilization_rate + '%' }"></i></div>
             </div>
@@ -78,7 +68,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, inject } from 'vue'
 import MetricCard from '../components/MetricCard.vue'
 import PanelCard from '../components/PanelCard.vue'
 import RevenueTrend from '../components/RevenueTrend.vue'
@@ -89,14 +79,11 @@ import DistributionMap from '../components/DistributionMap.vue'
 import RealtimeOrders from '../components/RealtimeOrders.vue'
 import WarningList from '../components/WarningList.vue'
 import DimensionComparison from '../components/DimensionComparison.vue'
-import { useDashboard } from '../composables/useDashboard'
 import { USE_SPARK_COMPARISONS } from '../api/dashboard'
 import { centsToYuan, formatNumber, whToKwh } from '../utils/format'
 
-const currentTime = ref('')
 const { error, dataSource, overview, revenueTrend, pileStatus, stationRanking,
-  stationDistribution, loadPrediction, realtimeOrders, analytics, comparisons, comparisonError } = useDashboard()
-let clock
+  stationDistribution, loadPrediction, realtimeOrders, analytics, comparisons, comparisonError } = inject('dashboard')
 
 const availablePileText = computed(() => `${overview.value.available_pile_count || 0}/${overview.value.pile_count || 0}`)
 const topStations = computed(() => (stationRanking.value.items || []).slice(0, 3))
@@ -120,18 +107,6 @@ const warnings = computed(() => {
   return result.length ? result : [{ level: '低', title: '运行状态平稳', detail: '当前未发现高峰拥堵或异常设备集中风险' }]
 })
 
-function updateClock() {
-  currentTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
-}
-
-onMounted(() => {
-  updateClock()
-  clock = setInterval(updateClock, 1000)
-})
-
-onBeforeUnmount(() => {
-  clearInterval(clock)
-})
 </script>
 
 
