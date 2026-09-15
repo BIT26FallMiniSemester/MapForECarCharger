@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from functools import reduce
 
-from common import batch_table_path, create_spark, validate_batch_id
+from common import batch_table_path, create_spark, parse_timestamp, validate_batch_id
 from schemas.table_schemas import TABLE_COLUMNS
 
 
@@ -62,8 +62,7 @@ def detect(frames: dict, batch_id: str):
                .join(valid_stations, F.trim("o.station_id") == valid_stations.sid, "left")
                .join(valid_piles, F.trim("o.pile_id") == valid_piles.pid, "left"))
     issue_frames.append(checked.where(F.col("uid").isNull() | F.col("sid").isNull() | F.col("pid").isNull() | (F.trim("o.station_id") != F.col("pile_sid"))).select(F.lit(batch_id).alias("batch_id"), F.lit("charging_orders").alias("table_name"), F.col("o.row_id").alias("row_id"), F.lit("DQ008").alias("rule_id"), F.lit("ERROR").alias("severity"), F.lit("order foreign key is invalid").alias("reason"), F.current_timestamp().alias("detected_at")))
-    ts = lambda name: F.to_timestamp(F.trim(name), "yyyy-MM-dd'T'HH:mm:ssX")
-    started, stopped, paid = ts("started_at"), ts("stopped_at"), ts("paid_at")
+    started, stopped, paid = parse_timestamp("started_at"), parse_timestamp("stopped_at"), parse_timestamp("paid_at")
     add("DQ009", "charging_orders", (started.isNotNull() & stopped.isNotNull() & (started > stopped)) | (paid.isNotNull() & stopped.isNotNull() & (paid < stopped)), "order event timeline is reversed")
     add("DQ010", "charging_orders", (F.col("duration_seconds").cast("long") < 0) | (F.col("energy_wh").cast("long") < 0) | (F.col("amount_cents").cast("long") < 0), "order measure is negative")
     complete = F.upper(F.trim("status")) == "COMPLETED"

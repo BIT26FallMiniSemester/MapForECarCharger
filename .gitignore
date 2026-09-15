@@ -27,3 +27,4 @@ __pycache__/
 /spark-warehouse/runtime/
 /spark-warehouse/data/generated/
 /.idea/
+/ml/outputs/

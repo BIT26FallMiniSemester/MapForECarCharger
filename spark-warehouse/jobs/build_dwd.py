@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from functools import reduce
 
-from common import batch_table_path, create_spark, validate_batch_id
+from common import batch_table_path, create_spark, parse_timestamp, validate_batch_id
 from schemas.table_schemas import TABLE_COLUMNS
 
 BLOCKING_RULES = {
@@ -41,9 +41,6 @@ def build(frames: dict, issues):
     def has_any(rules):
         return F.exists("quality_flags", lambda value: value.isin(*rules))
 
-    def timestamp(name):
-        return F.to_timestamp(F.trim(F.col(name)), "yyyy-MM-dd'T'HH:mm:ssX")
-
     tagged_frames = {table: tagged(table) for table in TABLE_COLUMNS}
     quarantine_parts = []
     valid = {}
@@ -55,7 +52,7 @@ def build(frames: dict, issues):
         valid[table] = frame.where(~blocked)
 
     users = (valid["users"]
-             .withColumn("_updated", timestamp("updated_at"))
+             .withColumn("_updated", parse_timestamp("updated_at"))
              .withColumn("_rank", F.row_number().over(Window.partitionBy(F.trim("id")).orderBy(F.col("_updated").desc_nulls_last(), F.col("row_id").desc())))
              .where(F.col("_rank") == 1))
     valid["users"] = users
@@ -63,7 +60,7 @@ def build(frames: dict, issues):
     quarantine_parts.append(duplicate_users.select(F.lit("users").alias("table_name"), "row_id", F.to_json(F.struct(*[F.col(c) for c in TABLE_COLUMNS["users"]])).alias("raw_record"), "quality_flags", F.current_timestamp().alias("quarantined_at")))
 
     orders = (valid["charging_orders"]
-              .withColumn("_updated", timestamp("updated_at"))
+              .withColumn("_updated", parse_timestamp("updated_at"))
               .withColumn("_rank", F.row_number().over(Window.partitionBy(F.trim("order_no")).orderBy(F.col("_updated").desc_nulls_last(), F.col("row_id").desc())))
               .where(F.col("_rank") == 1))
     valid["charging_orders"] = orders
@@ -75,7 +72,7 @@ def build(frames: dict, issues):
         F.col("id").cast("long").alias("user_id"),
         F.regexp_replace(F.trim("phone"), r"^(\d{3})\d{4}(\d{4})$", "$1****$2").alias("masked_phone"),
         F.trim("nickname").alias("nickname"), F.upper(F.trim("status")).alias("status"),
-        timestamp("created_at").alias("register_time"), "quality_flags")
+        parse_timestamp("created_at").alias("register_time"), "quality_flags")
 
     dwd["dim_station"] = valid["stations"].select(
         F.col("id").cast("long").alias("station_id"), F.trim("name").alias("station_name"),
@@ -94,30 +91,30 @@ def build(frames: dict, issues):
         F.col("rated_power_w").cast("long").alias("rated_power_w"), F.upper(F.trim("status")).alias("status"), "quality_flags")
 
     order_frame = valid["charging_orders"]
-    paid_at = timestamp("paid_at")
-    created_at = timestamp("created_at")
+    paid_at = parse_timestamp("paid_at")
+    created_at = parse_timestamp("created_at")
     dwd["dwd_charging_order_detail"] = order_frame.select(
         F.col("id").cast("long").alias("order_id"), F.trim("order_no").alias("order_no"),
         F.col("user_id").cast("long").alias("user_id"), F.col("station_id").cast("long").alias("station_id"),
         F.col("pile_id").cast("long").alias("pile_id"), F.upper(F.trim("status")).alias("status"),
         F.col("price_cents_per_kwh").cast("long").alias("price_cents_per_kwh"),
-        timestamp("reserved_at").alias("reserved_at"), timestamp("started_at").alias("started_at"),
-        timestamp("stopped_at").alias("stopped_at"), F.col("duration_seconds").cast("long").alias("duration_seconds"),
+        parse_timestamp("reserved_at").alias("reserved_at"), parse_timestamp("started_at").alias("started_at"),
+        parse_timestamp("stopped_at").alias("stopped_at"), F.col("duration_seconds").cast("long").alias("duration_seconds"),
         F.col("energy_wh").cast("long").alias("energy_wh"), F.col("amount_cents").cast("long").alias("amount_cents"),
-        paid_at.alias("paid_at"), timestamp("cancelled_at").alias("cancelled_at"), created_at.alias("created_at"),
+        paid_at.alias("paid_at"), parse_timestamp("cancelled_at").alias("cancelled_at"), created_at.alias("created_at"),
         F.to_date(F.from_utc_timestamp(F.coalesce(paid_at, created_at), "Asia/Shanghai")).alias("biz_date"),
         F.hour(F.from_utc_timestamp(F.coalesce(paid_at, created_at), "Asia/Shanghai")).alias("biz_hour"), "quality_flags")
 
     dwd["dwd_recharge_detail"] = valid["recharge_records"].select(
         F.col("id").cast("long").alias("record_id"), F.col("user_id").cast("long").alias("user_id"),
         F.col("amount_cents").cast("long").alias("amount_cents"), F.col("balance_after_cents").cast("long").alias("balance_after_cents"),
-        timestamp("created_at").alias("recharge_time"), F.to_date(F.from_utc_timestamp(timestamp("created_at"), "Asia/Shanghai")).alias("biz_date"), "quality_flags")
+        parse_timestamp("created_at").alias("recharge_time"), F.to_date(F.from_utc_timestamp(parse_timestamp("created_at"), "Asia/Shanghai")).alias("biz_date"), "quality_flags")
 
     dwd["dwd_pile_status_event"] = valid["pile_status_logs"].select(
         F.col("id").cast("long").alias("log_id"), F.col("pile_id").cast("long").alias("pile_id"),
         F.col("order_id").cast("long").alias("order_id"), F.upper(F.trim("old_status")).alias("old_status"),
         F.upper(F.trim("new_status")).alias("new_status"), F.trim("reason").alias("reason"),
-        timestamp("created_at").alias("event_time"), F.to_date(F.from_utc_timestamp(timestamp("created_at"), "Asia/Shanghai")).alias("biz_date"), "quality_flags")
+        parse_timestamp("created_at").alias("event_time"), F.to_date(F.from_utc_timestamp(parse_timestamp("created_at"), "Asia/Shanghai")).alias("biz_date"), "quality_flags")
     dwd["dwd_quarantine"] = reduce(lambda left, right: left.unionByName(right), quarantine_parts).dropDuplicates(["table_name", "row_id"])
     return dwd
 
