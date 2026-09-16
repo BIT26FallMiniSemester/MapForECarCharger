@@ -136,7 +136,8 @@ ChargingPage::ChargingPage(ApiClient *api, QWidget *parent)
         if (m_order.id > 0 && m_order.status == QStringLiteral("CHARGING"))
             m_api->fetchOrder(m_order.id);
     });
-    m_timer->setInterval(1000);
+    // 充电状态变化不需要每秒查询；降低轮询频率可让三端同时运行更稳定。
+    m_timer->setInterval(5000);
 
     connect(m_start, &QPushButton::clicked, this, [this] { m_api->startOrder(m_order.id); });
     connect(m_stop, &QPushButton::clicked, this, [this] {

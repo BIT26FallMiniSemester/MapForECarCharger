@@ -11,6 +11,68 @@ from time import monotonic
 from flask import Flask, jsonify, request
 
 
+_DISTRICT_GEOMETRY = None
+
+
+def _point_in_ring(longitude, latitude, ring):
+    inside = False
+    for index, point in enumerate(ring):
+        previous = ring[index - 1]
+        x1, y1 = point
+        x2, y2 = previous
+        crosses = (y1 > latitude) != (y2 > latitude)
+        if crosses and longitude < (x2 - x1) * (latitude - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _load_beijing_districts():
+    global _DISTRICT_GEOMETRY
+    if _DISTRICT_GEOMETRY is not None:
+        return _DISTRICT_GEOMETRY
+    path = Path(__file__).resolve().parents[2] / "web-bigscreen/public/maps/beijing.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    districts = []
+    for feature in document["features"]:
+        geometry = feature["geometry"]
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        points = [point for polygon in polygons for ring in polygon for point in ring]
+        districts.append((
+            feature["properties"]["name"], feature["properties"]["centroid"], geometry,
+            (min(point[0] for point in points), min(point[1] for point in points),
+             max(point[0] for point in points), max(point[1] for point in points)),
+        ))
+    _DISTRICT_GEOMETRY = districts
+    return districts
+
+
+def _resolve_coordinate_district(longitude, latitude):
+    districts = _load_beijing_districts()
+    for name, _, geometry, bounds in districts:
+        min_longitude, min_latitude, max_longitude, max_latitude = bounds
+        if not (min_longitude <= longitude <= max_longitude and min_latitude <= latitude <= max_latitude):
+            continue
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        for polygon in polygons:
+            if _point_in_ring(longitude, latitude, polygon[0]) and not any(
+                _point_in_ring(longitude, latitude, hole) for hole in polygon[1:]
+            ):
+                return name
+    return min(districts, key=lambda item: (item[1][0] - longitude) ** 2 + (item[1][1] - latitude) ** 2)[0]
+
+
+def _assign_station_districts(topic):
+    for station in topic.get("stations", []):
+        if station.get("district") not in (None, "", "未知", "未知区域"):
+            continue
+        try:
+            station["district"] = _resolve_coordinate_district(float(station["longitude"]), float(station["latitude"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        station["district_source"] = "coordinate"
+    return topic
+
+
 class AdsStore:
     def __init__(self, root, batch_id, cache_seconds=60):
         self.root = Path(root).resolve()
@@ -38,6 +100,10 @@ class AdsStore:
             for path in files:
                 with path.open(encoding="utf-8") as stream:
                     rows.extend(json.loads(line) for line in stream if line.strip())
+            if name == 'ads_revenue_trend_30d':
+                rows.sort(key=lambda row: row['biz_date'])
+            elif name == 'ads_station_ranking_30d':
+                rows.sort(key=lambda row: (-row['revenue_cents'], row['station_id']))
             self._cache[name] = (now, rows)
             return rows
 
@@ -89,7 +155,7 @@ def create_app(config=None):
     @app.get("/api/v1/topics")
     def topics():
         rows = store.load("ads_topics")
-        return jsonify(json.loads(rows[0]["payload_json"]) if rows else {})
+        return jsonify(_assign_station_districts(json.loads(rows[0]["payload_json"])) if rows else {})
 
     @app.get("/api/v1/piles")
     def piles():

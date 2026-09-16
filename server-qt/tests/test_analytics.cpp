@@ -6,6 +6,30 @@
 class AnalyticsTests: public QObject {
     Q_OBJECT
 private slots:
+    void sparkResults() {
+        QTemporaryDir directory;
+        const QString batch="test-batch";
+        auto write=[&](const QString &table,const QJsonArray &rows) {
+            const auto path=directory.path()+"/"+table+"/batch_id="+batch+"/json";
+            QVERIFY(QDir().mkpath(path));QFile success(path+"/_SUCCESS");QVERIFY(success.open(QIODevice::WriteOnly));success.close();
+            QFile file(path+"/part-00000.json");QVERIFY(file.open(QIODevice::WriteOnly));
+            for(const auto &row:rows)file.write(QJsonDocument(row.toObject()).toJson(QJsonDocument::Compact)+"\n");
+        };
+        QVERIFY(!readSparkAnalytics(directory.path(),batch)["available"].toBool());
+        write("ads_overview",QJsonArray{QJsonObject{{"generated_at",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},{"total_revenue_cents",300},{"data_as_of","2026-09-15"}}});
+        write("ads_revenue_trend_30d",QJsonArray{QJsonObject{{"biz_date","2026-09-15"},{"revenue_cents",200},{"order_count",2}},QJsonObject{{"biz_date","2026-09-14"},{"revenue_cents",100},{"order_count",1}}});
+        write("ads_station_ranking_30d",QJsonArray{QJsonObject{{"station_id",2},{"revenue_cents",100}},QJsonObject{{"station_id",1},{"revenue_cents",200}}});
+        const auto result=readSparkAnalytics(directory.path(),batch);
+        QVERIFY(result["available"].toBool());
+        const auto data=result["data"].toObject();QCOMPARE(data["batch_id"].toString(),batch);
+        const auto trend=data["revenue_trend"].toObject()["items"].toArray();
+        QCOMPARE(trend.first().toObject()["date"].toString(),QString("2026-09-14"));
+        QCOMPARE(trend.last().toObject()["order_count"].toInt(),2);
+        QCOMPARE(data["station_ranking"].toObject()["items"].toArray().first().toObject()["station_id"].toInt(),1);
+        QVERIFY(!readSparkAnalytics(directory.path(),"../bad")["available"].toBool());
+        QVERIFY(QFile::remove(directory.path()+"/ads_overview/batch_id="+batch+"/json/_SUCCESS"));
+        QVERIFY(!readSparkAnalytics(directory.path(),batch)["available"].toBool());
+    }
     void forecastStates() {
         QTemporaryDir directory;
         const auto path=directory.filePath("forecast.json");

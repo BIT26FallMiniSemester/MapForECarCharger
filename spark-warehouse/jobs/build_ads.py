@@ -149,9 +149,10 @@ def build(spark, frames: dict, dwd: dict, batch_id: str):
     user_summary["top"] = json_rows(spark.sql("""SELECT user_id,count(*) order_count,sum(amount_cents) amount_cents
       FROM dwd_charging_order_detail WHERE status='COMPLETED' GROUP BY user_id ORDER BY amount_cents DESC,user_id LIMIT 10"""))
     user_summary["spending"] = json_rows(spark.sql("""WITH spending AS (SELECT u.user_id,coalesce(sum(o.amount_cents),0) cents
-      FROM dim_user u LEFT JOIN dwd_charging_order_detail o ON o.user_id=u.user_id AND o.status='COMPLETED' GROUP BY u.user_id)
-      SELECT CASE WHEN cents=0 THEN '未消费' WHEN cents<5000 THEN '0–50元' WHEN cents<20000 THEN '50–200元'
-      WHEN cents<100000 THEN '200–1000元' ELSE '1000元以上' END band,count(*) count FROM spending GROUP BY band"""))
+      FROM dim_user u LEFT JOIN dwd_charging_order_detail o ON o.user_id=u.user_id AND o.status='COMPLETED' GROUP BY u.user_id),
+      buckets AS (SELECT CASE WHEN cents=0 THEN -1 ELSE cast(floor(cents / 2500.0) as int) END bucket FROM spending)
+      SELECT CASE WHEN bucket=-1 THEN '未消费' ELSE concat(cast(bucket * 25 as string),'–',cast((bucket + 1) * 25 as string),'元') END band,
+      count(*) count FROM buckets GROUP BY bucket ORDER BY bucket"""))
     pile_logs = json_rows(spark.sql("""SELECT l.log_id id,p.pile_no,l.old_status,l.new_status,l.reason,
       cast(l.event_time as string) created_at FROM dwd_pile_status_event l JOIN dim_pile p ON l.pile_id=p.pile_id
       ORDER BY l.log_id DESC LIMIT 20"""))

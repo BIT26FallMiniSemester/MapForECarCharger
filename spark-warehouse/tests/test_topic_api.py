@@ -16,7 +16,9 @@ class TopicApiTests(unittest.TestCase):
         topic = {"batch_id": self.batch, "source": "Spark DWD / DWS / ADS",
                  "orders": {"total_orders": 2, "funnel": {"paid": 1}},
                  "users": {"active_30d": 2}, "energy": {"month_revenue_cents": 3000},
-                 "stations": [{"station_id": 1, "pile_count": 121, "busy_pile_count": 1}],
+                 "stations": [{"station_id": 1, "pile_count": 121, "busy_pile_count": 1},
+                              {"station_id": 2, "latitude": 39.912934, "longitude": 116.416718,
+                               "district": "", "pile_count": 0, "busy_pile_count": 0}],
                  "pile_logs": [{"id": 1, "new_status": "CHARGING"}],
                  "system": {"storage": "Spark ADS", "tables": []}}
         meta = {"batch_id": self.batch, "generated_at": "2026-09-16T00:00:00Z", "data_as_of": "2026-09-16"}
@@ -46,6 +48,9 @@ class TopicApiTests(unittest.TestCase):
         self.assertEqual(data["source"], "Spark DWD / DWS / ADS")
         self.assertEqual(data["orders"]["total_orders"], 2)
         self.assertEqual(data["stations"][0]["pile_count"], 121)
+        coordinate_station = next(row for row in data["stations"] if row["station_id"] == 2)
+        self.assertEqual(coordinate_station["district"], "东城区")
+        self.assertEqual(coordinate_station["district_source"], "coordinate")
         self.assertNotIn("SQLite", json.dumps(data))
 
     def test_pagination_and_filter(self):

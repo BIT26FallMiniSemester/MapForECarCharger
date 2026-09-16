@@ -1,9 +1,12 @@
 <template>
-  <p v-if="topicError" role="alert" class="topic-notice">{{ topicError }}</p>
-  <p class="topic-source">{{ topics?.source || '等待 Spark 数据' }} · 清洗批次 {{ topics?.batch_id || '—' }} · 数据日期 {{ topics?.data_as_of || '—' }}</p>
+  <main class="topic-page" :class="`topic-${page}`">
+    <div class="topic-meta">
+      <p v-if="topicError" role="alert" class="topic-notice">{{ topicError }}</p>
+      <p class="topic-source">{{ topics?.source || '等待 Spark 数据' }} · 清洗批次 {{ topics?.batch_id || '—' }} · 数据日期 {{ topics?.data_as_of || '—' }}</p>
+    </div>
 
   <template v-if="page === 'stations'">
-    <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 80).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
+    <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 50).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
     <div class="topic-grid spatial-layout">
       <PanelCard title="区域资源分布" subtitle="Spark ADS · 各行政区电桩数量"><TopicChart :option="districtChart" label="区域电桩数量排名"/></PanelCard>
       <PanelCard title="站点空间态势" :subtitle="`Spark ADS · ${mapMode} · 站点以编号展示`" class="topic-map"><div class="mode-tabs"><button v-for="mode in ['繁忙率','空闲率','故障率']" :key="mode" :class="{ active: mapMode === mode }" @click="mapMode = mode">{{ mode }}</button></div><DistributionMap :stations="mapStations" :overview="overview" :metric-label="mapMode"/></PanelCard>
@@ -20,13 +23,13 @@
 
   <template v-else-if="page === 'orders'">
     <div class="metrics-grid"><MetricCard title="今日创建" :value="overview.today_order_count || 0" unit="单"/><MetricCard title="历史已完成" :value="orderCount('COMPLETED')" unit="单"/><MetricCard title="正在充电" :value="orderCount('CHARGING')" unit="单"/><MetricCard title="待支付" :value="orderCount('UNPAID')" unit="单"/><MetricCard title="平均充电时长" :value="number((orders.avg_duration_seconds || 0) / 60)" unit="分钟"/></div>
-    <div class="topic-grid"><PanelCard title="今日订单业务历程" subtitle="Spark DWD · 按今日创建订单计数"><TopicChart :option="funnelChart" label="创建、预约、充电、结束和支付里程碑"/></PanelCard><PanelCard title="当前订单状态分布" subtitle="Spark DWD · 全部历史与进行中订单"><TopicChart :option="orderChart" label="订单状态数量"/></PanelCard><PanelCard title="今日小时订单分布" subtitle="Spark DWD · 北京时间"><TopicChart :option="hourChart" label="今日每小时订单数"/></PanelCard></div>
+    <div class="topic-grid"><PanelCard title="今日订单业务历程" subtitle="Spark DWD · 按今日创建订单计数"><TopicChart :option="funnelChart" label="创建、预约、充电、结束和支付里程碑"/></PanelCard><PanelCard title="当前订单时间趋势" subtitle="Spark DWD · 北京时间，按小时创建"><TopicChart :option="hourChart" label="今日每小时订单数"/></PanelCard><PanelCard title="订单状态分布" subtitle="Spark DWD · 全部历史与进行中订单"><TopicChart :option="orderChart" label="订单状态数量"/></PanelCard></div>
     <PanelCard class="topic-wide" title="进行中订单" subtitle="Spark ADS · 最近8笔活跃订单"><RealtimeOrders :orders="realtimeOrders.items || []"/></PanelCard>
   </template>
 
   <template v-else-if="page === 'users'">
     <div class="metrics-grid"><MetricCard title="用户总量" :value="users.total_users || 0" unit="人"/><MetricCard title="今日新增" :value="users.today_new || 0" unit="人"/><MetricCard title="近30日活跃" :value="users.active_30d || 0" unit="人"/><MetricCard title="累计充值" :value="money(users.recharge_cents)" unit="元"/><MetricCard title="账户余额合计" :value="money(users.balance_cents)" unit="元"/></div>
-    <div class="topic-grid"><PanelCard title="用户增长" subtitle="Spark DWD · 近30日每日新增"><TopicChart :option="growthChart" label="每日新增用户"/></PanelCard><PanelCard title="消费层级" subtitle="Spark ADS · 累计已支付金额分组"><TopicChart :option="spendChart" label="用户消费金额分布"/></PanelCard><PanelCard title="充值趋势" subtitle="Spark DWD · 近30日"><TopicChart :option="rechargeChart" label="每日充值金额"/></PanelCard></div>
+    <div class="topic-grid"><PanelCard title="用户增长" subtitle="Spark DWD · 近30日每日新增"><TopicChart :option="growthChart" label="每日新增用户"/></PanelCard><PanelCard title="消费层级" subtitle="Spark ADS · 累计已支付金额 · 每25元一档"><TopicChart :option="spendChart" label="用户消费金额分布"/></PanelCard><PanelCard title="充值趋势" subtitle="Spark DWD · 近30日"><TopicChart :option="rechargeChart" label="每日充值金额"/></PanelCard></div>
     <div class="topic-grid two-columns topic-wide"><PanelCard title="用户消费 Top 10" subtitle="全历史已完成订单 · 用户以编号匿名展示"><div class="event-table"><table><thead><tr><th>用户</th><th>完成订单</th><th>消费金额</th></tr></thead><tbody><tr v-for="user in users.top || []" :key="user.user_id"><td>用户 #{{ user.user_id }}</td><td>{{ user.order_count }}</td><td>¥ {{ money(user.amount_cents) }}</td></tr></tbody></table></div></PanelCard><PanelCard title="用户账户状态" subtitle="真实业务字段，不推断年龄/性别/车型"><TopicChart :option="userStatusChart" label="正常和冻结用户数量"/></PanelCard></div>
   </template>
 
@@ -40,7 +43,8 @@
     <div class="metrics-grid"><MetricCard title="数据日期" :value="topics?.data_as_of || '—'" unit=""/><MetricCard title="Spark 批次" :value="system.batch_id || '—'" unit=""/><MetricCard title="数仓质量评分" :value="overview.quality_score ?? analytics.batch?.quality_score ?? '—'" unit="分"/><MetricCard title="ADS 表数" :value="system.tables?.length || 0" unit="张"/><MetricCard title="展示数据源" :value="system.storage || 'Spark ADS'" unit=""/></div>
     <div class="topic-grid two-columns"><PanelCard title="系统运行架构" subtitle="Web 统计只使用 Spark 数据源"><div class="system-flow"><div>Python 当前日期数据生成器</div><span>↓ CSV 模拟数据</span><div>Spark ODS → 质量检测 → DWD</div><span>↓ 聚合计算</span><div>DWS → ADS</div><span>↓ 只读 JSON 快照</span><div>Flask API → Vue Web 大屏</div></div></PanelCard><PanelCard title="数仓表规模" subtitle="Spark DWD 清洗后记录数"><div class="event-table"><table><thead><tr><th>数仓表</th><th>记录数</th></tr></thead><tbody><tr v-for="table in system.tables || []" :key="table.name"><td>{{ table.name }}</td><td>{{ table.count.toLocaleString() }}</td></tr></tbody></table></div><p>ADS 快照 {{ timestamp(topics?.generated_at) }}</p></PanelCard></div>
     <div class="topic-grid two-columns topic-wide"><PanelCard title="数仓批次状态" subtitle="已发布 Spark 结果"><p>{{ analytics.label }}</p><p v-if="analytics.batch">{{ analytics.batch.window_start }} → {{ analytics.batch.window_end }}</p><p v-if="analytics.batch">输入订单 {{ analytics.batch.input_orders }} · 质量 {{ analytics.batch.quality_score ?? '—' }}</p><p>{{ analytics.warning || '批次读取正常' }}</p></PanelCard><PanelCard title="数据源约束" subtitle="Web 与统计接口"><p>主题页、设备分页、订单、站点、用户和能源数据均来自 Spark ADS。</p><p>Qt 的 SQLite 仅服务桌面端事务，不参与 Web 大屏统计。</p></PanelCard></div>
-  </template>
+    </template>
+  </main>
 </template>
 <script setup>
 import { computed, inject, ref } from 'vue'

@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-shell">
+  <div class="dashboard-shell" :class="`page-${page.id}`">
     <header class="topbar">
       <div><p>EV Charging Operation Center · {{ page.subtitle }}</p><h1>充电运营平台 · {{ page.title }}</h1></div>
       <div class="topbar-right"><span>{{ dashboard.dataSource.value }} · 每 5 秒刷新</span><strong>{{ time }}</strong></div>

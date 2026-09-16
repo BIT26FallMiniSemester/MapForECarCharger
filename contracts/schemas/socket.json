@@ -2145,6 +2145,10 @@
             "minimum": 7,
             "maximum": 30
           },
+          "source": {"type": "string"},
+          "batch_id": {"type": "string"},
+          "data_as_of": {"type": "string"},
+          "stale": {"type": "boolean"},
           "items": {
             "type": "array",
             "items": {
@@ -2226,6 +2230,25 @@
           "FAULT",
           "OFFLINE"
         ],
+        "additionalProperties": false
+      }
+    },
+    "admin.orders.generate_realtime": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "created": {"type": "integer", "minimum": 100, "maximum": 100},
+          "reserved": {"type": "integer", "minimum": 50, "maximum": 50},
+          "charging": {"type": "integer", "minimum": 50, "maximum": 50}
+        },
+        "required": ["created", "reserved", "charging"],
         "additionalProperties": false
       }
     },

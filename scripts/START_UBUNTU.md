@@ -56,6 +56,21 @@ bash "$PROJECT_ROOT/scripts/start_ubuntu.sh"
 
 地图配置仍从 /etc/map-for-ecar/server.env 读取，不输出 Key。脚本默认各服务仅监听本机，供 Ubuntu 完整测试。
 
+## 统一统计来源
+
+Qt 与 Flask 启动前都读取同一个 latest-flow.env 并设置 ADS_ROOT=$WAREHOUSE/ads、ADS_BATCH_ID=$BATCH。一键启动脚本已为两者设置相同变量。
+
+```bash
+cd /home/zjs/MapForECarCharger
+source spark-warehouse/scripts/env_ubuntu.sh
+source spark-warehouse/runtime/latest-flow.env
+export ADS_ROOT="$WAREHOUSE/ads"
+export ADS_BATCH_ID="$BATCH"
+bash scripts/start_ubuntu.sh
+```
+
+管理端近 7/30 日趋势现在使用清洗后 ADS；7 日是同一 30 日批次的末 7 日，窗口截至批次 data_as_of，允许不等于今天。图表显示来源、批次和截止日期。今日、本月、累计业务卡片与订单操作仍使用实时 SQLite。ADS 未就绪时趋势回退到实时 SQLite 并明确标注。更新历史请运行 --refresh-data 后启动两个服务；不要仅为一个服务切换批次。Qt 9001 /api/analytics 也读取这份 ADS，5000 /api/analytics 的批次和每日营收/订单数应与其一致。
+
 ## 丰富业务场景模拟库
 
 保留原模拟库，生成新的副本。先退出用户端/管理端并停止旧服务，再在 Ubuntu 执行：
@@ -84,3 +99,28 @@ PY
 ```
 
 预期 users 有 NORMAL/FROZEN，电桩有五种状态，订单有六种状态；foreign_keys=[]、integrity=[('ok',)]。大屏状态饼图、矩阵、订单漏斗、用户冻结分布和充值图应更丰富。新库是业务展示数据，不另外注入非法外键或时间字段；原历史库已有质量问题仍保留给 Spark 检测清洗。
+
+## 2026-09-16：六张清洗 CSV 数据集验收
+
+新库使用 15000 用户、2614 站点、32256 电桩、400000 订单、75000 充值记录和 650000 状态日志。原 CSV 的 row_id 是数仓标识，不写入业务表。保留原管理员账号，原业务库和 CSV 均不覆盖。导入器恢复 3807 个充电中电桩的订单绑定，使 Qt 能处理停止充电。
+
+```bash
+cd /home/zjs/MapForECarCharger
+# 从目录导入时使用新目标文件名（六张 CSV 须已复制到此目录）：
+# python3 server-qt/tools/import_clean_csv.py --template server-qt/runtime/showcase-sim.db --csv-dir /home/zjs/clean-csv --target server-qt/runtime/showcase-clean-new.db
+export LAUNCH_DATABASE_PATH="$PWD/server-qt/runtime/showcase-clean-20260916-v2.db"
+bash scripts/start_ubuntu.sh
+```
+
+启动成功后脚本记住这份数据库路径。重新导入或更新历史统计使用 --refresh-data；只需看当前已计算好的结果时不要重复计算。Ubuntu 大屏地址 http://127.0.0.1:5174/，该启动方式默认仅监听本机。
+
+注意数据存在 326 名冻结用户有活跃订单，与 Qt 不允许冻结活跃用户的操作规则不同；为展示冻结分布按原数据保留。原有 3116 笔预约全部已过期，本次展示副本续期到启动前 15 分钟，启动后仍按正常规则到期，不保证重启后继续显示预约。历史数据不会按每天开机自动前移，今日卡片可能为零；通过用户端创建当天业务验证实时变化。预测仍是演示预测，不是新 CSV 训练的结果。
+
+```bash
+curl -fsS http://127.0.0.1:5000/api/v1/topics | python3 -m json.tool
+curl -fsS 'http://127.0.0.1:5174/api/v1/piles?page=1&page_size=120&status=FAULT' | python3 -m json.tool
+curl -fsS http://127.0.0.1:9001/api/analytics | python3 -m json.tool
+curl -fsS http://127.0.0.1:5000/api/analytics | python3 -m json.tool
+```
+
+预期用户冻结 330、充电中 3807、故障 3226、离线 645；预约初始 3116，15 分钟后可变为 0；分页筛选 total=3226、每页最多 120；两个 analytics 接口批次、每日营收和订单数相同，管理端 7 日趋势是同批次 30 日的末 7 日。大屏地图与榜单只显示站点编号。
