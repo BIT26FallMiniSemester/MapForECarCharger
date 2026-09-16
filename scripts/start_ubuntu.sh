@@ -105,6 +105,7 @@ FLOW="$PROJECT_ROOT/spark-warehouse/runtime/latest-flow.env"
 TODAY=$(TZ=Asia/Shanghai date +%F)
 if ((REFRESH)) || [[ -z ${WAREHOUSE:-} || -z ${BATCH:-} || $BATCH != sim-full-$TODAY-seed* ]] || [[ ! -d "$WAREHOUSE/ads/ads_topics/batch_id=$BATCH/json" ]]; then
   GENERATED="$PROJECT_ROOT/spark-warehouse/runtime/generated"
+  mkdir -p "$GENERATED"
   SNAPSHOT=$(find "$GENERATED" -mindepth 1 -maxdepth 1 -type d -name "sim-full-$TODAY-seed*" 2>/dev/null | sort | tail -n 1)
   if [[ -z "$SNAPSHOT" ]]; then
     SNAPSHOT=$(python spark-warehouse/generator/generate_all.py --profile full --output "$GENERATED")
