@@ -3,7 +3,7 @@
 在 Ubuntu 桌面终端执行，不要使用 sudo bash，也不要从无图形会话的 SSH 启动界面。
 
 ```bash
-cd /home/zjs/MapForECarCharger
+cd ~/MapForECarCharger
 bash scripts/start_ubuntu.sh
 ```
 
@@ -12,7 +12,7 @@ bash scripts/start_ubuntu.sh
 仅检查依赖：
 
 ```bash
-cd /home/zjs/MapForECarCharger
+cd ~/MapForECarCharger
 bash scripts/start_ubuntu.sh --check-only
 ```
 
@@ -22,7 +22,7 @@ bash scripts/start_ubuntu.sh --check-only
 bash scripts/start_ubuntu.sh --install-deps
 ```
 
-Node/npm 必须预先安装。当前虚拟机已有 Node 24，无须重复安装；新 Ubuntu 可使用官方 Node 24 压缩包安装到用户目录，或安装发行渠道提供的 Node 20.19+、22.12+、24+ 和 npm。Hadoop 必须预先配置，脚本不自动下载 Hadoop、不格式化 NameNode。
+脚本会识别项目标准目录及当前虚拟机已有的 Python 环境、用户目录 JDK 和 Node 24；也可用 `SPARK_VENV`、`JAVA_HOME`、`NODE_HOME` 显式覆盖。新 Ubuntu 可使用官方 Node 24 压缩包安装到用户目录，或安装发行渠道提供的 Node 20.19+、22.12+、24+ 和 npm。Hadoop 必须预先配置，脚本不自动下载 Hadoop、不格式化 NameNode。
 
 更新业务历史统计，额外将快照保存到已有 HDFS：
 
@@ -47,7 +47,7 @@ ss -ltnp | grep -E ':9000|:9001|:5000|:5174'
 指定其他项目、数据库或已训练预测：
 
 ```bash
-export PROJECT_ROOT=/home/zjs/MapForECarCharger
+export PROJECT_ROOT="$HOME/MapForECarCharger"
 export LAUNCH_DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
 # 只有文件存在时才启用下行：
 # export LAUNCH_ML_PATH="$PROJECT_ROOT/ml/outputs/forecast-live-test.json"
@@ -61,7 +61,7 @@ bash "$PROJECT_ROOT/scripts/start_ubuntu.sh"
 保留原模拟库，生成新的副本。先退出用户端/管理端并停止旧服务，再在 Ubuntu 执行：
 
 ```bash
-cd /home/zjs/MapForECarCharger
+cd ~/MapForECarCharger
 RICH_DB="$PWD/server-qt/runtime/showcase-rich-$(date +%Y%m%d-%H%M%S).db"
 python3 server-qt/tools/enrich_showcase_simulation.py --source server-qt/runtime/showcase-sim.db --target "$RICH_DB" --seed 20260915
 export LAUNCH_DATABASE_PATH="$RICH_DB"
