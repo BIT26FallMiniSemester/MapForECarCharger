@@ -1,24 +1,27 @@
 profiles:
   quick:
-    days: 30
-    users: 100
-    stations: 50
-    orders: 3000
-    recharge_records: 500
-    pile_status_logs: 5000
+    days: 45
+    users: 250
+    stations: 100
+    orders: 10000
+    recharge_records: 1500
+    pile_status_logs: 15000
   full:
-    days: 90
-    users: 10000
+    days: 120
+    users: 15000
     stations: 2614
-    orders: 300000
-    recharge_records: 50000
-    pile_status_logs: 500000
+    orders: 400000
+    realtime_charging_orders: 100
+    seed: 20260917
+    recharge_records: 75000
+    pile_status_logs: 650000
 
 defaults:
   profile: quick
-  seed: 20260914
-  end_date: 2026-09-14
+  seed: 20260915
   price_cents_per_kwh: 150
+  fault_pile_ratio: 0.10 # intentionally elevated for fault-dashboard demos, not real failure rate
+  offline_pile_ratio: 0.02
   output_format: csv
   encoding: utf-8
 

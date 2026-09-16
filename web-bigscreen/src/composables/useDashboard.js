@@ -17,7 +17,7 @@ export function useDashboard() {
   let timer, controller, stopped = false
   const merged = computed(() => USE_MOCK ? { ...live.value,
     analytics: { label: '模拟数据', warning: '', batch: null } } : !USE_ANALYTICS ? {
-      ...live.value, analytics: { label: '历史统计：Qt 实时汇总', warning: '', batch: null }
+      ...live.value, analytics: { label: 'Spark ADS 数据', warning: '', batch: null }
     } : mergeAnalytics(live.value, batch.value, batchError.value))
   async function refresh() {
     controller = new AbortController()
@@ -38,7 +38,7 @@ export function useDashboard() {
       }).catch(() => {
         if (stopped) return
         batch.value = null
-        batchError.value = '批处理结果不可用，历史图表暂用 Qt 汇总'
+        batchError.value = 'Spark 批处理结果不可用'
       })),
       (USE_MOCK || !USE_SPARK_COMPARISONS ? Promise.resolve() : getComparisons(controller.signal).then(data => {
         if (stopped) return

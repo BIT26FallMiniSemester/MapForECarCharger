@@ -1,6 +1,6 @@
 export function adaptDashboard(data) {
   if (!data?.generated_at || !Array.isArray(data.stations)) {
-    throw new Error('Qt 大屏数据尚未就绪，请确认已运行合并版后端')
+    throw new Error('Spark ADS 数据尚未就绪，请确认已完成数据清洗')
   }
   const total = data.pile_count || 0
   const counts = Object.fromEntries(data.pile_status.map(item => [item.name, item.value]))

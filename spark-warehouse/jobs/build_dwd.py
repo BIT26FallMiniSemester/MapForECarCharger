@@ -109,7 +109,8 @@ def build(frames: dict, issues):
     dwd["dim_user"] = valid["users"].select(
         F.col("id").cast("long").alias("user_id"),
         F.regexp_replace(F.trim("phone"), r"^(\d{3})\d{4}(\d{4})$", "$1****$2").alias("masked_phone"),
-        F.trim("nickname").alias("nickname"), F.upper(F.trim("status")).alias("status"),
+        F.trim("nickname").alias("nickname"), F.col("balance_cents").cast("long").alias("balance_cents"),
+        F.upper(F.trim("status")).alias("status"),
         parse_timestamp("created_at").alias("register_time"), "quality_flags")
 
     dwd["dim_station"] = valid["stations"].select(

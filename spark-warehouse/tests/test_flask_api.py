@@ -5,8 +5,6 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-import sqlite3
-from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_PATH = ROOT / "flask-api" / "app.py"
@@ -35,7 +33,7 @@ class FlaskApiTests(unittest.TestCase):
         self.batch = "batch-001"
         meta = {"batch_id": self.batch, "generated_at": "2026-09-14T02:00:00Z", "data_as_of": "2026-09-14"}
         datasets = {
-            "ads_overview": [{**meta, "total_revenue_cents": 1000, "today_revenue_cents": 300, "today_order_count": 2, "station_count": 1, "pile_count": 2}],
+            "ads_overview": [{**meta, "total_revenue_cents": 1000, "total_order_count": 9, "today_revenue_cents": 300, "today_order_count": 2, "today_energy_wh": 5000, "station_count": 1, "pile_count": 2}],
             "ads_revenue_trend_30d": [{**meta, "biz_date": "2026-09-14", "revenue_cents": 300, "order_count": 2}],
             "ads_station_ranking_30d": [{**meta, "station_id": 1, "station_name": "测试站", "revenue_cents": 300}],
             "ads_district_distribution": [{**meta, "district": "海淀区", "revenue_cents": 300}],
@@ -46,6 +44,9 @@ class FlaskApiTests(unittest.TestCase):
             "ads_quality_rules": [{**meta, "rule_id": "DQ001", "issue_count": 1}],
             "ads_district_charge_type_30d": [{**meta, "district": "海淀区", "charge_type": "FAST", "order_count": 3}],
             "ads_day_type_hour_30d": [{**meta, "day_type": "WEEKEND", "biz_hour": 18, "order_count": 2}],
+            "ads_topics": [{**meta, "payload_json": json.dumps({"source": "Spark DWD / DWS / ADS", "orders": {"total_orders": 9}})}],
+            "ads_pile_inventory": [{**meta, "id": 1, "station_id": 1, "pile_no": "SP-1", "status": "CHARGING", "rated_power_w": 60000}],
+            "ads_realtime_orders": [{**meta, "id": 1, "order_no": "SPARK-1", "status": "CHARGING", "station_id": 1, "station_name": "测试站", "pile_no": "SP-1", "power_w": 60000, "amount_cents": 450}],
         }
         for name, rows in datasets.items():
             target = self.root / name / f"batch_id={self.batch}" / "json"
@@ -58,22 +59,8 @@ class FlaskApiTests(unittest.TestCase):
             {"station_id": 2, "horizon_hours": 1, "predicted_for_epoch": 1789347600,
              "predicted_load_kw": 7.5, "predicted_available_piles": 2, "predicted_occupied_piles": 2},
         ]}), encoding="utf-8")
-        self.database = self.root / "live.db"
-        connection = sqlite3.connect(self.database)
-        connection.executescript("""
-            CREATE TABLE stations(id INTEGER PRIMARY KEY,name TEXT,status TEXT);
-            CREATE TABLE charging_piles(id INTEGER PRIMARY KEY,station_id INTEGER,pile_no TEXT,status TEXT,rated_power_w INTEGER);
-            CREATE TABLE charging_orders(id INTEGER PRIMARY KEY,order_no TEXT,status TEXT,station_id INTEGER,pile_id INTEGER,amount_cents INTEGER,energy_wh INTEGER,created_at TEXT,paid_at TEXT,stopped_at TEXT);
-            INSERT INTO stations VALUES(1,'实时站','ACTIVE');
-            INSERT INTO charging_piles VALUES(1,1,'P-1','CHARGING',60000);
-        """)
-        now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-        connection.execute("INSERT INTO charging_orders VALUES(1,'LIVE-1','CHARGING',1,1,450,3000,?,NULL,NULL)", (now,))
-        connection.commit()
-        connection.close()
         app = self.module.create_app({"TESTING": True, "ADS_ROOT": str(self.root), "ADS_BATCH_ID": self.batch,
-                                      "ADS_CACHE_SECONDS": 0, "ML_PREDICTIONS_PATH": str(self.ml_path),
-                                      "DATABASE_PATH": str(self.database)})
+                                      "ADS_CACHE_SECONDS": 0, "ML_PREDICTIONS_PATH": str(self.ml_path)})
         self.client = app.test_client()
 
     def tearDown(self):
@@ -88,15 +75,17 @@ class FlaskApiTests(unittest.TestCase):
         self.assertEqual(comparison["batch_id"], self.batch)
         self.assertEqual(comparison["district_charge_type"][0]["charge_type"], "FAST")
         self.assertEqual(comparison["day_type_hour"][0]["biz_hour"], 18)
+        self.assertEqual(self.client.get("/api/v1/topics").json["source"], "Spark DWD / DWS / ADS")
+        self.assertEqual(self.client.get("/api/v1/piles").json["items"][0]["pile_no"], "SP-1")
 
     def test_compatibility_endpoints(self):
         dashboard = self.client.get("/api/dashboard").json
-        self.assertEqual(dashboard["today_orders"], 1)
+        self.assertEqual(dashboard["today_orders"], 2)
         self.assertEqual(dashboard["load_prediction"]["model_version"], "test-v1")
         self.assertEqual(dashboard["load_prediction"]["points"][0]["load_w"], 20000.0)
         self.assertEqual(dashboard["load_prediction"]["points"][0]["available_piles"], 5)
-        self.assertEqual(dashboard["realtime_orders"][0]["order_no"], "LIVE-1")
-        self.assertEqual(dashboard["pile_status"], [{"name": "CHARGING", "value": 1}])
+        self.assertEqual(dashboard["realtime_orders"][0]["order_no"], "SPARK-1")
+        self.assertEqual(dashboard["pile_status"], [{"name": "IDLE", "value": 2}])
         analytics = self.client.get("/api/analytics").json
         self.assertTrue(analytics["available"])
         self.assertEqual(analytics["data"]["engine"], "spark-sql")

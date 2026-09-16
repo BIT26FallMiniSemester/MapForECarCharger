@@ -11,6 +11,8 @@
 *.sqlite
 *.sqlite3
 .env
+/.vite/
+/runtime/
 /server-qt/build/
 /server-qt/runtime/
 CMakeUserPresets.json

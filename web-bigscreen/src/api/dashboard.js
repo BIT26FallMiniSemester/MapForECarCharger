@@ -12,7 +12,7 @@ export async function getDashboard(signal) {
     return { ...mock, source: '模拟数据' }
   }
   const { data } = await request.get('/dashboard', { signal })
-  return { ...adaptDashboard(data), source: 'Qt 实时数据' }
+  return { ...adaptDashboard(data), source: 'Spark ADS' }
 }
 
 export async function getAnalytics(signal) {
