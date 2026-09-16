@@ -105,6 +105,23 @@ class GeneratorTests(unittest.TestCase):
             daily[local_day] += 1
         self.assertLess(max(daily.values()), len(orders) / len(daily) * 1.3)
 
+    def test_default_end_date_is_today_and_no_timestamp_is_in_future(self):
+        today = datetime.now(generator.BEIJING).date()
+        self.assertEqual(date.fromisoformat(self.metadata["end_date"]), today)
+        terminal = datetime.combine(today, time.max, generator.BEIJING).astimezone(generator.UTC)
+        timestamp_fields = ("created_at", "reserved_at", "expires_at", "started_at", "stopped_at",
+                            "paid_at", "cancelled_at", "updated_at")
+        for order in self.rows("clean", "charging_orders"):
+            for field in timestamp_fields:
+                if order[field]:
+                    value = datetime.fromisoformat(order[field].replace("Z", "+00:00"))
+                    self.assertLessEqual(value, terminal, (order["id"], field, order[field]))
+        for table, field in (("users", "created_at"), ("recharge_records", "created_at"),
+                             ("pile_status_logs", "created_at")):
+            for row in self.rows("clean", table):
+                value = datetime.fromisoformat(row[field].replace("Z", "+00:00"))
+                self.assertLessEqual(value, terminal, (table, row["id"], row[field]))
+
     def test_realtime_orders_are_extra_and_match_pile_events(self):
         config = generator.parse_config(ROOT / "conf/generator.yaml", "quick")
         config.update(orders=1000, realtime_charging_orders=5)

@@ -3,65 +3,12 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
-from contextlib import closing
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from time import monotonic
-from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request
-
-
-def read_topics(database_path):
-    """Bounded, read-only business aggregates for the six topic screens."""
-    if not database_path:
-        raise FileNotFoundError("DATABASE_PATH is required for topic screens")
-    path = Path(database_path).resolve()
-    now = datetime.now(ZoneInfo("Asia/Shanghai"))
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    iso = lambda t: t.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    lower, upper, window, month = map(iso, (start, start + timedelta(days=1), start - timedelta(days=29), start.replace(day=1)))
-    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA query_only=ON")
-        db.execute("BEGIN")
-        rows = lambda sql, args=(): [dict(r) for r in db.execute(sql, args)]
-        scalar = lambda sql, args=(): db.execute(sql, args).fetchone()[0]
-        order_stats = rows("SELECT count(*) total_orders,coalesce(avg(CASE WHEN status='COMPLETED' THEN duration_seconds END),0) avg_duration_seconds,coalesce(avg(CASE WHEN status='COMPLETED' THEN energy_wh END),0) avg_energy_wh,coalesce(avg(CASE WHEN status='COMPLETED' THEN amount_cents END),0) avg_amount_cents FROM charging_orders")[0]
-        order_stats["statuses"] = rows("SELECT status,count(*) count FROM charging_orders GROUP BY status")
-        order_stats["funnel"] = rows("SELECT count(*) created,coalesce(sum(reserved_at IS NOT NULL),0) reserved,coalesce(sum(started_at IS NOT NULL),0) started,coalesce(sum(stopped_at IS NOT NULL),0) stopped,coalesce(sum(paid_at IS NOT NULL AND status='COMPLETED'),0) paid FROM charging_orders WHERE created_at>=? AND created_at<?", (lower, upper))[0]
-        order_stats["hourly"] = rows("SELECT cast(strftime('%H',created_at,'+8 hours') as integer) hour,count(*) count FROM charging_orders WHERE created_at>=? AND created_at<? GROUP BY hour", (lower, upper))
-        users = rows("SELECT count(*) total_users,coalesce(sum(balance_cents),0) balance_cents,coalesce(sum(created_at>=? AND created_at<?),0) today_new FROM users", (lower, upper))[0]
-        users["active_30d"] = scalar("SELECT count(distinct user_id) FROM charging_orders WHERE created_at>=? AND created_at<?", (window, upper))
-        users["recharge_cents"] = scalar("SELECT coalesce(sum(amount_cents),0) FROM recharge_records")
-        users["statuses"] = rows("SELECT status,count(*) count FROM users GROUP BY status")
-        users["growth"] = rows("SELECT date(created_at,'+8 hours') date,count(*) count FROM users WHERE created_at>=? AND created_at<? GROUP BY date", (window, upper))
-        users["recharges"] = rows("SELECT date(created_at,'+8 hours') date,sum(amount_cents) amount_cents FROM recharge_records WHERE created_at>=? AND created_at<? GROUP BY date", (window, upper))
-        users["top"] = rows("SELECT user_id,count(*) order_count,sum(amount_cents) amount_cents FROM charging_orders WHERE status='COMPLETED' GROUP BY user_id ORDER BY amount_cents DESC,user_id LIMIT 10")
-        users["spending"] = rows("WITH spending AS (SELECT u.id,coalesce(sum(o.amount_cents),0) cents FROM users u LEFT JOIN charging_orders o ON o.user_id=u.id AND o.status='COMPLETED' GROUP BY u.id) SELECT CASE WHEN cents=0 THEN '未消费' WHEN cents<5000 THEN '0–50元' WHEN cents<20000 THEN '50–200元' WHEN cents<100000 THEN '200–1000元' ELSE '1000元以上' END band,count(*) count FROM spending GROUP BY band")
-        spatial = rows("SELECT s.id station_id,s.latitude,s.longitude,coalesce(nullif(s.district,''),'未知区域') district,s.status station_status,coalesce(p.total,0) pile_count,coalesce(p.idle,0) available_pile_count,coalesce(p.busy,0) busy_pile_count,coalesce(p.fault,0) fault_count,coalesce(p.offline,0) offline_count,coalesce(o.orders,0) order_count,coalesce(o.revenue,0) revenue_cents FROM stations s LEFT JOIN (SELECT station_id,count(*) total,sum(status='IDLE') idle,sum(status IN ('RESERVED','CHARGING')) busy,sum(status='FAULT') fault,sum(status='OFFLINE') offline FROM charging_piles GROUP BY station_id) p ON p.station_id=s.id LEFT JOIN (SELECT station_id,count(*) orders,sum(amount_cents) revenue FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<? GROUP BY station_id) o ON o.station_id=s.id ORDER BY s.id", (window, upper))
-        for station in spatial:
-            station["utilization_rate"] = round(100 * station["busy_pile_count"] / station["pile_count"], 2) if station["pile_count"] else 0
-        logs = rows("SELECT l.id,p.pile_no,l.old_status,l.new_status,l.reason,l.created_at FROM pile_status_logs l JOIN charging_piles p ON p.id=l.pile_id ORDER BY l.id DESC LIMIT 20")
-        energy = rows("SELECT coalesce(sum(CASE WHEN status='COMPLETED' AND paid_at>=? AND paid_at<? THEN amount_cents ELSE 0 END),0) month_revenue_cents,coalesce(sum(CASE WHEN status IN ('UNPAID','COMPLETED') AND stopped_at>=? AND stopped_at<? THEN energy_wh ELSE 0 END),0) month_energy_wh FROM charging_orders", (month, upper, month, upper))[0]
-        tables = [{"name": name, "count": scalar(f"SELECT count(*) FROM {name}")} for name in ("users", "stations", "charging_piles", "charging_orders", "recharge_records", "pile_status_logs", "operation_logs")]
-        system = {"database_bytes": path.stat().st_size + sum(p.stat().st_size for p in (Path(str(path) + "-wal"), Path(str(path) + "-shm")) if p.exists()), "journal_mode": scalar("PRAGMA journal_mode"), "schema_version": scalar("SELECT max(version) FROM schema_migrations"), "tables": tables, "admin_events": rows("SELECT action,target_type,target_id,created_at FROM operation_logs ORDER BY id DESC LIMIT 10"), "socket_connections": None, "socket_requests": None, "map_status": "未采集"}
-        return {"generated_at": datetime.now(timezone.utc).isoformat(), "window_start": start.date().isoformat(), "source": "业务数据库（含模拟数据）", "orders": order_stats, "users": users, "stations": spatial, "pile_logs": logs, "energy": energy, "system": system}
-
-
-def read_pile_page(database_path, page, size, status):
-    if not database_path:
-        raise FileNotFoundError("DATABASE_PATH is required")
-    where, args = (" WHERE status=?", (status,)) if status else ("", ())
-    with closing(sqlite3.connect(Path(database_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA query_only=ON")
-        db.execute("BEGIN")
-        total = db.execute("SELECT count(*) FROM charging_piles" + where, args).fetchone()[0]
-        items = [dict(r) for r in db.execute("SELECT id,station_id,pile_no,status,rated_power_w FROM charging_piles" + where + " ORDER BY id LIMIT ? OFFSET ?", (*args, size, (page-1)*size))]
-        return {"items": items, "total": total, "page": page, "page_size": size}
 
 
 class AdsStore:
@@ -127,63 +74,22 @@ def load_ml_prediction(path):
     return {"model_version": document.get("model_version"), "horizon_hours": len(points), "points": points}
 
 
-def load_live_dashboard(database_path):
-    if not database_path:
-        return None
-    path = Path(database_path).resolve()
-    uri = f"file:{path.as_posix()}?mode=ro"
-    zone = ZoneInfo("Asia/Shanghai")
-    local_now = datetime.now(timezone.utc).astimezone(zone)
-    start = datetime(local_now.year, local_now.month, local_now.day, tzinfo=zone).astimezone(timezone.utc)
-    end = start + timedelta(days=1)
-    lower = start.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    upper = end.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    with sqlite3.connect(uri, uri=True) as connection:
-        connection.row_factory = sqlite3.Row
-        scalar = lambda sql, args=(): connection.execute(sql, args).fetchone()[0]
-        statuses = [dict(row) for row in connection.execute(
-            "SELECT status name,count(*) value FROM charging_piles GROUP BY status ORDER BY status")]
-        orders = [dict(row) for row in connection.execute(
-            "SELECT o.id,o.order_no,o.status,o.station_id,s.name station_name,p.pile_no,"
-            "CASE WHEN o.status='CHARGING' THEN p.rated_power_w ELSE 0 END power_w,"
-            "coalesce(o.amount_cents,0) amount_cents FROM charging_orders o "
-            "JOIN stations s ON s.id=o.station_id JOIN charging_piles p ON p.id=o.pile_id "
-            "ORDER BY o.created_at DESC,o.id DESC LIMIT 8")]
-        return {
-            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "total_revenue_cents": scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED'"),
-            "today_revenue_cents": scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?", (lower, upper)),
-            "today_orders": scalar("SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?", (lower, upper)),
-            "today_energy_wh": scalar("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE status IN ('UNPAID','COMPLETED') AND stopped_at>=? AND stopped_at<?", (lower, upper)),
-            "station_count": scalar("SELECT count(*) FROM stations WHERE status='ACTIVE'"),
-            "pile_count": scalar("SELECT count(*) FROM charging_piles"),
-            "pile_status": statuses,
-            "realtime_orders": orders,
-        }
-
-
 def create_app(config=None):
     app = Flask(__name__)
     app.config.update(ADS_ROOT=os.environ.get("ADS_ROOT", "runtime/warehouse/ads"),
                       ADS_BATCH_ID=os.environ.get("ADS_BATCH_ID", ""),
                       ADS_CACHE_SECONDS=int(os.environ.get("ADS_CACHE_SECONDS", "60")),
-                      ML_PREDICTIONS_PATH=os.environ.get("ML_PREDICTIONS_PATH", ""),
-                      DATABASE_PATH=os.environ.get("DATABASE_PATH", ""))
+                      ML_PREDICTIONS_PATH=os.environ.get("ML_PREDICTIONS_PATH", ""))
     if config:
         app.config.update(config)
     if not app.config["ADS_BATCH_ID"]:
         raise RuntimeError("ADS_BATCH_ID must be set explicitly")
     store = AdsStore(app.config["ADS_ROOT"], app.config["ADS_BATCH_ID"], app.config["ADS_CACHE_SECONDS"])
     app.extensions["ads_store"] = store
-    topic_cache = {}
-    topic_lock = RLock()
-
     @app.get("/api/v1/topics")
     def topics():
-        with topic_lock:
-            if not topic_cache or monotonic() - topic_cache["at"] >= 5:
-                topic_cache.update(data=read_topics(app.config["DATABASE_PATH"]), at=monotonic())
-            return jsonify(topic_cache["data"])
+        rows = store.load("ads_topics")
+        return jsonify(json.loads(rows[0]["payload_json"]) if rows else {})
 
     @app.get("/api/v1/piles")
     def piles():
@@ -195,12 +101,11 @@ def create_app(config=None):
                 raise ValueError()
         except ValueError:
             return jsonify({"error": "invalid_pagination"}), 400
-        return jsonify(read_pile_page(app.config["DATABASE_PATH"], page, size, status))
-
-    @app.errorhandler(sqlite3.Error)
-    def database_unavailable(error):
-        app.logger.warning("Read-only database query failed: %s", type(error).__name__)
-        return jsonify({"error": "database_unavailable"}), 503
+        rows = store.load("ads_pile_inventory")
+        if status:
+            rows = [row for row in rows if row.get("status") == status]
+        start = (page - 1) * size
+        return jsonify({"items": rows[start:start + size], "total": len(rows), "page": page, "page_size": size})
 
     @app.after_request
     def add_headers(response):
@@ -273,21 +178,17 @@ def create_app(config=None):
         row = store.load("ads_overview")[0]
         trend = store.load("ads_revenue_trend_30d")
         statuses = store.load("ads_pile_status")
-        live = load_live_dashboard(app.config["DATABASE_PATH"])
         dashboard = {"generated_at": row["generated_at"], "model": "spark-sql-offline",
             "total_revenue_cents": row["total_revenue_cents"], "today_revenue_cents": row["today_revenue_cents"],
             "today_orders": row["today_order_count"], "station_count": row["station_count"], "pile_count": row["pile_count"],
+            "today_energy_wh": row.get("today_energy_wh", 0),
             "quality_score": row.get("quality_score"),
             "trend": [{**item, "date": item.get("biz_date"), "orders": item.get("order_count", 0)} for item in trend],
             "pile_status": [{"name": item["status"], "value": item["count"]} for item in statuses],
             "station_ranking": store.load("ads_station_ranking_30d")[:10],
             "stations": store.load("ads_station_distribution"), "forecast_points": [],
-            "load_prediction": load_ml_prediction(app.config["ML_PREDICTIONS_PATH"]), "realtime_orders": []}
-        if live:
-            dashboard.update(live)
-            dashboard["trend"][-1] = {**dashboard["trend"][-1], "orders": live["today_orders"],
-                "order_count": live["today_orders"], "revenue_cents": live["today_revenue_cents"],
-                "energy_wh": live["today_energy_wh"]}
+            "load_prediction": load_ml_prediction(app.config["ML_PREDICTIONS_PATH"]),
+            "realtime_orders": store.load("ads_realtime_orders")}
         return jsonify(dashboard)
 
     @app.get("/api/analytics")

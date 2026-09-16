@@ -2,12 +2,12 @@ export function mergeAnalytics(live, response, failure = '') {
   const batch = response?.available ? response.data : null
   if (!batch) return {
     ...live,
-    analytics: { label: '历史统计：Qt 实时汇总', warning: failure || 'Hadoop 结果尚未就绪', batch: null }
+    analytics: { label: 'Spark ADS 尚未就绪', warning: failure || 'Spark 批次结果尚未就绪', batch: null }
   }
   if (batch.schema_version !== 1 || !['hadoop-mapreduce', 'local-mapreduce', 'spark-sql'].includes(batch.engine) ||
       !Array.isArray(batch.revenue_trend?.items) || batch.revenue_trend.items.length < 1 ||
       !Array.isArray(batch.station_ranking?.items) || !Number.isFinite(Date.parse(batch.snapshot_at))) {
-    return mergeAnalytics(live, null, '批处理结果格式异常，使用 Qt 汇总')
+    return mergeAnalytics(live, null, 'Spark 批处理结果格式异常')
   }
   const stations = new Map((live.stationDistribution?.items || []).map(row => [row.station_id, row]))
   return {

@@ -1,11 +1,11 @@
 # ADS 只读 API
 
-Flask 只读取 `build_ads.py` 导出的 JSON，不直接查询 ODS/DWD，也不在请求中启动 Spark。
+Flask 只读取 `build_ads.py` 导出的 JSON，不查询 SQLite、ODS 或 DWD，也不在请求中启动 Spark。主题页、设备分页、最新活跃订单和兼容大屏接口均来自 Spark ADS。
 
 ```bash
 python3 -m pip install -r requirements.txt
 export ADS_ROOT=/home/zjs/map-for-ecar/runtime/warehouse/ads
-export ADS_BATCH_ID=sim-quick-2026-09-14-seed20260914
+export ADS_BATCH_ID=sim-quick-$(TZ=Asia/Shanghai date +%F)-seed20260915
 export ML_PREDICTIONS_PATH=/home/zjs/map-for-ecar/ml/models/stations_predictions.json
 python3 app.py
 ```

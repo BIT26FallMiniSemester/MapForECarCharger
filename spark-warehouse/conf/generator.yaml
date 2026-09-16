@@ -19,7 +19,6 @@ profiles:
 defaults:
   profile: quick
   seed: 20260915
-  end_date: 2026-09-14
   price_cents_per_kwh: 150
   fault_pile_ratio: 0.10 # intentionally elevated for fault-dashboard demos, not real failure rate
   offline_pile_ratio: 0.02

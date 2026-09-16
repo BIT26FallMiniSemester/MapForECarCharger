@@ -41,6 +41,9 @@ def parse_config(path: Path, profile_name: str | None) -> dict:
     if selected not in config["profiles"]:
         raise ValueError(f"unknown profile: {selected}")
     result = {**config["defaults"], **config["profiles"][selected], "profile": selected}
+    # A caller may still pin end_date for reproducible tests, but normal runs always
+    # follow the current Beijing calendar day instead of a date stored in YAML.
+    result["end_date"] = str(result.get("end_date") or datetime.now(BEIJING).date())
     source = Path(config["source"]["station_catalog"])
     result["station_catalog"] = source if source.is_absolute() else (path.parent / source).resolve()
     return result
@@ -70,7 +73,7 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
     if config["stations"] > len(catalog):
         raise ValueError("station profile exceeds source catalog")
     chosen = catalog[: config["stations"]]
-    base_time = datetime.combine(start, time.min, UTC)
+    base_time = datetime.combine(start, time.min, BEIJING).astimezone(UTC)
 
     stations = []
     for index, source in enumerate(chosen, 1):
@@ -158,6 +161,10 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
         else:
             peak_hours = [10, 11, 12, 15, 16, 17, 18] if day.weekday() >= 5 else [7, 8, 9, 17, 18, 19, 20]
             hour = rng.choice(peak_hours) if rng.random() < 0.58 else rng.randrange(24)
+            # Completed/cancelled historical records must not spill into tomorrow.
+            # Current-day live records are generated separately below at 22:00.
+            if day == end:
+                hour = min(hour, 18)
             created = datetime.combine(day, time(hour, rng.randrange(60), rng.randrange(60)), BEIJING).astimezone(UTC)
             pile = pile_by_id[rng.choice(piles)["id"]]
             user = rng.choice(users)
@@ -289,6 +296,7 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
     dirty = copy.deepcopy(clean)
     rng = random.Random(seed + 1)
     manifest: list[dict] = []
+    issue_day = max(row["created_at"] for row in clean["charging_orders"])[:10]
     realtime_orders = [row for row in clean["charging_orders"] if row["status"] == "CHARGING"]
     realtime_order_ids = {row["id"] for row in realtime_orders}
     protected_rows = {
@@ -322,7 +330,7 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
     for source in duplicate_users:
         clone = copy.deepcopy(source)
         clone["row_id"] += ":duplicate"
-        clone["updated_at"] = "2026-09-14T23:59:59Z"
+        clone["updated_at"] = f"{issue_day}T23:59:59Z"
         dirty["users"].append(clone)
         record("DQ002", "users", clone, ["id", "phone", "updated_at"], {})
     mutate("DQ003", "stations", ["latitude", "longitude"], lambda row: row.update(latitude=181.0, longitude=95.0))
@@ -333,11 +341,11 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
     duplicate_order_no = order_rows[0]["order_no"]
     mutate("DQ007", "charging_orders", ["order_no"], lambda row: row.update(order_no=duplicate_order_no), lambda row: row is not order_rows[0])
     mutate("DQ008", "charging_orders", ["user_id", "station_id"], lambda row: row.update(user_id=999999999, station_id=999999999))
-    mutate("DQ009", "charging_orders", ["started_at", "stopped_at"], lambda row: row.update(started_at="2026-09-14T12:00:00Z", stopped_at="2026-09-14T11:00:00Z"))
+    mutate("DQ009", "charging_orders", ["started_at", "stopped_at"], lambda row: row.update(started_at=f"{issue_day}T12:00:00Z", stopped_at=f"{issue_day}T11:00:00Z"))
     mutate("DQ010", "charging_orders", ["duration_seconds", "energy_wh", "amount_cents"], lambda row: row.update(duration_seconds=-1, energy_wh=-100, amount_cents=-15))
     mutate("DQ011", "charging_orders", ["status", "paid_at", "amount_cents", "energy_wh"], lambda row: row.update(status="COMPLETED", paid_at="", amount_cents="", energy_wh=""))
     mutate("DQ012", "charging_orders", ["amount_cents"], lambda row: row.update(amount_cents=int(row["amount_cents"]) + 9999), lambda row: row["energy_wh"] != "" and row["amount_cents"] != "")
-    mutate("DQ013", "charging_orders", ["status", "started_at", "stopped_at", "paid_at"], lambda row: row.update(status="PENDING", started_at="2026-09-14T10:00:00Z", stopped_at="2026-09-14T11:00:00Z", paid_at="2026-09-14T11:05:00Z"))
+    mutate("DQ013", "charging_orders", ["status", "started_at", "stopped_at", "paid_at"], lambda row: row.update(status="PENDING", started_at=f"{issue_day}T10:00:00Z", stopped_at=f"{issue_day}T11:00:00Z", paid_at=f"{issue_day}T11:05:00Z"))
     mutate("DQ014", "recharge_records", ["user_id", "amount_cents"], lambda row: row.update(user_id=999999999, amount_cents=0))
     mutate("DQ015", "pile_status_logs", ["old_status", "new_status"], lambda row: row.update(old_status="BROKEN", new_status="RUNNING"))
     for table in TABLES:
