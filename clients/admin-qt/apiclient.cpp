@@ -103,6 +103,8 @@ void ApiClient::send(const QString &method, const QString &path, QJsonObject bod
         addQuery(body, query, QStringLiteral("page"), QStringLiteral("page"), true);
         addQuery(body, query, QStringLiteral("page_size"), QStringLiteral("page_size"), true);
         addQuery(body, query, QStringLiteral("phone_keyword"), QStringLiteral("keyword"));
+    } else if (route == QStringLiteral("/admin/orders/generate-realtime")) {
+        action = QStringLiteral("admin.orders.generate_realtime");
     } else if (route == QStringLiteral("/admin/orders")) {
         action = QStringLiteral("admin.orders.list");
         addQuery(body, query, QStringLiteral("page"), QStringLiteral("page"), true);

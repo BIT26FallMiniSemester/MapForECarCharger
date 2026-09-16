@@ -299,6 +299,24 @@ QJsonValue Business::adminAction(const QString &a,const QJsonObject &d,qint64 ad
     }
     if(a=="admin.piles.detail") {auto id=idOf(d,"pile_id");auto out=pile(id);out["status_logs"]=db.rows("SELECT * FROM pile_status_logs WHERE pile_id=? ORDER BY id DESC LIMIT 100",{id});return out;}
     Transaction tx(db);
+    if(a=="admin.orders.generate_realtime") {
+        const auto users=db.rows("SELECT u.id FROM users u WHERE u.status='NORMAL' AND NOT EXISTS (SELECT 1 FROM charging_orders o WHERE o.user_id=u.id AND o.status IN "+activeSql()+") ORDER BY u.id LIMIT 100");
+        const auto piles=db.rows("SELECT p.id,p.station_id,s.price_cents_per_kwh FROM charging_piles p JOIN stations s ON s.id=p.station_id WHERE p.status='IDLE' AND p.reserved_order_id IS NULL AND s.status='ACTIVE' ORDER BY p.id LIMIT 100");
+        if(users.size()<100||piles.size()<100) fail(40003);
+        const auto now=utcNow(); const auto expiry=QDateTime::currentDateTimeUtc().addSecs(900).toString(Qt::ISODateWithMs);
+        int reserved=0,charging=0;
+        for(int index=0;index<100;++index) {
+            const auto userId=users[index].toObject()["id"].toInteger(); const auto pile=piles[index].toObject();
+            const auto pileId=pile["id"].toInteger(), stationId=pile["station_id"].toInteger(); const bool startNow=index>=50;
+            const QString status=startNow?"CHARGING":"RESERVED";
+            const auto orderId=db.insert("INSERT INTO charging_orders(order_no,user_id,station_id,pile_id,status,price_cents_per_kwh,reserved_at,expires_at,started_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",{"ADMIN-RT-"+randomToken().left(24),userId,stationId,pileId,status,pile["price_cents_per_kwh"].toInteger(),now,expiry,startNow?QVariant(now):QVariant(),now,now});
+            if(db.execute("UPDATE charging_piles SET status=?,reserved_order_id=?,updated_at=? WHERE id=? AND status='IDLE' AND reserved_order_id IS NULL",{status,orderId,now,pileId})!=1) fail(40003);
+            pileLog(pileId,orderId,"IDLE","RESERVED","ADMIN_DEMO_RESERVE");
+            if(startNow) {pileLog(pileId,orderId,"RESERVED","CHARGING","ADMIN_DEMO_START");++charging;} else ++reserved;
+        }
+        operationLog(adminId,a,"ORDER_BATCH",0,QJsonObject{{"created",100},{"reserved",reserved},{"charging",charging}});tx.commit();
+        return QJsonObject{{"created",100},{"reserved",reserved},{"charging",charging}};
+    }
     if(a=="admin.users.freeze"||a=="admin.users.unfreeze") {
         auto id=idOf(d,"user_id");auto u=user(id);QString desired=a.endsWith(".freeze")?"FROZEN":"NORMAL";
         if(desired=="FROZEN"&&db.scalar("SELECT count(*) FROM charging_orders WHERE user_id=? AND status IN "+activeSql(),{id}))fail(40007);

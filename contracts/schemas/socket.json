@@ -2233,6 +2233,25 @@
         "additionalProperties": false
       }
     },
+    "admin.orders.generate_realtime": {
+      "role": "ADMIN",
+      "request": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "created": {"type": "integer", "minimum": 100, "maximum": 100},
+          "reserved": {"type": "integer", "minimum": 50, "maximum": 50},
+          "charging": {"type": "integer", "minimum": 50, "maximum": 50}
+        },
+        "required": ["created", "reserved", "charging"],
+        "additionalProperties": false
+      }
+    },
     "admin.orders.list": {
       "role": "ADMIN",
       "request": {
