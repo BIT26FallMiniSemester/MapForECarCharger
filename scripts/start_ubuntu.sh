@@ -129,6 +129,14 @@ export FLASK_HOST=127.0.0.1 FLASK_PORT=5000
 export DASHBOARD_REFRESH_MS=300000 DASHBOARD_INITIAL_DELAY_MS=300000
 export DASHBOARD_TARGET=http://127.0.0.1:5000 VITE_USE_MOCK=false VITE_USE_ANALYTICS=true VITE_USE_SPARK_COMPARISONS=true
 start() { local name=$1; shift; nohup "$@" 9>&- > "$RUN/$name.log" 2>&1 < /dev/null & echo $! > "$RUN/$name.pid"; }
+start_detached() {
+  local name=$1; shift
+  rm -f "$RUN/$name.pid"
+  setsid -f bash -c 'pid_file=$1; shift; echo $$ > "$pid_file"; exec "$@"' _ "$RUN/$name.pid" "$@" \
+    9>&- > "$RUN/$name.log" 2>&1 < /dev/null
+  for _ in {1..20}; do [[ -s "$RUN/$name.pid" ]] && return 0; sleep .1; done
+  fail "$name did not publish its detached PID."
+}
 wait_http() {
   local url=$1 name=$2
   for _ in {1..60}; do
@@ -147,16 +155,16 @@ done
 python -c 'import socket; socket.create_connection(("127.0.0.1",9000),1).close()' || fail 'Qt server startup timeout.'
 start flask env -u DATABASE_PATH python "$PROJECT_ROOT/spark-warehouse/flask-api/app.py"
 wait_http http://127.0.0.1:5000/health flask
-start vue node "$PROJECT_ROOT/web-bigscreen/node_modules/vite/bin/vite.js" "$PROJECT_ROOT/web-bigscreen" --host 127.0.0.1 --port 5174 --strictPort
+start_detached vue node "$PROJECT_ROOT/web-bigscreen/node_modules/vite/bin/vite.js" "$PROJECT_ROOT/web-bigscreen" --host 127.0.0.1 --port 5174 --strictPort
 wait_http http://127.0.0.1:5174/api/v1/topics vue
 (cd clients/user-qt; start user "$PROJECT_ROOT/clients/user-qt/charging-user-client")
 (cd clients/admin-qt; start admin "$PROJECT_ROOT/clients/admin-qt/ChargingAdmin")
 sleep 2
 for name in user admin; do kill -0 "$(cat "$RUN/$name.pid")" 2>/dev/null || fail "$name window failed: $RUN/$name.log"; done
 if command -v firefox >/dev/null; then
-  nohup firefox --new-window http://127.0.0.1:5174/ > "$RUN/browser.log" 2>&1 < /dev/null &
+  nohup firefox --new-window http://127.0.0.1:5174/ 9>&- > "$RUN/browser.log" 2>&1 < /dev/null &
 else
-  xdg-open http://127.0.0.1:5174/ > "$RUN/browser.log" 2>&1 || fail "Browser failed: $RUN/browser.log"
+  xdg-open http://127.0.0.1:5174/ 9>&- > "$RUN/browser.log" 2>&1 || fail "Browser failed: $RUN/browser.log"
 fi
 echo "Ready: one user client, one admin client, Vue http://127.0.0.1:5174/"
 echo "Qt transaction DB: $DATABASE_PATH; Web Spark ADS batch: $BATCH; prediction: $ML_PREDICTIONS_PATH"
