@@ -23,7 +23,7 @@
 
   <template v-else-if="page === 'orders'">
     <div class="metrics-grid"><MetricCard title="今日创建" :value="overview.today_order_count || 0" unit="单"/><MetricCard title="历史已完成" :value="orderCount('COMPLETED')" unit="单"/><MetricCard title="正在充电" :value="orderCount('CHARGING')" unit="单"/><MetricCard title="待支付" :value="orderCount('UNPAID')" unit="单"/><MetricCard title="平均充电时长" :value="number((orders.avg_duration_seconds || 0) / 60)" unit="分钟"/></div>
-    <div class="topic-grid"><PanelCard title="今日订单业务历程" subtitle="Spark DWD · 按今日创建订单计数"><TopicChart :option="funnelChart" label="创建、预约、充电、结束和支付里程碑"/></PanelCard><PanelCard title="当前订单状态分布" subtitle="Spark DWD · 全部历史与进行中订单"><TopicChart :option="orderChart" label="订单状态数量"/></PanelCard><PanelCard title="今日小时订单分布" subtitle="Spark DWD · 北京时间"><TopicChart :option="hourChart" label="今日每小时订单数"/></PanelCard></div>
+    <div class="topic-grid"><PanelCard title="今日订单业务历程" subtitle="Spark DWD · 按今日创建订单计数"><TopicChart :option="funnelChart" label="创建、预约、充电、结束和支付里程碑"/></PanelCard><PanelCard title="当前订单时间趋势" subtitle="Spark DWD · 北京时间，按小时创建"><TopicChart :option="hourChart" label="今日每小时订单数"/></PanelCard><PanelCard title="订单状态分布" subtitle="Spark DWD · 全部历史与进行中订单"><TopicChart :option="orderChart" label="订单状态数量"/></PanelCard></div>
     <PanelCard class="topic-wide" title="进行中订单" subtitle="Spark ADS · 最近8笔活跃订单"><RealtimeOrders :orders="realtimeOrders.items || []"/></PanelCard>
   </template>
 

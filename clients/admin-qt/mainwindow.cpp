@@ -97,14 +97,13 @@ MainWindow::MainWindow(bool demoMode, const QString &baseUrl, const QString &tok
     ui->statusbar->showMessage(m_demoMode ? "内置演示数据模式" : "已连接 Qt 后端 · " + m_api->baseUrl());
     for(QLabel *label:ui->sidebar->findChildren<QLabel*>())if(label->text().contains("演示数据模式"))label->setText(m_demoMode?"管理员：admin\n演示数据模式":"管理员：admin\n真实后端模式");
     if (!m_demoMode) {
-        loadDashboard(7);
-        refreshStations();
-        refreshPiles();
-        refreshUsers();
-        refreshOrders();
         m_refreshTimer = new QTimer(this);
-        m_refreshTimer->setInterval(1000);
+        // 大规模模拟库中一次订单/用户分页查询需要若干数据库访问；只刷新可见页，
+        // 并使用温和的轮询间隔，避免启动三端时把单线程 Socket 服务压入超时队列。
+        m_refreshTimer->setInterval(5000);
         connect(m_refreshTimer, &QTimer::timeout, this, &MainWindow::refreshLiveData);
+        // 首次只加载可见的首页，列表在用户切换到对应页面后再查询。
+        refreshLiveData();
         m_refreshTimer->start();
     }
 }
@@ -300,9 +299,14 @@ void MainWindow::refreshOrders()
 /// 按当前页面轮询用户、订单、站点或电桩数据。
 void MainWindow::refreshLiveData()
 {
-    if(m_demoMode)return;
-    refreshOrders();refreshUsers();const int page=ui->navigationList->currentRow();
-    if(page==0)loadDashboard(m_trendDays);else if(page==1)refreshPiles();else if(page==2)refreshStations();
+    // 构造 UI 时 currentRowChanged 可能早于轮询器建立，不能提前发出一批请求。
+    if(m_demoMode || !m_refreshTimer)return;
+    const int page=ui->navigationList->currentRow();
+    if(page==0)loadDashboard(m_trendDays);
+    else if(page==1)refreshPiles();
+    else if(page==2)refreshStations();
+    else if(page==3)refreshOrders();
+    else if(page==4)refreshUsers();
 }
 
 /// 并行请求首页概览、趋势和电桩状态数据。
