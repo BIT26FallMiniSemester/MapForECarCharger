@@ -51,6 +51,16 @@ def build(frames: dict, issues):
             "quality_flags", F.current_timestamp().alias("quarantined_at")))
         valid[table] = frame.where(~blocked)
 
+    def enforce_references(table, candidates, retained):
+        removed = (candidates.join(retained.select("row_id"), "row_id", "left_anti")
+                   .withColumn("quality_flags", F.array_union(
+                       F.col("quality_flags"), F.array(F.lit("DWD_FK")))))
+        quarantine_parts.append(removed.select(
+            F.lit(table).alias("table_name"), "row_id",
+            F.to_json(F.struct(*[F.col(c) for c in TABLE_COLUMNS[table]])).alias("raw_record"),
+            "quality_flags", F.current_timestamp().alias("quarantined_at")))
+        return retained
+
     users = (valid["users"]
              .withColumn("_updated", parse_timestamp("updated_at"))
              .withColumn("_rank", F.row_number().over(Window.partitionBy(F.trim("id")).orderBy(F.col("_updated").desc_nulls_last(), F.col("row_id").desc())))
@@ -59,12 +69,40 @@ def build(frames: dict, issues):
     duplicate_users = tagged_frames["users"].join(users.select("row_id").withColumn("_keep", F.lit(1)), "row_id", "left").where(F.col("_keep").isNull() & ~has_any(BLOCKING_RULES["users"]))
     quarantine_parts.append(duplicate_users.select(F.lit("users").alias("table_name"), "row_id", F.to_json(F.struct(*[F.col(c) for c in TABLE_COLUMNS["users"]])).alias("raw_record"), "quality_flags", F.current_timestamp().alias("quarantined_at")))
 
-    orders = (valid["charging_orders"]
+    station_ids = valid["stations"].select(F.trim("id").alias("_station_id")).distinct()
+    pile_candidates = valid["charging_piles"]
+    valid["charging_piles"] = enforce_references(
+        "charging_piles", pile_candidates,
+        pile_candidates.join(station_ids, F.trim("station_id") == F.col("_station_id"), "left_semi"))
+
+    user_ids = valid["users"].select(F.trim("id").alias("_user_id")).distinct()
+    pile_ids = valid["charging_piles"].select(
+        F.trim("id").alias("_pile_id"), F.trim("station_id").alias("_pile_station_id")).distinct()
+    order_candidates = valid["charging_orders"]
+    referenced_orders = (order_candidates
+                         .join(user_ids, F.trim("user_id") == F.col("_user_id"), "left_semi")
+                         .join(station_ids, F.trim("station_id") == F.col("_station_id"), "left_semi")
+                         .join(pile_ids, (F.trim("pile_id") == F.col("_pile_id")) &
+                               (F.trim("station_id") == F.col("_pile_station_id")), "left_semi"))
+    valid["charging_orders"] = enforce_references(
+        "charging_orders", order_candidates, referenced_orders)
+
+    recharge_candidates = valid["recharge_records"]
+    valid["recharge_records"] = enforce_references(
+        "recharge_records", recharge_candidates,
+        recharge_candidates.join(user_ids, F.trim("user_id") == F.col("_user_id"), "left_semi"))
+    log_candidates = valid["pile_status_logs"]
+    valid["pile_status_logs"] = enforce_references(
+        "pile_status_logs", log_candidates,
+        log_candidates.join(pile_ids, F.trim("pile_id") == F.col("_pile_id"), "left_semi"))
+
+    dedupe_candidates = valid["charging_orders"]
+    orders = (dedupe_candidates
               .withColumn("_updated", parse_timestamp("updated_at"))
               .withColumn("_rank", F.row_number().over(Window.partitionBy(F.trim("order_no")).orderBy(F.col("_updated").desc_nulls_last(), F.col("row_id").desc())))
               .where(F.col("_rank") == 1))
     valid["charging_orders"] = orders
-    duplicate_orders = tagged_frames["charging_orders"].join(orders.select("row_id").withColumn("_keep", F.lit(1)), "row_id", "left").where(F.col("_keep").isNull() & ~has_any(BLOCKING_RULES["charging_orders"]))
+    duplicate_orders = dedupe_candidates.join(orders.select("row_id").withColumn("_keep", F.lit(1)), "row_id", "left").where(F.col("_keep").isNull())
     quarantine_parts.append(duplicate_orders.select(F.lit("charging_orders").alias("table_name"), "row_id", F.to_json(F.struct(*[F.col(c) for c in TABLE_COLUMNS["charging_orders"]])).alias("raw_record"), "quality_flags", F.current_timestamp().alias("quarantined_at")))
 
     dwd = {}
