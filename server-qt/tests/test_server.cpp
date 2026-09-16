@@ -61,7 +61,7 @@ private slots:
     void cleanup(){peer.reset();server.reset();db.reset();dir.reset();}
 /// 实现 protocolAndPermissions 的本地处理逻辑，保持与项目其他模块的接口约定一致。
     void protocolAndPermissions(){
-        QCOMPARE(contract()["x-actions"].toObject().size(),41);
+        QCOMPARE(contract()["x-actions"].toObject().size(),42);
         QCOMPARE(call("system.health")["code"].toInt(),0);
         QCOMPARE(call("orders.active",{},token)["data"],QJsonValue(QJsonValue::Null));
         QCOMPARE(call("users.me.get")["code"].toInt(),40101);
