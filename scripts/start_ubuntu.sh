@@ -49,6 +49,12 @@ else
 fi
 ((CHECK==0)) || { echo 'Dependency check passed. No services or windows started.'; exit 0; }
 [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] || fail 'Use an Ubuntu desktop terminal to open Qt and the browser.'
+# Remote launchers may know DISPLAY but not the Wayland-managed Xwayland cookie.
+# Reuse the current desktop session's cookie so both Qt clients can open normally.
+if [[ -n ${DISPLAY:-} && ! -r ${XAUTHORITY:-} ]]; then
+  XWAYLAND_AUTH=$(find "/run/user/$(id -u)" -maxdepth 1 -type f -name '.mutter-Xwaylandauth.*' -print -quit 2>/dev/null || true)
+  [[ -z "$XWAYLAND_AUTH" ]] || export XAUTHORITY="$XWAYLAND_AUTH"
+fi
 # Load private map configuration without printing credentials.
 if [[ -f /etc/map-for-ecar/server.env ]]; then
   [[ -r /etc/map-for-ecar/server.env ]] || fail '/etc/map-for-ecar/server.env is not readable by your user.'
