@@ -289,7 +289,17 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
     dirty = copy.deepcopy(clean)
     rng = random.Random(seed + 1)
     manifest: list[dict] = []
-    realtime_ids = {row["row_id"] for row in clean["charging_orders"] if row["status"] == "CHARGING"}
+    realtime_orders = [row for row in clean["charging_orders"] if row["status"] == "CHARGING"]
+    realtime_order_ids = {row["id"] for row in realtime_orders}
+    protected_rows = {
+        "users": {row_id("users", row["user_id"]) for row in realtime_orders},
+        "stations": {row_id("stations", row["station_id"]) for row in realtime_orders},
+        "charging_piles": {row_id("charging_piles", row["pile_id"]) for row in realtime_orders},
+        "charging_orders": {row["row_id"] for row in realtime_orders},
+        "recharge_records": set(),
+        "pile_status_logs": {row["row_id"] for row in clean["pile_status_logs"]
+                             if row["order_id"] in realtime_order_ids},
+    }
 
     def record(rule_id: str, table: str, row: dict, fields: list[str], before: dict):
         manifest.append({"rule_id": rule_id, "table": table, "row_id": row["row_id"],
@@ -298,16 +308,17 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
 
     def mutate(rule_id: str, table: str, fields: list[str], action, predicate=lambda row: True):
         count = issue_count(dirty[table], float(rules[rule_id]["ratio"]))
-        if table == "charging_orders":
-            original_predicate = predicate
-            predicate = lambda row: row["row_id"] not in realtime_ids and original_predicate(row)
+        original_predicate = predicate
+        predicate = lambda row: row["row_id"] not in protected_rows[table] and original_predicate(row)
         for row in choose_rows(rng, dirty[table], count, predicate):
             before = {field: row.get(field) for field in fields}
             action(row)
             record(rule_id, table, row, fields, before)
 
     mutate("DQ001", "users", ["phone"], lambda row: row.update(phone="12345"))
-    duplicate_users = choose_rows(rng, dirty["users"], issue_count(dirty["users"], rules["DQ002"]["ratio"]))
+    duplicate_users = choose_rows(
+        rng, dirty["users"], issue_count(dirty["users"], rules["DQ002"]["ratio"]),
+        lambda row: row["row_id"] not in protected_rows["users"])
     for source in duplicate_users:
         clone = copy.deepcopy(source)
         clone["row_id"] += ":duplicate"
@@ -334,7 +345,7 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
         count = issue_count(rows, float(rules["DQ016"]["ratio"]))
         text_field = "status" if "status" in COLUMNS[table] else ("old_status" if table == "pile_status_logs" else "created_at")
         for row in choose_rows(rng, rows, count,
-                               lambda row: table != "charging_orders" or row["row_id"] not in realtime_ids):
+                               lambda row: row["row_id"] not in protected_rows[table]):
             before = {text_field: row.get(text_field)}
             row[text_field] = "  " + str(row.get(text_field, "")).lower() + "  "
             record("DQ016", table, row, [text_field], before)

@@ -132,8 +132,22 @@ class GeneratorTests(unittest.TestCase):
             datasets, generator.load_rules(ROOT / "conf/quality_rules.yaml"), config["seed"])
         dirty_orders = {order["id"]: order for order in dirty["charging_orders"]}
         self.assertTrue(all(dirty_orders[order["id"]] == order for order in realtime))
-        self.assertFalse(any(issue["row_id"] in {order["row_id"] for order in realtime}
-                             for issue in manifest))
+        realtime_ids = {order["id"] for order in realtime}
+        protected = {
+            "users": {generator.row_id("users", order["user_id"]) for order in realtime},
+            "stations": {generator.row_id("stations", order["station_id"]) for order in realtime},
+            "charging_piles": {generator.row_id("charging_piles", order["pile_id"]) for order in realtime},
+            "charging_orders": {order["row_id"] for order in realtime},
+            "pile_status_logs": {row["row_id"] for row in datasets["pile_status_logs"]
+                                 if row["order_id"] in realtime_ids},
+        }
+        manifest_rows = {(issue["table"], issue["row_id"]) for issue in manifest}
+        for table, identifiers in protected.items():
+            clean_rows = {row["row_id"]: row for row in datasets[table]}
+            dirty_rows = {row["row_id"]: row for row in dirty[table]}
+            for identifier in identifiers:
+                self.assertEqual(dirty_rows[identifier], clean_rows[identifier])
+                self.assertNotIn((table, identifier), manifest_rows)
 
     def test_manifest_points_to_dirty_rows_and_keeps_before_after(self):
         issues = [json.loads(line) for line in (self.batch / "_injected_issues.jsonl").read_text(encoding="utf-8").splitlines()]
