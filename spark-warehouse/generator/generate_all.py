@@ -15,6 +15,7 @@ import sys
 import yaml
 
 UTC = timezone.utc
+BEIJING = timezone(timedelta(hours=8))
 TABLES = (
     "users", "stations", "charging_piles", "charging_orders",
     "recharge_records", "pile_status_logs",
@@ -56,6 +57,13 @@ def row_id(table: str, identifier: int) -> str:
 
 def build_clean(config: dict) -> dict[str, list[dict]]:
     rng = random.Random(config["seed"])
+    realtime_count = int(config.get("realtime_charging_orders", 0))
+    if realtime_count < 0:
+        raise ValueError("realtime_charging_orders must not be negative")
+    fault_ratio = float(config.get("fault_pile_ratio", 0))
+    offline_ratio = float(config.get("offline_pile_ratio", 0))
+    if not 0 <= fault_ratio <= 1 or not 0 <= offline_ratio <= 1:
+        raise ValueError("fault/offline pile ratios must be between 0 and 1")
     end = date.fromisoformat(str(config["end_date"]))
     start = end - timedelta(days=config["days"] - 1)
     catalog = json.loads(config["station_catalog"].read_text(encoding="utf-8"))["stations"]
@@ -100,19 +108,19 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
     for station in stations:
         source = chosen[station["id"] - 1]
         specifications = [
-            ("FAST", max(0, int(source.get("fast_connector_count") or 0)), 60000),
-            ("SLOW", max(0, int(source.get("slow_connector_count") or 0)), 7000),
+            ("FAST", max(0, int(source.get("fast_connector_count") or 0)), (60000, 90000, 120000)),
+            ("SLOW", max(0, int(source.get("slow_connector_count") or 0)), (7000, 11000, 22000)),
         ]
         if sum(item[1] for item in specifications) == 0:
-            specifications = [("SLOW", 1, 7000)]
-        for charge_type, count, power in specifications:
+            specifications = [("SLOW", 1, (7000, 11000, 22000))]
+        for charge_type, count, powers in specifications:
             for sequence in range(1, count + 1):
                 pile_identifier += 1
                 piles.append({
                     "row_id": row_id("charging_piles", pile_identifier), "id": pile_identifier,
                     "station_id": station["id"],
                     "pile_no": f"SIM-{station['id']:04d}-{charge_type[0]}{sequence:03d}",
-                    "charge_type": charge_type, "rated_power_w": power,
+                    "charge_type": charge_type, "rated_power_w": rng.choice(powers),
                     "status": "IDLE", "reserved_order_id": "",
                     "created_at": iso(base_time), "updated_at": iso(base_time),
                 })
@@ -122,31 +130,63 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
     pile_by_id = {item["id"]: item for item in piles}
     order_statuses = ["COMPLETED"] * 72 + ["CANCELLED"] * 10 + ["UNPAID"] * 6 + ["CHARGING"] * 5 + ["RESERVED"] * 4 + ["PENDING"] * 3
     orders = []
+    realtime_orders = []
+    realtime_piles = []
+    realtime_users = []
+    sessions_by_pile: dict[int, list[tuple[datetime, datetime]]] = {}
     active_users: set[int] = set()
     active_piles: set[int] = set()
-    for identifier in range(1, config["orders"] + 1):
-        # Weighted hour model creates morning/evening peaks without external ML.
-        day = start + timedelta(days=rng.randrange(config["days"]))
-        hour = rng.choice([7, 8, 9, 17, 18, 19, 20]) if rng.random() < 0.58 else rng.randrange(24)
-        created = datetime.combine(day, time(hour, rng.randrange(60), rng.randrange(60)), UTC)
-        pile = pile_by_id[rng.choice(piles)["id"]]
+    terminal_time = datetime.combine(end, time.max, BEIJING).astimezone(UTC)
+    realtime_open = datetime.combine(end, time(22), BEIJING).astimezone(UTC)
+    for identifier in range(1, config["orders"] + realtime_count + 1):
+        realtime = identifier > config["orders"]
+        if realtime and not realtime_piles:
+            available_piles = [pile for pile in piles if pile["status"] == "IDLE" and
+                               all(stop <= realtime_open for _, stop in sessions_by_pile.get(pile["id"], ()))]
+            available_users = [user for user in users if user["id"] not in active_users]
+            if len(available_piles) < realtime_count or len(available_users) < realtime_count:
+                raise ValueError("not enough idle piles or users for realtime charging orders")
+            realtime_piles = rng.sample(available_piles, realtime_count)
+            realtime_users = rng.sample(available_users, realtime_count)
+        # Peak hours follow Beijing local time; weekends favor midday charging.
+        day = end if realtime else start + timedelta(days=rng.randrange(config["days"]))
+        if realtime:
+            created = realtime_open + timedelta(minutes=rng.randrange(16), seconds=rng.randrange(60))
+            pile = realtime_piles[identifier - config["orders"] - 1]
+            user = realtime_users[identifier - config["orders"] - 1]
+            status = "CHARGING"
+        else:
+            peak_hours = [10, 11, 12, 15, 16, 17, 18] if day.weekday() >= 5 else [7, 8, 9, 17, 18, 19, 20]
+            hour = rng.choice(peak_hours) if rng.random() < 0.58 else rng.randrange(24)
+            created = datetime.combine(day, time(hour, rng.randrange(60), rng.randrange(60)), BEIJING).astimezone(UTC)
+            pile = pile_by_id[rng.choice(piles)["id"]]
+            user = rng.choice(users)
+            status = rng.choice(order_statuses)
+            if status in {"PENDING", "RESERVED", "CHARGING", "UNPAID"} and (day != end or status == "CHARGING"):
+                status = "COMPLETED"
         station = stations[pile["station_id"] - 1]
-        status = rng.choice(order_statuses)
-        user = rng.choice(users)
         if status in {"PENDING", "RESERVED", "CHARGING", "UNPAID"} and user["id"] in active_users:
             status = "COMPLETED"
         if status in {"RESERVED", "CHARGING"} and pile["id"] in active_piles:
             status = "COMPLETED"
         if status in {"PENDING", "RESERVED", "CHARGING", "UNPAID"}:
-            day = end
-            created = datetime.combine(day, time(hour, rng.randrange(60), rng.randrange(60)), UTC)
             active_users.add(user["id"])
         if status in {"RESERVED", "CHARGING"}:
             active_piles.add(pile["id"])
         reserved = created + timedelta(minutes=rng.randrange(1, 11)) if status != "PENDING" else None
         started = reserved + timedelta(minutes=rng.randrange(1, 21)) if status in {"CHARGING", "UNPAID", "COMPLETED"} else None
-        duration = rng.randrange(600, 10801) if started else None
+        duration = int((terminal_time - started).total_seconds()) if realtime else (rng.randrange(600, 10801) if started else None)
         stopped = started + timedelta(seconds=duration) if status in {"UNPAID", "COMPLETED"} else None
+        if started and stopped:
+            for _ in range(50):
+                if not any(started < prior_stop and prior_start < stopped
+                           for prior_start, prior_stop in sessions_by_pile.get(pile["id"], ())):
+                    break
+                pile = rng.choice(piles)
+                station = stations[pile["station_id"] - 1]
+            else:
+                raise ValueError("unable to place charging order without pile overlap")
+            sessions_by_pile.setdefault(pile["id"], []).append((started, stopped))
         energy = round(pile["rated_power_w"] * duration / 3600) if duration else None
         amount = round(energy * station["price_cents_per_kwh"] / 1000) if energy is not None else None
         paid = stopped + timedelta(minutes=rng.randrange(1, 31)) if status == "COMPLETED" else None
@@ -165,10 +205,22 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
             "paid_at": iso(paid), "cancelled_at": iso(cancelled),
             "created_at": iso(created), "updated_at": iso(updated),
         })
+        if realtime:
+            realtime_orders.append(orders[-1])
         if status in {"RESERVED", "CHARGING"}:
             pile["status"] = status
             pile["reserved_order_id"] = identifier if status == "RESERVED" else ""
             pile["updated_at"] = iso(updated)
+
+    idle_piles = [pile for pile in piles if pile["status"] == "IDLE"]
+    fault_count = round(len(piles) * fault_ratio)
+    offline_count = round(len(piles) * offline_ratio)
+    if fault_count + offline_count > len(idle_piles):
+        raise ValueError("not enough idle piles for requested fault/offline ratios")
+    failed_piles = rng.sample(idle_piles, fault_count + offline_count)
+    for index, pile in enumerate(failed_piles):
+        pile["status"] = "FAULT" if index < fault_count else "OFFLINE"
+        pile["updated_at"] = iso(terminal_time)
 
     recharges = []
     balances: dict[int, int] = {}
@@ -186,14 +238,36 @@ def build_clean(config: dict) -> dict[str, list[dict]]:
 
     status_logs = []
     transitions = [("IDLE", "RESERVED"), ("RESERVED", "CHARGING"), ("CHARGING", "IDLE"), ("IDLE", "FAULT"), ("FAULT", "IDLE"), ("IDLE", "OFFLINE"), ("OFFLINE", "IDLE")]
-    for identifier in range(1, config["pile_status_logs"] + 1):
-        pile = rng.choice(piles)
+    reasons = {("IDLE", "FAULT"): "SIMULATED_FAILURE", ("FAULT", "IDLE"): "SIMULATED_REPAIR",
+               ("IDLE", "OFFLINE"): "SIMULATED_NETWORK_LOSS", ("OFFLINE", "IDLE"): "SIMULATED_RECONNECT"}
+    history_count = config["pile_status_logs"] - len(failed_piles) - len(realtime_orders)
+    failed_ids = {pile["id"] for pile in failed_piles}
+    realtime_ids = {order["pile_id"] for order in realtime_orders}
+    history_piles = [pile for pile in piles if pile["id"] not in failed_ids | realtime_ids]
+    if history_count < 0 or (history_count and not history_piles):
+        raise ValueError("pile_status_logs must cover terminal failures and historical events")
+    for identifier in range(1, history_count + 1):
+        pile = rng.choice(history_piles)
         old, new = rng.choice(transitions)
         created = base_time + timedelta(seconds=rng.randrange(config["days"] * 86400))
         status_logs.append({
             "row_id": row_id("pile_status_logs", identifier), "id": identifier,
             "pile_id": pile["id"], "order_id": "", "old_status": old,
-            "new_status": new, "reason": "SIMULATION", "created_at": iso(created),
+            "new_status": new, "reason": reasons.get((old, new), "SIMULATION"), "created_at": iso(created),
+        })
+    for identifier, order in enumerate(realtime_orders, history_count + 1):
+        status_logs.append({
+            "row_id": row_id("pile_status_logs", identifier), "id": identifier,
+            "pile_id": order["pile_id"], "order_id": order["id"],
+            "old_status": "RESERVED", "new_status": "CHARGING",
+            "reason": "SIMULATED_CHARGING_START", "created_at": order["started_at"],
+        })
+    for identifier, pile in enumerate(failed_piles, history_count + len(realtime_orders) + 1):
+        status_logs.append({
+            "row_id": row_id("pile_status_logs", identifier), "id": identifier,
+            "pile_id": pile["id"], "order_id": "", "old_status": "IDLE",
+            "new_status": pile["status"], "reason": reasons[("IDLE", pile["status"])],
+            "created_at": iso(terminal_time),
         })
     return {"users": users, "stations": stations, "charging_piles": piles,
             "charging_orders": orders, "recharge_records": recharges,
@@ -215,6 +289,7 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
     dirty = copy.deepcopy(clean)
     rng = random.Random(seed + 1)
     manifest: list[dict] = []
+    realtime_ids = {row["row_id"] for row in clean["charging_orders"] if row["status"] == "CHARGING"}
 
     def record(rule_id: str, table: str, row: dict, fields: list[str], before: dict):
         manifest.append({"rule_id": rule_id, "table": table, "row_id": row["row_id"],
@@ -223,6 +298,9 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
 
     def mutate(rule_id: str, table: str, fields: list[str], action, predicate=lambda row: True):
         count = issue_count(dirty[table], float(rules[rule_id]["ratio"]))
+        if table == "charging_orders":
+            original_predicate = predicate
+            predicate = lambda row: row["row_id"] not in realtime_ids and original_predicate(row)
         for row in choose_rows(rng, dirty[table], count, predicate):
             before = {field: row.get(field) for field in fields}
             action(row)
@@ -255,7 +333,8 @@ def inject_issues(clean: dict[str, list[dict]], rules: dict, seed: int) -> tuple
         rows = dirty[table]
         count = issue_count(rows, float(rules["DQ016"]["ratio"]))
         text_field = "status" if "status" in COLUMNS[table] else ("old_status" if table == "pile_status_logs" else "created_at")
-        for row in choose_rows(rng, rows, count):
+        for row in choose_rows(rng, rows, count,
+                               lambda row: table != "charging_orders" or row["row_id"] not in realtime_ids):
             before = {text_field: row.get(text_field)}
             row[text_field] = "  " + str(row.get(text_field, "")).lower() + "  "
             record("DQ016", table, row, [text_field], before)
