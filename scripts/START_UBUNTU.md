@@ -1,13 +1,13 @@
-# Ubuntu 一键初始化与启动
+# 第二阶段 Web 大屏 + ML 一键启动
 
-在 Ubuntu 桌面终端执行，不要使用 sudo bash，也不要从无图形会话的 SSH 启动界面。
+在 Ubuntu 终端执行，不要使用 sudo bash。脚本只启动 Spark 数据链路、Flask API 和 Vue Web 大屏，不启动 Qt 用户端、管理端或 Qt 后端；无图形会话也可以启动，之后手动打开浏览器访问地址即可。
 
 ```bash
 cd ~/MapForECarCharger
 bash scripts/start_ubuntu.sh
 ```
 
-首次检查、构建并安装 Vue npm 依赖；检查 Qt 模拟库；按北京时间当天生成 full 数据集并运行 Spark ODS→DWD→DWS→ADS；预测缺失时生成模拟演示预测；启动 Qt 后端、Flask、一个用户窗口、一个管理窗口和浏览器。Web 大屏与统计接口只读取 Spark ADS，Qt 的 SQLite 仅用于桌面端业务事务。
+首次检查并安装 Web/Spark 依赖；按北京时间当天生成 full 数据集并运行 Spark ODS→DWD→DWS→ADS；预测缺失时生成 ML 演示预测；启动 Flask API 和 Vue Web 大屏。Web 统计接口只读取 Spark ADS，不读取 SQLite。
 
 仅检查依赖：
 
@@ -16,7 +16,7 @@ cd ~/MapForECarCharger
 bash scripts/start_ubuntu.sh --check-only
 ```
 
-缺少 Qt/Java/Python 依赖时自动安装（需要 sudo 和网络；PySpark 下载约 450 MB）：
+缺少 Java/Python 依赖时自动安装（需要 sudo 和网络；PySpark 下载约 450 MB）：
 
 ```bash
 bash scripts/start_ubuntu.sh --install-deps
@@ -32,15 +32,15 @@ bash scripts/start_ubuntu.sh --refresh-data --hdfs
 
 默认 Spark local[2] 使用本地数仓；--hdfs 增加 HDFS 快照存储，不表示所有 Spark 分层均在 HDFS 计算。普通重复启动复用历史批次，刷新历史时使用 --refresh-data。
 
-预期：终端最后输出 Ready，用户端和管理端各一个窗口，浏览器打开 http://127.0.0.1:5174/，顶部能切换七页。管理账号 admin / 123456，演示用户手机号 13900000000。运行中日志位于 runtime/desktop-launch/。首次数仓在本机此前约 2 分钟，加上构建和下载会更久。
+预期：终端最后输出 Ready，Flask 健康检查和 Web 大屏均可访问 `http://127.0.0.1:5000/`、`http://127.0.0.1:5174/`，顶部能切换七页。运行中日志位于 runtime/desktop-launch/。首次 Spark 数仓计算可能需要数分钟。
 
 ```bash
 curl -fsS http://127.0.0.1:5000/health
 curl -fsS http://127.0.0.1:5174/api/v1/topics | python3 -m json.tool
-ss -ltnp | grep -E ':9000|:9001|:5000|:5174'
+ss -ltnp | grep -E ':5000|:5174'
 ```
 
-预期接口返回 JSON，四个端口监听。用户端新建订单并完成支付，下一轮大屏刷新应出现业务变化；Spark 历史结果和预测不是实时重算。自动生成的 demo 预测不代表真实业务预测模型通过训练。
+预期接口返回 JSON，两个端口监听。数据生成和 Spark ADS 计算完成后，刷新 Web 页面即可看到统计和 ML 预测；预测不是实时重算。自动生成的 demo 预测不代表真实业务预测模型通过训练。
 
 脚本重复运行只关闭自己 PID 文件记录且命令匹配的程序；遇到原手工启动服务占用端口会停止并报错，请在原终端 Ctrl+C 后再运行。任何阶段失败会显示日志路径，已启动服务保留用于排查。
 
@@ -48,30 +48,28 @@ ss -ltnp | grep -E ':9000|:9001|:5000|:5174'
 
 ```bash
 export PROJECT_ROOT="$HOME/MapForECarCharger"
-export LAUNCH_DATABASE_PATH="$PROJECT_ROOT/server-qt/runtime/showcase-sim.db"
-# 只有文件存在时才启用下行：
 # export LAUNCH_ML_PATH="$PROJECT_ROOT/ml/outputs/forecast-live-test.json"
 bash "$PROJECT_ROOT/scripts/start_ubuntu.sh"
 ```
 
-地图配置仍从 /etc/map-for-ecar/server.env 读取，不输出 Key。脚本默认各服务仅监听本机，供 Ubuntu 完整测试。
+脚本默认各服务仅监听本机，供 Ubuntu 本地展示。`LAUNCH_ML_PATH` 可指定已有预测结果。
 
 ## 统一统计来源
 
-Qt 与 Flask 启动前都读取同一个 latest-flow.env 并设置 ADS_ROOT=$WAREHOUSE/ads、ADS_BATCH_ID=$BATCH。一键启动脚本已为两者设置相同变量。
+Flask 和 Vue 启动时使用同一个 `latest-flow.env`，设置 `ADS_ROOT=$WAREHOUSE/ads`、`ADS_BATCH_ID=$BATCH`。所有 Web 主题页、设备分页、订单、站点、用户、能源和 ML 展示均来自 Spark ADS/预测文件；本启动脚本不检查、不启动、不连接 SQLite 或 Qt 客户端。
 
 ```bash
-cd /home/zjs/MapForECarCharger
-source spark-warehouse/scripts/env_ubuntu.sh
-source spark-warehouse/runtime/latest-flow.env
-export ADS_ROOT="$WAREHOUSE/ads"
-export ADS_BATCH_ID="$BATCH"
-bash scripts/start_ubuntu.sh
+cd ~/MapForECarCharger
+bash scripts/start_ubuntu.sh --refresh-data
+curl -fsS http://127.0.0.1:5000/health
+curl -fsS http://127.0.0.1:5174/api/v1/topics | python3 -m json.tool
 ```
 
-管理端近 7/30 日趋势现在使用清洗后 ADS；7 日是同一 30 日批次的末 7 日，窗口截至批次 data_as_of，允许不等于今天。图表显示来源、批次和截止日期。今日、本月、累计业务卡片与订单操作仍使用实时 SQLite。ADS 未就绪时趋势回退到实时 SQLite 并明确标注。更新历史请运行 --refresh-data 后启动两个服务；不要仅为一个服务切换批次。Qt 9001 /api/analytics 也读取这份 ADS，5000 /api/analytics 的批次和每日营收/订单数应与其一致。
+普通重复启动复用当天批次；需要重新计算时使用 `--refresh-data`。`--hdfs` 仅额外保存 Spark 输入快照，不改变 Web 的 ADS 数据源。
 
-## 丰富业务场景模拟库
+## 第一阶段 Qt 数据库手动流程（本脚本不执行）
+
+以下内容仅供第一阶段 Qt 客户端调试参考；第二阶段一键启动不会读取这些 SQLite 数据，也不会启动用户端、管理端或 Qt 后端。
 
 保留原模拟库，生成新的副本。先退出用户端/管理端并停止旧服务，再在 Ubuntu 执行：
 
