@@ -368,7 +368,7 @@ void MainWindow::handleApiSuccess(const QString &path, const QJsonValue &data, c
     }
     if (path.startsWith("/admin/revenue-trend?")) {
         if (!path.contains(QString("days=%1").arg(m_trendDays))) return;
-        buildTrendChart(data.toObject().value("items").toArray()); return;
+        const auto result=data.toObject(); buildTrendChart(result.value("items").toArray()); if(auto *label=m_trendHost->findChild<QLabel*>()) label->setText(QString("营收与订单趋势 · 近 %1 日 · %2 · 批次 %3 · 数据截至 %4%5").arg(m_trendDays).arg(result["source"].toString(),result["batch_id"].toString(),result["data_as_of"].toString(),result["stale"].toBool()?"（批次已过期）":"")); return;
     }
     if (path == "/dashboard/pile-status") {
         const QJsonObject d=data.toObject(); buildStatusChart(d.value("items").toArray()); return;

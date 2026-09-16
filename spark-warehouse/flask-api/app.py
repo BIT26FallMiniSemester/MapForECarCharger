@@ -100,6 +100,10 @@ class AdsStore:
             for path in files:
                 with path.open(encoding="utf-8") as stream:
                     rows.extend(json.loads(line) for line in stream if line.strip())
+            if name == 'ads_revenue_trend_30d':
+                rows.sort(key=lambda row: row['biz_date'])
+            elif name == 'ads_station_ranking_30d':
+                rows.sort(key=lambda row: (-row['revenue_cents'], row['station_id']))
             self._cache[name] = (now, rows)
             return rows
 

@@ -2145,6 +2145,10 @@
             "minimum": 7,
             "maximum": 30
           },
+          "source": {"type": "string"},
+          "batch_id": {"type": "string"},
+          "data_as_of": {"type": "string"},
+          "stale": {"type": "boolean"},
           "items": {
             "type": "array",
             "items": {

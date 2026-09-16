@@ -2,6 +2,7 @@
 // 本文件中的注释仅用于说明逻辑，不改变可执行代码。
 
 #include "business.h"
+#include "analyticsresult.h"
 #include <QTimeZone>
 #include <QtMath>
 
@@ -278,7 +279,7 @@ QJsonValue Business::adminAction(const QString &a,const QJsonObject &d,qint64 ad
     auto revenue=[&](QString from,QString to){return db.scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<?",{from,to});};
     auto count=[&](QString from,QString to){return db.scalar("SELECT count(*) FROM charging_orders WHERE created_at>=? AND created_at<?",{from,to});};
     if(a=="admin.overview")return QJsonObject{{"today_revenue_cents",revenue(boundary(today),boundary(today.addDays(1)))},{"month_revenue_cents",revenue(boundary(QDate(today.year(),today.month(),1)),boundary(QDate(today.year(),today.month(),1).addMonths(1)))},{"total_revenue_cents",db.scalar("SELECT coalesce(sum(amount_cents),0) FROM charging_orders WHERE status='COMPLETED'")},{"today_order_count",count(boundary(today),boundary(today.addDays(1)))},{"today_energy_wh",db.scalar("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE status IN ('UNPAID','COMPLETED') AND stopped_at>=? AND stopped_at<?",{boundary(today),boundary(today.addDays(1))})},{"total_energy_wh",db.scalar("SELECT coalesce(sum(energy_wh),0) FROM charging_orders WHERE status IN ('UNPAID','COMPLETED')")}};
-    if(a=="admin.revenue_trend") {int days=d["days"].toInt(7);QJsonArray items;for(int i=days-1;i>=0;--i){auto day=today.addDays(-i);items.append(QJsonObject{{"date",day.toString(Qt::ISODate)},{"revenue_cents",revenue(boundary(day),boundary(day.addDays(1)))},{"order_count",count(boundary(day),boundary(day.addDays(1)))}});}return QJsonObject{{"days",days},{"items",items}};}
+    if(a=="admin.revenue_trend") {int days=qBound(1,d["days"].toInt(7),30); const auto result=readAnalyticsResult(qEnvironmentVariable("ANALYTICS_RESULT_PATH"),86400); if(result["available"].toBool()){const auto batch=result["data"].toObject();const auto rows=batch["revenue_trend"].toObject()["items"].toArray();QJsonArray selected;for(int i=qMax(0,int(rows.size())-days);i<rows.size();++i){auto row=rows[i].toObject();if(row["date"].toString().isEmpty())row["date"]=row["biz_date"];selected.append(QJsonObject{{"date",row["date"]},{"revenue_cents",row["revenue_cents"]},{"order_count",row["order_count"]}});}return QJsonObject{{"days",days},{"items",selected},{"source","SparkSQL 清洗后 ADS"},{"batch_id",batch["batch_id"]},{"stale",result["stale"]},{"data_as_of",batch["data_as_of"]}};} QJsonArray items;for(int i=days-1;i>=0;--i){auto day=today.addDays(-i);items.append(QJsonObject{{"date",day.toString(Qt::ISODate)},{"revenue_cents",revenue(boundary(day),boundary(day.addDays(1)))},{"order_count",count(boundary(day),boundary(day.addDays(1)))}});}return QJsonObject{{"days",days},{"items",items},{"source","实时 SQLite（ADS 未就绪）"}};}
     if(a=="admin.orders.list") {
         QString sql="SELECT o.id FROM charging_orders o JOIN users u ON u.id=o.user_id JOIN stations s ON s.id=o.station_id WHERE 1=1";QVariantList args;
         if(d.contains("status")){sql+=" AND o.status=?";args<<d["status"].toString();}
