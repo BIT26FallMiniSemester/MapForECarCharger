@@ -6,7 +6,7 @@
     </div>
 
   <template v-if="page === 'stations'">
-    <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 80).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
+    <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 50).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
     <div class="topic-grid spatial-layout">
       <PanelCard title="区域资源分布" subtitle="Spark ADS · 各行政区电桩数量"><TopicChart :option="districtChart" label="区域电桩数量排名"/></PanelCard>
       <PanelCard title="站点空间态势" :subtitle="`Spark ADS · ${mapMode} · 站点以编号展示`" class="topic-map"><div class="mode-tabs"><button v-for="mode in ['繁忙率','空闲率','故障率']" :key="mode" :class="{ active: mapMode === mode }" @click="mapMode = mode">{{ mode }}</button></div><DistributionMap :stations="mapStations" :overview="overview" :metric-label="mapMode"/></PanelCard>
@@ -29,7 +29,7 @@
 
   <template v-else-if="page === 'users'">
     <div class="metrics-grid"><MetricCard title="用户总量" :value="users.total_users || 0" unit="人"/><MetricCard title="今日新增" :value="users.today_new || 0" unit="人"/><MetricCard title="近30日活跃" :value="users.active_30d || 0" unit="人"/><MetricCard title="累计充值" :value="money(users.recharge_cents)" unit="元"/><MetricCard title="账户余额合计" :value="money(users.balance_cents)" unit="元"/></div>
-    <div class="topic-grid"><PanelCard title="用户增长" subtitle="Spark DWD · 近30日每日新增"><TopicChart :option="growthChart" label="每日新增用户"/></PanelCard><PanelCard title="消费层级" subtitle="Spark ADS · 累计已支付金额分组"><TopicChart :option="spendChart" label="用户消费金额分布"/></PanelCard><PanelCard title="充值趋势" subtitle="Spark DWD · 近30日"><TopicChart :option="rechargeChart" label="每日充值金额"/></PanelCard></div>
+    <div class="topic-grid"><PanelCard title="用户增长" subtitle="Spark DWD · 近30日每日新增"><TopicChart :option="growthChart" label="每日新增用户"/></PanelCard><PanelCard title="消费层级" subtitle="Spark ADS · 累计已支付金额 · 每25元一档"><TopicChart :option="spendChart" label="用户消费金额分布"/></PanelCard><PanelCard title="充值趋势" subtitle="Spark DWD · 近30日"><TopicChart :option="rechargeChart" label="每日充值金额"/></PanelCard></div>
     <div class="topic-grid two-columns topic-wide"><PanelCard title="用户消费 Top 10" subtitle="全历史已完成订单 · 用户以编号匿名展示"><div class="event-table"><table><thead><tr><th>用户</th><th>完成订单</th><th>消费金额</th></tr></thead><tbody><tr v-for="user in users.top || []" :key="user.user_id"><td>用户 #{{ user.user_id }}</td><td>{{ user.order_count }}</td><td>¥ {{ money(user.amount_cents) }}</td></tr></tbody></table></div></PanelCard><PanelCard title="用户账户状态" subtitle="真实业务字段，不推断年龄/性别/车型"><TopicChart :option="userStatusChart" label="正常和冻结用户数量"/></PanelCard></div>
   </template>
 

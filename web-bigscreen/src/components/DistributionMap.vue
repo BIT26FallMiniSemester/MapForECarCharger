@@ -129,7 +129,7 @@ function render() {
           shadowBlur: 12,
           shadowColor: 'rgba(250, 204, 21, .7)'
         },
-        data: points.filter(point => point.value[2] >= 78).slice(0, 28)
+        data: points.filter(point => point.value[2] >= 50).slice(0, 28)
       }
     ]
   })
