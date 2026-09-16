@@ -14,6 +14,72 @@ from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request
 
 
+_DISTRICT_GEOMETRY = None
+
+
+def _point_in_ring(longitude, latitude, ring):
+    """Return whether a longitude/latitude point lies in one GeoJSON linear ring."""
+    inside = False
+    for index, point in enumerate(ring):
+        previous = ring[index - 1]
+        x1, y1 = point
+        x2, y2 = previous
+        crosses = (y1 > latitude) != (y2 > latitude)
+        if crosses and longitude < (x2 - x1) * (latitude - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _load_beijing_districts():
+    global _DISTRICT_GEOMETRY
+    if _DISTRICT_GEOMETRY is not None:
+        return _DISTRICT_GEOMETRY
+    path = Path(__file__).resolve().parents[2] / "web-bigscreen/public/maps/beijing.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    districts = []
+    for feature in document["features"]:
+        geometry = feature["geometry"]
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        points = [point for polygon in polygons for ring in polygon for point in ring]
+        longitudes = [point[0] for point in points]
+        latitudes = [point[1] for point in points]
+        districts.append(
+            (
+                feature["properties"]["name"],
+                feature["properties"]["centroid"],
+                geometry,
+                (min(longitudes), min(latitudes), max(longitudes), max(latitudes)),
+            )
+        )
+    _DISTRICT_GEOMETRY = districts
+    return _DISTRICT_GEOMETRY
+
+
+def _coordinate_district(longitude, latitude):
+    """Resolve a station to Beijing's district polygons, with a nearest-centroid fallback."""
+    districts = _load_beijing_districts()
+    for name, _, geometry, bounds in districts:
+        minimum_longitude, minimum_latitude, maximum_longitude, maximum_latitude = bounds
+        if not (minimum_longitude <= longitude <= maximum_longitude and minimum_latitude <= latitude <= maximum_latitude):
+            continue
+        polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+        for polygon in polygons:
+            if _point_in_ring(longitude, latitude, polygon[0]) and not any(
+                _point_in_ring(longitude, latitude, hole) for hole in polygon[1:]
+            ):
+                return name
+    return min(districts, key=lambda item: (item[1][0] - longitude) ** 2 + (item[1][1] - latitude) ** 2)[0]
+
+
+def _resolve_station_districts(stations):
+    for station in stations:
+        if station["district"] not in (None, "", "未知", "未知区域"):
+            continue
+        station["district"] = _coordinate_district(float(station["longitude"]), float(station["latitude"]))
+        station["district_source"] = "coordinate"
+    return stations
+
+
 def read_topics(database_path):
     """Bounded, read-only business aggregates for the six topic screens."""
     if not database_path:
@@ -41,7 +107,8 @@ def read_topics(database_path):
         users["recharges"] = rows("SELECT date(created_at,'+8 hours') date,sum(amount_cents) amount_cents FROM recharge_records WHERE created_at>=? AND created_at<? GROUP BY date", (window, upper))
         users["top"] = rows("SELECT user_id,count(*) order_count,sum(amount_cents) amount_cents FROM charging_orders WHERE status='COMPLETED' GROUP BY user_id ORDER BY amount_cents DESC,user_id LIMIT 10")
         users["spending"] = rows("WITH spending AS (SELECT u.id,coalesce(sum(o.amount_cents),0) cents FROM users u LEFT JOIN charging_orders o ON o.user_id=u.id AND o.status='COMPLETED' GROUP BY u.id) SELECT CASE WHEN cents=0 THEN '未消费' WHEN cents<5000 THEN '0–50元' WHEN cents<20000 THEN '50–200元' WHEN cents<100000 THEN '200–1000元' ELSE '1000元以上' END band,count(*) count FROM spending GROUP BY band")
-        spatial = rows("SELECT s.id station_id,s.latitude,s.longitude,coalesce(nullif(s.district,''),'未知区域') district,s.status station_status,coalesce(p.total,0) pile_count,coalesce(p.idle,0) available_pile_count,coalesce(p.busy,0) busy_pile_count,coalesce(p.fault,0) fault_count,coalesce(p.offline,0) offline_count,coalesce(o.orders,0) order_count,coalesce(o.revenue,0) revenue_cents FROM stations s LEFT JOIN (SELECT station_id,count(*) total,sum(status='IDLE') idle,sum(status IN ('RESERVED','CHARGING')) busy,sum(status='FAULT') fault,sum(status='OFFLINE') offline FROM charging_piles GROUP BY station_id) p ON p.station_id=s.id LEFT JOIN (SELECT station_id,count(*) orders,sum(amount_cents) revenue FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<? GROUP BY station_id) o ON o.station_id=s.id ORDER BY s.id", (window, upper))
+        spatial = rows("SELECT s.id station_id,s.latitude,s.longitude,s.district,s.status station_status,coalesce(p.total,0) pile_count,coalesce(p.idle,0) available_pile_count,coalesce(p.busy,0) busy_pile_count,coalesce(p.fault,0) fault_count,coalesce(p.offline,0) offline_count,coalesce(o.orders,0) order_count,coalesce(o.revenue,0) revenue_cents FROM stations s LEFT JOIN (SELECT station_id,count(*) total,sum(status='IDLE') idle,sum(status IN ('RESERVED','CHARGING')) busy,sum(status='FAULT') fault,sum(status='OFFLINE') offline FROM charging_piles GROUP BY station_id) p ON p.station_id=s.id LEFT JOIN (SELECT station_id,count(*) orders,sum(amount_cents) revenue FROM charging_orders WHERE status='COMPLETED' AND paid_at>=? AND paid_at<? GROUP BY station_id) o ON o.station_id=s.id ORDER BY s.id", (window, upper))
+        _resolve_station_districts(spatial)
         for station in spatial:
             station["utilization_rate"] = round(100 * station["busy_pile_count"] / station["pile_count"], 2) if station["pile_count"] else 0
         logs = rows("SELECT l.id,p.pile_no,l.old_status,l.new_status,l.reason,l.created_at FROM pile_status_logs l JOIN charging_piles p ON p.id=l.pile_id ORDER BY l.id DESC LIMIT 20")

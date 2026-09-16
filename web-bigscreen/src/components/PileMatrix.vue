@@ -17,7 +17,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { getPiles } from '../api/dashboard'
 const labels = { IDLE: '空闲', RESERVED: '预约', CHARGING: '充电', FAULT: '故障', OFFLINE: '离线' }
 const data = ref({ items: [], total: 0 }), page = ref(1), status = ref(''), error = ref(''), loading = ref(false)
-const pages = computed(() => Math.max(1, Math.ceil(data.value.total / 120)))
+const pageSize = 96
+const pages = computed(() => Math.max(1, Math.ceil(data.value.total / pageSize)))
 let timer, controller, stopped = false, sequence = 0
 async function refresh() {
   clearTimeout(timer); controller?.abort(); controller = new AbortController()

@@ -21,6 +21,7 @@ class TopicApiTests(unittest.TestCase):
             db.execute("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,applied_at TEXT)")
             db.execute("INSERT INTO schema_migrations VALUES(1,?)", (now,))
             db.execute("INSERT INTO stations(id,name,address,latitude,longitude,district,created_at,updated_at) VALUES(1,'PRIVATE_STATION','address',39.9,116.4,'海淀区',?,?)", (now, now))
+            db.execute("INSERT INTO stations(id,name,address,latitude,longitude,district,created_at,updated_at) VALUES(2,'COORDINATE_ONLY','address',39.912934,116.416718,'',?,?)", (now, now))
             for user in (1, 2):
                 db.execute("INSERT INTO users(id,phone,nickname,balance_cents,created_at,updated_at) VALUES(?,?,?,5000,?,?)", (user, f"1390000000{user}", "PRIVATE_USER", now, now))
             for pile in range(1, 122):
@@ -48,6 +49,9 @@ class TopicApiTests(unittest.TestCase):
         self.assertEqual(data["energy"]["month_revenue_cents"], 3000)
         self.assertEqual(data["stations"][0]["pile_count"], 121)
         self.assertEqual(data["stations"][0]["busy_pile_count"], 1)
+        coordinate_station = next(station for station in data["stations"] if station["station_id"] == 2)
+        self.assertEqual(coordinate_station["district"], "东城区")
+        self.assertEqual(coordinate_station["district_source"], "coordinate")
         self.assertEqual(data["pile_logs"][0]["new_status"], "CHARGING")
         self.assertIsNone(data["system"]["socket_connections"])
         self.assertNotIn("PRIVATE_USER", json.dumps(data))

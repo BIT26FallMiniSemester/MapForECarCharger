@@ -31,6 +31,6 @@ export async function getTopics(signal) {
 }
 
 export async function getPiles(page, status, signal) {
-  const { data } = await request.get('/v1/piles', { params: { page, page_size: 120, status }, signal })
+  const { data } = await request.get('/v1/piles', { params: { page, page_size: 96, status }, signal })
   return data
 }

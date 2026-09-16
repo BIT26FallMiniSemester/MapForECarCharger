@@ -62,8 +62,12 @@ function render() {
     geo: {
       map: 'beijing',
       roam: false,
-      zoom: 1.08,
-      center: [116.405, 39.92],
+      // Beijing's north-east (Miyun) needs extra headroom. A lower layout centre
+      // uses the panel's unused lower area without cropping the district outline.
+      zoom: 0.92,
+      center: [116.405, 40.12],
+      layoutCenter: ['50%', '56%'],
+      layoutSize: '96%',
       label: {
         show: true,
         color: 'rgba(220,236,255,.72)',

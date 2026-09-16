@@ -1,6 +1,9 @@
 <template>
-  <p v-if="topicError" role="alert" class="topic-notice">{{ topicError }}</p>
-  <p class="topic-source">{{ topics?.source || '等待业务数据' }} · 实时统计与 Spark 历史分析分别标注 · 电量为平台统计值</p>
+  <main class="topic-page" :class="`topic-${page}`">
+    <div class="topic-meta">
+      <p v-if="topicError" role="alert" class="topic-notice">{{ topicError }}</p>
+      <p class="topic-source">{{ topics?.source || '等待业务数据' }} · 实时统计与 Spark 历史分析分别标注 · 电量为平台统计值</p>
+    </div>
 
   <template v-if="page === 'stations'">
     <div class="metrics-grid"><MetricCard title="站点总量" :value="stations.length" unit="站"/><MetricCard title="平均站点桩数" :value="number(stations.length ? overview.pile_count / stations.length : 0)" unit="台"/><MetricCard title="繁忙站点" :value="stations.filter(s => s.utilization_rate >= 80).length" unit="站"/><MetricCard title="空闲电桩" :value="overview.available_pile_count || 0" unit="台"/><MetricCard title="覆盖区域" :value="districts.length" unit="个"/></div>
@@ -15,7 +18,7 @@
   <template v-else-if="page === 'piles'">
     <div class="metrics-grid"><MetricCard v-for="item in pileStatus.items || []" :key="item.status" :title="statusLabel(item.status)" :value="item.count" unit="台"/></div>
     <div class="topic-grid device-layout"><PanelCard title="电桩实时状态矩阵" subtitle="业务状态 · 已接入（模拟） · 支持筛选和翻页"><PileMatrix/></PanelCard><PanelCard title="设备状态占比" subtitle="实时业务状态，非硬件心跳"><PileStatusChart :data="pileStatus"/></PanelCard></div>
-    <PanelCard class="topic-wide" title="电桩状态变化时间线" subtitle="SQLite pile_status_logs · 最近20条"><div class="event-table"><table><thead><tr><th>时间</th><th>电桩编号</th><th>状态变化</th><th>原因</th></tr></thead><tbody><tr v-for="log in topics?.pile_logs || []" :key="log.id"><td>{{ timestamp(log.created_at) }}</td><td>{{ log.pile_no }}</td><td>{{ statusLabel(log.old_status) }} → {{ statusLabel(log.new_status) }}</td><td>{{ log.reason }}</td></tr></tbody></table></div></PanelCard>
+    <PanelCard class="topic-wide" title="电桩状态变化时间线" subtitle="SQLite pile_status_logs · 最近10条"><div class="event-table"><table><thead><tr><th>时间</th><th>电桩编号</th><th>状态变化</th><th>原因</th></tr></thead><tbody><tr v-for="log in (topics?.pile_logs || []).slice(0, 10)" :key="log.id"><td>{{ timestamp(log.created_at) }}</td><td>{{ log.pile_no }}</td><td>{{ statusLabel(log.old_status) }} → {{ statusLabel(log.new_status) }}</td><td>{{ log.reason }}</td></tr></tbody></table></div></PanelCard>
   </template>
 
   <template v-else-if="page === 'orders'">
@@ -40,7 +43,8 @@
     <div class="metrics-grid"><MetricCard title="数据库体积" :value="number((system.database_bytes || 0) / 1048576)" unit="MB"/><MetricCard title="迁移版本" :value="system.schema_version ?? '—'" unit=""/><MetricCard title="数仓质量评分" :value="overview.quality_score ?? analytics.batch?.quality_score ?? '—'" unit="分"/><MetricCard title="Socket连接数" value="未采集" unit=""/><MetricCard title="地图接口状态" :value="system.map_status || '未采集'" unit=""/></div>
     <div class="topic-grid two-columns"><PanelCard title="系统运行架构" subtitle="Qt业务回路 + 实时查询 + 批量数仓"><div class="system-flow"><div>Qt 用户端 / 管理端</div><span>↓ 原生 TCP · 长度前缀 + JSON</span><div>QTcpServer → 校验 → 授权 → Business</div><span>↓ 事务写入</span><div>SQLite · WAL</div><span>↙ 实时只读查询　　↘ 只读快照</span><div>Flask → Vue　　｜　　HDFS存储 / Spark计算</div><span>↓ ODS → 质量检测 → DWD → DWS → ADS</span><div>Flask → Vue 历史分析</div></div></PanelCard><PanelCard title="数据库表规模" subtitle="实时只读查询 · 不展示凭据"><div class="event-table"><table><thead><tr><th>业务表</th><th>记录数</th></tr></thead><tbody><tr v-for="table in system.tables || []" :key="table.name"><td>{{ table.name }}</td><td>{{ table.count.toLocaleString() }}</td></tr></tbody></table></div><p>journal_mode：{{ system.journal_mode || '—' }} · 快照 {{ timestamp(topics?.generated_at) }}</p></PanelCard></div>
     <div class="topic-grid two-columns topic-wide"><PanelCard title="数仓批次状态" subtitle="已发布结果，不代替集群运行探测"><p>{{ analytics.label }}</p><p v-if="analytics.batch">{{ analytics.batch.window_start }} → {{ analytics.batch.window_end }}</p><p v-if="analytics.batch">输入订单 {{ analytics.batch.input_orders }} · 质量 {{ analytics.batch.quality_score ?? '—' }}</p><p>{{ analytics.warning || '批次读取正常' }}</p><p>Socket请求量、平均业务响应时间、HDFS/YARN在线状态尚未采集。</p></PanelCard><PanelCard title="最近管理员操作" subtitle="operation_logs · 不是Socket请求日志"><div class="event-table"><table><thead><tr><th>时间</th><th>操作</th><th>目标</th></tr></thead><tbody><tr v-for="(event, index) in system.admin_events || []" :key="index"><td>{{ timestamp(event.created_at) }}</td><td>{{ event.action }}</td><td>{{ event.target_type }} #{{ event.target_id }}</td></tr></tbody></table><p v-if="!system.admin_events?.length">暂无管理员操作记录</p></div></PanelCard></div>
-  </template>
+    </template>
+  </main>
 </template>
 <script setup>
 import { computed, inject, ref } from 'vue'
