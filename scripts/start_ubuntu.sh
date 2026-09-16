@@ -118,6 +118,12 @@ if ((REFRESH)) || [[ -z ${WAREHOUSE:-} || -z ${BATCH:-} || $BATCH != sim-full-$T
   fi
   BATCH=$(basename "$SNAPSHOT")
   WAREHOUSE="$PROJECT_ROOT/spark-warehouse/runtime/generated-warehouse/$BATCH"
+  if ((REFRESH)) && [[ -d "$WAREHOUSE" ]]; then
+    case "$WAREHOUSE" in
+      "$PROJECT_ROOT"/spark-warehouse/runtime/generated-warehouse/*) rm -rf "$WAREHOUSE";;
+      *) fail "Refusing to refresh outside generated warehouse: $WAREHOUSE";;
+    esac
+  fi
   python spark-warehouse/jobs/run_pipeline.py --master 'local[2]' --spark-submit "$SPARK_HOME/bin/spark-submit" --input "$SNAPSHOT" --warehouse "$WAREHOUSE" --batch-id "$BATCH" > "$RUN/pipeline.log" 2>&1 || fail "Spark failed: see $RUN/pipeline.log"
   printf 'export SNAPSHOT=%q\nexport BATCH=%q\nexport WAREHOUSE=%q\n' "$SNAPSHOT" "$BATCH" "$WAREHOUSE" > "$FLOW"
 fi
